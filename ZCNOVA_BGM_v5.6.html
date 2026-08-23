@@ -339,15 +339,15 @@ footer b{ color:var(--brass); }
       <button class="clr-btn" id="melMoreBtn" aria-expanded="false">▸ くわしく決める</button>
       <span class="hint" style="margin:0;" id="melMoreNote">形・リズム・ひびき・終わり方を自分で組み合わせます</span>
     </div>
+    <!-- つまみの行は MEL_KNOBS から組み立てる（増減してもHTMLを触らずに済む） -->
     <div id="melDetail" style="display:none;">
-      <div class="fx-row"><span class="t-label">形</span>
-        <div class="pat-btns" id="melShapePick"></div></div>
-      <div class="fx-row"><span class="t-label">リズム</span>
-        <div class="pat-btns" id="melBeatPick"></div></div>
-      <div class="fx-row"><span class="t-label">ひびき</span>
-        <div class="pat-btns" id="melColorPick"></div></div>
-      <div class="fx-row"><span class="t-label">終わり方</span>
-        <div class="pat-btns" id="melEndPick"></div></div>
+      <div id="melKnobTier1"></div>
+      <div class="fx-row" style="margin-top:-4px;">
+        <span class="t-label"></span>
+        <button class="clr-btn" id="melMore2Btn" aria-expanded="false">▸ さらに細かく</button>
+        <span class="hint" style="margin:0;">跳ぶ幅・音の長さ・くり返し方まで決めます</span>
+      </div>
+      <div id="melKnobTier2" style="display:none;"></div>
     </div>
 
     <!-- 【2026-08-23 UI整理④】組み立て方11個で136px使っていた。
@@ -6891,21 +6891,52 @@ const MEL_COMMON = ['sing','short','repeat','call','arp','rhythm','jazzy'];
 
 /* つまみの中身。値は MELODY_STYLES と同じ意味のものを使う。
    'auto' は「いじらない（選んだメロディのまま）」。 */
+/* つまみは2段構え。
+   tier 1 …「くわしく決める」を開くと出る。効き目が大きく、言葉も分かりやすい4つ。
+   tier 2 …「さらに細かく」でもう一段開く。凝る人向けの6つ。
+   一気に10個並べるとスマホで1050pxになり、せっかく縮めたカード①が
+   開いた瞬間に整理前より長くなってしまうため段を分けた。
+   ※ opts の値は MELODY_STYLES のプロパティにそのまま入る。
+     配列を渡すもの（leapSize / motifOps）は値をそのまま持たせている。 */
 const MEL_KNOBS = {
-  shape: { label:'形', prop:'contour', opts:[
+  /* ---- 1段目 ---- */
+  shape: { tier:1, label:'形', prop:'contour', opts:[
     ['auto','おまかせ'], ['flat','たいら'], ['rise','上がる'],
     ['fall','下がる'], ['arch','山なり'], ['wave','波'] ] },
-  beat:  { label:'リズム', prop:'beat', opts:[
+  beat:  { tier:1, label:'リズム', prop:'beat', opts:[
     ['auto','おまかせ'], ['head','拍の頭'], ['off','裏拍'],
     ['push','前のめり'], ['even','均等'], ['sparse','まばら'] ] },
-  color: { label:'ひびき', prop:'landing', opts:[
+  color: { tier:1, label:'ひびき', prop:'landing', opts:[
     ['auto','おまかせ'], ['root','素朴'], ['third','やさしい'],
     ['fifth','開けた'], ['seventh','おしゃれ'], ['ninth','ふわり'] ] },
-  end:   { label:'終わり方', prop:'cadence', opts:[
+  end:   { tier:1, label:'終わり方', prop:'cadence', opts:[
     ['auto','おまかせ'], ['tonic','しっかり終わる'],
     ['open','余韻を残す'], ['up','次へ続く'] ] },
+
+  /* ---- 2段目 ---- */
+  leapw: { tier:2, label:'跳ぶ幅', prop:'leapSize', opts:[
+    ['auto','おまかせ'], ['near','近い音だけ'], ['mid','ふつう'],
+    ['wide','大きく'], ['oct','オクターブ'] ],
+    map:{ near:[2,2], mid:[2,4], wide:[4,6], oct:[6,8] } },
+  longv: { tier:2, label:'音の長さ', prop:'longSpan', opts:[
+    ['auto','おまかせ'], ['a','長め'], ['b','うんと長く'], ['c','最大まで'] ],
+    map:{ a:4, b:8, c:12 } },
+  accat: { tier:2, label:'強く鳴らす所', prop:'accentAt', opts:[
+    ['auto','おまかせ'], ['head','小節の頭'], ['beat','各拍'], ['off','裏拍'] ],
+    /* accentAt だけでは効かない（確率 st.accent が要る）ので一緒に立てる */
+    also:{ accent:0.5 } },
+  motifo:{ tier:2, label:'くり返し方', prop:'motifOps', opts:[
+    ['auto','おまかせ'], ['strict','きっちり'], ['flip','裏返す'], ['loose','崩す'] ],
+    map:{ strict:['orig','up'], flip:['orig','inv','retro'], loose:['wide','head','retro'] } },
+  spr:   { tier:2, label:'素直さ', prop:'spread', opts:[
+    ['auto','おまかせ'], ['w','さまよう'], ['m','ふつう'], ['s','素直'] ],
+    map:{ w:0.15, m:0.5, s:0.9 } },
+  repv:  { tier:2, label:'同じ音のくり返し', prop:'rep', opts:[
+    ['auto','おまかせ'], ['few','少ない'], ['mid','ふつう'], ['many','多い'] ],
+    map:{ few:0.05, mid:0.2, many:0.5 } },
 };
-let pickMelKnob = { shape:'auto', beat:'auto', color:'auto', end:'auto' };
+let pickMelKnob = {};
+Object.keys(MEL_KNOBS).forEach(g => { pickMelKnob[g] = 'auto'; });
 
 function buildMelStyleButtons(){
   const w = $('melStylePick'); w.innerHTML = '';
@@ -6926,17 +6957,36 @@ function buildMelStyleButtons(){
   buildMelKnobButtons();
 }
 function buildMelKnobButtons(){
-  const ids = { shape:'melShapePick', beat:'melBeatPick', color:'melColorPick', end:'melEndPick' };
-  Object.keys(ids).forEach(g => {
-    const w = $(ids[g]); if(!w) return;
-    w.innerHTML = '';
-    MEL_KNOBS[g].opts.forEach(([v, lab]) => {
-      const b = document.createElement('button');
-      b.className = 'pat-btn' + (pickMelKnob[g] === v ? ' active' : '');
-      b.textContent = lab; b.dataset.knob = g; b.dataset.val = v;
-      w.appendChild(b);
+  [1, 2].forEach(tier => {
+    const box = $('melKnobTier' + tier); if(!box) return;
+    box.innerHTML = '';
+    Object.keys(MEL_KNOBS).filter(g => (MEL_KNOBS[g].tier || 1) === tier).forEach(g => {
+      const k = MEL_KNOBS[g];
+      const row = document.createElement('div');
+      row.className = 'fx-row';
+      const lab = document.createElement('span');
+      lab.className = 't-label'; lab.textContent = k.label;
+      const btns = document.createElement('div');
+      btns.className = 'pat-btns';
+      k.opts.forEach(([v, text]) => {
+        const b = document.createElement('button');
+        b.className = 'pat-btn' + (pickMelKnob[g] === v ? ' active' : '');
+        b.textContent = text; b.dataset.knob = g; b.dataset.val = v;
+        btns.appendChild(b);
+      });
+      row.appendChild(lab); row.appendChild(btns);
+      box.appendChild(row);
     });
   });
+}
+/* 曲に焼き込まれている値から、画面の選択肢キーを逆引きする。
+   map を持つつまみは値が [4,6] や 0.9 なので、そのままでは戻せない。 */
+function melKnobKeyFor(g, val){
+  const k = MEL_KNOBS[g];
+  if(val === undefined || val === null) return 'auto';
+  if(!k.map) return val;
+  const hit = Object.keys(k.map).find(key => JSON.stringify(k.map[key]) === JSON.stringify(val));
+  return hit || 'auto';
 }
 /* つまみで指定されたぶんだけ、選んだメロ型の設定を上書きする。
    何も触っていなければ null を返し、従来どおり型そのままで作る。 */
@@ -6944,8 +6994,13 @@ function melKnobOverride(){
   const o = {};
   let any = false;
   Object.keys(MEL_KNOBS).forEach(g => {
-    const v = pickMelKnob[g];
-    if(v && v !== 'auto'){ o[MEL_KNOBS[g].prop] = v; any = true; }
+    const k = MEL_KNOBS[g], v = pickMelKnob[g];
+    if(!v || v === 'auto') return;
+    /* map があるつまみは、画面の選択肢を実際の値へ置き換える
+       （跳ぶ幅なら 'wide' → [4,6]、素直さなら 's' → 0.9）。 */
+    o[k.prop] = k.map ? k.map[v] : v;
+    if(k.also) Object.assign(o, k.also);   // accentAt は確率もセットで要る
+    any = true;
   });
   return any ? o : null;
 }
@@ -7062,9 +7117,17 @@ function markPicked(){
   if(song){
     const tw = song.melTweak || {};
     Object.keys(MEL_KNOBS).forEach(g => {
-      pickMelKnob[g] = tw[MEL_KNOBS[g].prop] || 'auto';
+      pickMelKnob[g] = melKnobKeyFor(g, tw[MEL_KNOBS[g].prop]);
     });
     try{ buildMelKnobButtons(); updateMelKnobNote(); }catch(e){}
+    /* 2段目のつまみが使われている曲なら、その段も開いて見せる */
+    const t2on = Object.keys(MEL_KNOBS)
+      .some(g => (MEL_KNOBS[g].tier === 2) && pickMelKnob[g] !== 'auto');
+    const d2 = $('melKnobTier2'), mb2 = $('melMore2Btn');
+    if(t2on && d2 && d2.style.display === 'none'){
+      d2.style.display = 'block';
+      if(mb2){ mb2.textContent = '▾ さらに細かく'; mb2.setAttribute('aria-expanded','true'); }
+    }
     const anyOn = Object.keys(MEL_KNOBS).some(g => pickMelKnob[g] !== 'auto');
     const d = $('melDetail'), mb = $('melMoreBtn');
     if(anyOn && d && d.style.display === 'none'){
@@ -7909,15 +7972,23 @@ $('melMoreBtn').addEventListener('click', () => {
   btn.textContent = (open ? '▾ ' : '▸ ') + 'くわしく決める';
   btn.setAttribute('aria-expanded', open ? 'true' : 'false');
 });
-/* 【UI整理②】4つのつまみ */
-['melShapePick','melBeatPick','melColorPick','melEndPick'].forEach(id => {
+/* 【UI整理②】つまみ。行は動的に作り直すので、入れ物側で受ける。 */
+['melKnobTier1','melKnobTier2'].forEach(id => {
   $(id).addEventListener('click', (e) => {
-    const b = e.target.closest('button'); if(!b) return;
+    const b = e.target.closest('button'); if(!b || !b.dataset.knob) return;
     pickMelKnob[b.dataset.knob] = b.dataset.val;
     buildMelKnobButtons();
     updateMelKnobNote();
     if(song) makeNewSong();
   });
+});
+/* 【A案】2段目「さらに細かく」の開閉 */
+$('melMore2Btn').addEventListener('click', () => {
+  const d = $('melKnobTier2'), btn = $('melMore2Btn');
+  const open = d.style.display === 'none';
+  d.style.display = open ? 'block' : 'none';
+  btn.textContent = (open ? '▾ ' : '▸ ') + 'さらに細かく';
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
 });
 function updateMelKnobNote(){
   const on = Object.keys(MEL_KNOBS).filter(g => pickMelKnob[g] !== 'auto');
