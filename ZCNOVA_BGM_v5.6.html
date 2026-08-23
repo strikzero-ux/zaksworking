@@ -105,7 +105,19 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .cells{ display:grid; gap:3px; }
 .cell{ height:18px; min-width:16px; border:1px solid var(--border); border-radius:3px;
-  background:#241d15; cursor:pointer; padding:0; }
+  background:#241d15; cursor:pointer; padding:0;
+  touch-action:manipulation;          /* ダブルタップ拡大を止めて反応を速くする */
+  -webkit-tap-highlight-color:transparent; }
+/* 【2026-08-23 修正⑪】指で押す端末ではマスを大きくする。
+   ------------------------------------------------------------
+   実測(390x844)で1マスは 16.0 x 18.0px。指で押す目標の目安は 44x44px
+   なので約1/7の面積しかなく、隣を誤爆する。横スクロールは既にあるので
+   広げても破綻しない。マウスのある機器は今までどおり細かいまま。 */
+@media (pointer: coarse){
+  .cell{ height:30px; min-width:26px; border-radius:4px; }
+  .cells{ gap:4px; }
+  .row .rlabel{ font-size:11px; }
+}
 .cell.beat{ background:#2b2318; }
 .cell.bar-start{ border-left:2px solid rgba(200,150,62,0.45); }
 .cell:hover{ border-color:var(--brass); }
@@ -231,6 +243,9 @@ footer b{ color:var(--brass); }
          試聴と効果音単体の書き出しは「効果音」カードに残っている。 -->
     <!-- 効果音レーン：1回だけでなく、拍に合わせて鳴らし続ける -->
     <span class="sfx-loop" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+      <!-- 【修正⑲】この一群が何の設定なのか画面のどこにも書いていなかった。
+           起動直後に目に入る位置なのに「自動で置く」「裏」だけでは伝わらない。 -->
+      <span class="badge" style="border-color:var(--border);color:var(--brass);">🔊 効果音レーン</span>
       <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);cursor:pointer;">
         <input type="checkbox" id="seLoopOn" title="拍に合わせて自動で置きます。切っても手で置いた効果音は残ります"> 自動で置く
       </label>
@@ -247,10 +262,13 @@ footer b{ color:var(--brass); }
         <option value="2">3拍目</option>
         <option value="3">4拍目</option>
       </select>
-      <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);cursor:pointer;">
-        <input type="checkbox" id="seLoopOff"> 裏
+      <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);cursor:pointer;"
+             title="拍の真上ではなく、その半分ずらした位置（裏拍）で鳴らします">
+        <input type="checkbox" id="seLoopOff"> 裏拍にずらす
       </label>
-      <input type="range" id="seLoopVol" min="0" max="100" value="55" title="効果音レーンの音量" style="width:70px;">
+      <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);">音量
+        <input type="range" id="seLoopVol" min="0" max="100" value="55" title="効果音レーンの音量" style="width:70px;">
+      </label>
     </span>
   </div>
 
@@ -322,13 +340,18 @@ footer b{ color:var(--brass); }
     <div class="fx-row">
       <span class="t-label"></span>
       <button class="io-btn go" id="makeBtn">この設定で作る</button>
-      <button class="io-btn" id="againBtn">もう一度（別の曲）</button>
-      <button class="io-btn" id="seedBtn">曲番号を指定</button>
+      <!-- 【修正⑬】旧「もう一度（別の曲）」は makeBtn と全く同じ処理で、
+           名前だけ違うため「片方は同じ曲が出る」等と誤解されていた。
+           役割を分け、こちらは**設定を変えずに曲番号だけ振り直す**と明示する。 -->
+      <button class="io-btn" id="againBtn" title="曲調などの設定はそのまま、曲番号だけ新しくします">🎲 別の曲番号で作り直す</button>
+      <button class="io-btn" id="seedBtn">🔢 曲番号を指定</button>
     </div>
 
     <p class="hint">
       曲調ごとに<b>テンポ・音階・コード進行・楽器・リズム</b>がまとめて決まります。同じ曲調でも押すたびに違う曲になります。<br>
       上のバーに出る<b>曲番号</b>を控えておけば、あとで同じ曲をもう一度出せます。<br>
+      <b>この設定で作る</b>は曲番号を変えずに設定だけ反映します。
+      <b>🎲 別の曲番号で作り直す</b>は設定そのままで別の曲にします。<br>
       <b>メロディの作り方</b>を変えると、同じコード進行でもまるで違う曲になります（いちばん効きます）。
       <b>曲の展開</b>はイントロ〜Aメロ〜Bメロ〜サビの並べ方です。どちらも「おまかせ」なら曲調に合うものが自動で選ばれます。<br>
       <b>音数</b>を下げても、1小節が薄くなりすぎないよう自動で下限を保ちます。
@@ -385,7 +408,8 @@ footer b{ color:var(--brass); }
     <div id="trackArea"></div>
 
     <p class="hint">
-      マスを押すと音が入り、もう一度押すと消えます。<b>Shift＋クリックで「強く鳴らす」印</b>が付きます。<br>
+      マスを押すと音が入り、もう一度押すと消えます。<b>Shift＋クリック（スマホは長押し）で「強く鳴らす」印</b>が付きます。<br>
+      押し間違えたら上の<b>「↩ やり直す」</b>で、直前のひとまとまりが元に戻ります。<br>
       トラックの帯を押すと開閉します。使わないトラックは畳んでおくと見やすくなります。
     </p>
     </div>
@@ -477,7 +501,9 @@ footer b{ color:var(--brass); }
       </span>
     </div>
     <p class="hint">
-      書き出しは<b>鳴らさずに計算で作る</b>ので、曲が長くても待たされません。
+      書き出しは<b>鳴らさずに計算で作る</b>ので、再生するより速く終わります。
+      それでも<b>3分の曲でおよそ30〜60秒</b>かかります（機種と音数によって前後します）。
+      画面を閉じずにお待ちください。
       音量は動画で扱いやすい大きさに自動でそろえます。書き出し中は再生を止めます（同時に動かすと不安定になるため）。<br>
       「このパートだけ」は、選んだパート（メロディ・伴奏・ドラムなど）だけをWAVで書き出します。
       DAWで混ぜ直せるよう、曲全体の音量を測ってから同じ倍率で書き出すので、足し戻せば元のバランスになります。
@@ -6359,6 +6385,27 @@ function pushUndo(){
     $('undoBtn').disabled = false;
   }catch(e){}
 }
+/* 【2026-08-23 修正⑪】打ち込み（マス編集）を「やり直す」で戻せるようにする。
+   ------------------------------------------------------------
+   旧実装では onGridEdit() が pushUndo() を呼んでおらず、
+   **アプリの主作業である打ち込みにだけ取り消しが無かった**。
+   実測：起動直後に20マス編集しても「↩ やり直す」は無効のまま。
+   16x18px のマスを指で誤爆しても戻す手段が無く、どこを間違えたか
+   分からないまま曲が濁っていく状態だった。
+
+   ただし1マスごとに積むと上限12回をすぐ食い潰し、
+   「1マス戻す」を12回押さないと曲作りの前まで戻れなくなる。
+   そこで**ひと続きの打ち込みを1回にまとめる**：最後の編集から
+   2.5秒あいたら新しい区切りとみなし、そこで1回だけ積む。
+   結果、「やり直す」1回で直前のひとまとまりが元に戻る。
+   ------------------------------------------------------------ */
+const ZC_GRID_UNDO_GAP = 2500;
+let zcLastGridEditAt = 0;
+function zcPushGridUndo(){
+  const now = Date.now();
+  if(now - zcLastGridEditAt > ZC_GRID_UNDO_GAP) pushUndo();
+  zcLastGridEditAt = now;
+}
 
 /* ---------- 選択ボタンの並び ---------- */
 function buildMoodButtons(){
@@ -7053,10 +7100,43 @@ function makeRow(label, n, isOn, onClass, toggle, isAcc, trackKey){
     /* 修正⑬：このマスを「トラック＋列」の控えに登録する。 */
     const reg = (zcCellReg[trackKey] || (zcCellReg[trackKey] = {}));
     (reg[s] || (reg[s] = [])).push({ el:c, isOn, isAcc, onClass });
-    c.addEventListener('click', (ev) => {
-      toggle(s, ev.shiftKey);
-      /* 修正⑬：押したマスだけでなく、同じ列のマスをまとめて塗り直す。
-         （控えが無いときは今までどおり自分だけ直す） */
+    /* 【2026-08-23 修正⑪】長押しでもアクセントが付くようにする。
+       説明文は「Shift＋クリックで強く鳴らす印」だったが、スマホ・タブレットに
+       Shiftキーは無く、代替の操作も用意されていなかった。iOS共有シートまで
+       作り込んである＝スマホが主要ターゲットなのに、編集機能の半分が
+       スマホから使えない状態だった。 */
+    let lpTimer = null, lpFired = false, lpX = 0, lpY = 0;
+    const lpStart = (ev) => {
+      lpFired = false; lpX = ev.clientX; lpY = ev.clientY;
+      clearTimeout(lpTimer);
+      lpTimer = setTimeout(() => {
+        lpFired = true;
+        zcPushGridUndo();
+        /* 空のマスなら「強い音を置く」、鳴っているマスなら印の付け外し。
+           （Shift＋クリックは元から『鳴っている音にしか付かない』仕様だが、
+             スマホで空マスを長押しして無反応だと壊れて見えるため、
+             置く所までまとめて行う） */
+        if(!isOn(s)) toggle(s, false);
+        if(isAcc && isOn(s)) toggle(s, true);
+        repaintCol();
+        onGridEdit();
+        if(navigator.vibrate) try{ navigator.vibrate(12); }catch(e){}
+      }, 450);
+    };
+    /* 指はわずかに動くので、少し動いた程度では取り消さない（8px まで許容）。 */
+    const lpMove = (ev) => {
+      if(lpTimer && (Math.abs(ev.clientX - lpX) > 8 || Math.abs(ev.clientY - lpY) > 8)){
+        clearTimeout(lpTimer); lpTimer = null;
+      }
+    };
+    const lpCancel = () => { clearTimeout(lpTimer); lpTimer = null; };
+    c.addEventListener('pointerdown', lpStart);
+    c.addEventListener('pointermove', lpMove);
+    ['pointerup','pointerleave','pointercancel'].forEach(ev =>
+      c.addEventListener(ev, lpCancel));
+
+    /* 押したマスだけでなく、同じ列のマスをまとめて塗り直す。 */
+    const repaintCol = () => {
       const col = zcCellReg[trackKey] && zcCellReg[trackKey][s];
       if(col && col.length){
         col.forEach(o => {
@@ -7067,6 +7147,13 @@ function makeRow(label, n, isOn, onClass, toggle, isAcc, trackKey){
         c.classList.toggle(onClass, isOn(s));
         c.classList.toggle('accent', !!(isAcc && isAcc(s)));
       }
+    };
+
+    c.addEventListener('click', (ev) => {
+      if(lpFired){ lpFired = false; return; }   // 長押しで処理済み
+      zcPushGridUndo();                          /* 【修正⑪】打ち込みも戻せるように */
+      toggle(s, ev.shiftKey);
+      repaintCol();   /* 修正⑬：同じ列のマスもまとめて塗り直す */
       onGridEdit();
     });
     cells.appendChild(c);
@@ -7324,7 +7411,13 @@ $('humanize').addEventListener('input', (e) => {
   setText('humanizeVal', pickHumanize === 0 ? '機械的' : pickHumanize + '%');
   regenSoon();
 });
-$('makeBtn').addEventListener('click', () => makeNewSong());
+/* 【2026-08-23 修正⑬】この2つは中身が全く同じ makeNewSong() で、
+   名前だけ違うため「片方は同じ曲が出るのだろう」と誤解を招いていた。
+   役割を実際に分ける：
+     この設定で作る … いまの曲番号のまま、選び直した設定を反映する
+     別の曲番号で作り直す … 設定はそのまま、曲番号だけ振り直す
+   （曲がまだ無いときは、どちらも新しい曲番号で1曲作る） */
+$('makeBtn').addEventListener('click', () => makeNewSong(song ? song.seed : undefined));
 $('againBtn').addEventListener('click', () => makeNewSong());
 $('seedBtn').addEventListener('click', () => {
   const v = prompt('曲番号を入れてください（6桁の数字）', song ? String(song.seed) : '');
@@ -7364,14 +7457,28 @@ $('addPhraseBtn').addEventListener('click', () => {
   song.arrangement.push(curPhrase);
   renderAll(); scheduleAutosave();
   if(playing) restartPlayback();
+  status('arrangeStatus', `「${ph.name}」を足しました（${fmtTime(songSeconds(song))}）`, 'ok');
 });
 $('dupPhraseBtn').addEventListener('click', () => {
+  /* 【2026-08-23 修正⑫】隣の「フレーズを足す」は並びにも入れて曲が伸びるのに、
+     こちらは入れていなかったため、押しても曲の長さも音も一切変わらず
+     「壊れている」ように見えていた（実測：3分06秒のまま、メッセージも無し）。
+     並びの中で**元のフレーズのすぐ後ろ**に差し込む。複製した意図に一番近く、
+     どこに増えたかも分かりやすい。 */
   pushUndo();
-  const cp = JSON.parse(JSON.stringify(song.phrases[curPhrase]));
+  const src = curPhrase;
+  const cp = JSON.parse(JSON.stringify(song.phrases[src]));
   cp.name = zcPhraseLabel(song.phrases.length);
   song.phrases.push(cp);
-  curPhrase = song.phrases.length - 1;
+  const idx = song.phrases.length - 1;
+  const at = song.arrangement.indexOf(src);
+  if(at >= 0) song.arrangement.splice(at + 1, 0, idx);
+  else song.arrangement.push(idx);
+  curPhrase = idx;
   renderAll(); scheduleAutosave();
+  if(playing) restartPlayback();
+  status('arrangeStatus',
+    `「${song.phrases[src].name}」を複製して「${cp.name}」を作り、並びに入れました（${fmtTime(songSeconds(song))}）`, 'ok');
 });
 $('delPhraseBtn').addEventListener('click', () => {
   if(song.phrases.length <= 1){ status('arrangeStatus', 'フレーズは1つ以上必要です', 'warn'); return; }
@@ -7457,6 +7564,7 @@ $('trackArea').addEventListener('click', (e) => {
   }
   const cc = e.target.closest('[data-chord-beat]');
   if(cc){
+    zcPushGridUndo();                       /* 【修正⑪】コードの変更も戻せるように */
     const b = parseInt(cc.dataset.chordBeat, 10);
     const ph = song.phrases[curPhrase];
     const st = (SCALES[song.scale] || SCALES.major).steps;
@@ -12038,6 +12146,25 @@ boot();
              wind2:['trumpet','horn','trombone','brass','tuba'] }
     },
 
+    /* 【2026-08-23 追加】「バンド」
+       ------------------------------------------------------------
+       フルバンドは管楽器（サックス／トランペット）まで入る厚い編成なので、
+       ギター・ベース・ドラム・シンセだけの、いわゆるバンド編成が選べなかった。
+       フルバンドから wind1 / wind2 を外し、音色もギターとシンセに寄せる。
+       曲そのものは変えず、鳴らすトラックと音色の割り当てだけを決める
+       （このアプリの編成モードは全部その約束で作られている）。
+       ------------------------------------------------------------ */
+    band: {
+      label:'バンド', icon:'🎤',
+      note:'ギター・ベース・ドラム・シンセだけの編成。管楽器は入りません。厚みが要るときは「フルバンド」へ。',
+      on:['mel1','mel2','sub','chord','bass','drum'],
+      pool:{ mel1: ['guitar','lead','synth'],
+             mel2: ['lead','synth','pad','guitar'],
+             sub:  ['pluck','guitar','retro'],
+             chord:['guitar','guitar','synth','ep'],
+             bass: ['bassSynth','bassString'] }
+    },
+
     full: {
       label:'フルバンド', icon:'🎧',
       /* 2026-08-23：PLAY_MODES の 'full' と中身をそろえた。
@@ -12073,8 +12200,9 @@ boot();
   const FAMILY_ORDER = [
     'random_all',
     'piano', 'guitar', 'drum', 'percussion', 'bowedStrings',
-    'brass', 'winds', 'concert', 'full', 'orchestra'
-  ];   // 'harp' は 2026-08-23 に弦楽器へ収納したので並びから外した（定義は残してある）
+    'brass', 'winds', 'concert', 'band', 'full', 'orchestra'
+  ];   /* 'band'（ギター＋ベース＋ドラム＋シンセ）は 2026-08-23 追加。
+          管の入る 'full' の手前に置く。 */   // 'harp' は 2026-08-23 に弦楽器へ収納したので並びから外した（定義は残してある）
 
   const DRUM_PM_KEY = 'drum';   // 既存の「ドラムだけ」モードのキー
 
