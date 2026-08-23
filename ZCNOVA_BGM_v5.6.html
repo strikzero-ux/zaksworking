@@ -350,9 +350,16 @@ footer b{ color:var(--brass); }
         <div class="pat-btns" id="melEndPick"></div></div>
     </div>
 
+    <!-- 【2026-08-23 UI整理④】組み立て方11個で136px使っていた。
+         よく使う4つだけ出し、残りは「もっと見る」で開く。 -->
     <div class="fx-row">
       <span class="t-label">曲の組み立て方</span>
       <div class="pat-btns" id="arrangePick"></div>
+    </div>
+    <div class="fx-row" style="margin-top:-4px;">
+      <span class="t-label"></span>
+      <button class="clr-btn" id="arrMoreBtn" aria-expanded="false">▸ もっと見る</button>
+      <span class="hint" style="margin:0;">イントロ〜Aメロ〜サビの並べ方です</span>
     </div>
 
     <div class="fx-row">
@@ -374,13 +381,21 @@ footer b{ color:var(--brass); }
       <button class="io-btn" id="seedBtn">🔢 曲番号を指定</button>
     </div>
 
-    <p class="hint">
+    <!-- 【2026-08-23 UI整理⑥】この説明はスマホで224px（カード①の6分の1）を
+         占めていた。読むのは最初の一度きりなので、畳んでおく。
+         中身は減らさず、必要な人が開けば全部読める。 -->
+    <div class="fx-row" style="margin-top:2px;">
+      <span class="t-label"></span>
+      <button class="clr-btn" id="makeHelpBtn" aria-expanded="false">▸ 使い方をみる</button>
+    </div>
+    <p class="hint" id="makeHelp" style="display:none;">
       曲調ごとに<b>テンポ・音階・コード進行・楽器・リズム</b>がまとめて決まります。同じ曲調でも押すたびに違う曲になります。<br>
       上のバーに出る<b>曲番号</b>を控えておけば、あとで同じ曲をもう一度出せます。<br>
       <b>この設定で作る</b>は曲番号を変えずに設定だけ反映します。
       <b>🎲 別の曲番号で作り直す</b>は設定そのままで別の曲にします。<br>
-      <b>メロディの作り方</b>を変えると、同じコード進行でもまるで違う曲になります（いちばん効きます）。
-      <b>曲の展開</b>はイントロ〜Aメロ〜Bメロ〜サビの並べ方です。どちらも「おまかせ」なら曲調に合うものが自動で選ばれます。<br>
+      <b>メロディ</b>を変えると、同じコード進行でもまるで違う曲になります（いちばん効きます）。
+      <b>くわしく決める</b>を開くと、形・リズム・ひびき・終わり方を自分で組み合わせられます。<br>
+      <b>曲の組み立て方</b>はイントロ〜Aメロ〜Bメロ〜サビの並べ方です。どちらも「おまかせ」なら曲調に合うものが自動で選ばれます。<br>
       <b>音数</b>を下げても、1小節が薄くなりすぎないよう自動で下限を保ちます。
     </p>
     <div class="status" id="makeStatus"></div>
@@ -6852,7 +6867,7 @@ function buildPlayModeButtons(){
    ★ MELODY_STYLES の47型はそのまま残す。ボタンに出さないだけなので、
      控えてある曲番号の曲も、保存済みの曲も今までどおり開ける。
    ============================================================ */
-const MEL_COMMON = ['sing','short','repeat','call','arp','rhythm','jazzy','hold','penta','march'];
+const MEL_COMMON = ['sing','short','repeat','call','arp','rhythm','jazzy'];
 
 /* つまみの中身。値は MELODY_STYLES と同じ意味のものを使う。
    'auto' は「いじらない（選んだメロディのまま）」。 */
@@ -6914,12 +6929,23 @@ function melKnobOverride(){
   });
   return any ? o : null;
 }
+/* 【UI整理④】組み立て方10種＋おまかせで11ボタン・136pxあった。
+   動画づくりで実際によく使う4つだけ出し、残りは「もっと見る」で開く。
+   ARRANGE_TYPES 自体はそのままなので、保存した曲も曲番号も影響なし。 */
+const ARR_COMMON = ['royal', 'loop', 'short', 'simple'];
+let arrShowAll = false;
 function buildArrangeButtons(){
   const w = $('arrangePick'); w.innerHTML = '';
   const auto = document.createElement('button');
   auto.className = 'pat-btn'; auto.textContent = 'おまかせ'; auto.dataset.arr = 'auto';
   w.appendChild(auto);
-  ARRANGE_TYPES.forEach(a => {
+  /* 畳んでいるときでも、いま選ばれている型は必ず見せる（見失うと戻せない） */
+  const cur = (typeof song !== 'undefined' && song) ? song.arrange : null;
+  const keys = arrShowAll
+    ? ARRANGE_TYPES.map(a => a.key)
+    : ARR_COMMON.concat((cur && ARR_COMMON.indexOf(cur) < 0) ? [cur] : []);
+  keys.forEach(k => {
+    const a = ARRANGE_TYPES.find(x => x.key === k); if(!a) return;
     const b = document.createElement('button');
     b.className = 'pat-btn'; b.textContent = a.label; b.dataset.arr = a.key;
     b.title = [...a.head, ...a.core, ...a.tail]
@@ -7881,6 +7907,23 @@ function updateMelKnobNote(){
         (MEL_KNOBS[g].opts.find(o => o[0] === pickMelKnob[g]) || ['',''])[1]).join('・')
     : '形・リズム・ひびき・終わり方を自分で組み合わせます';
 }
+/* 【UI整理⑥】「使い方をみる」の開閉 */
+$('makeHelpBtn').addEventListener('click', () => {
+  const el = $('makeHelp'), btn = $('makeHelpBtn');
+  const open = el.style.display === 'none';
+  el.style.display = open ? 'block' : 'none';
+  btn.textContent = (open ? '▾ 使い方をとじる' : '▸ 使い方をみる');
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+});
+/* 【UI整理④】組み立て方の「もっと見る」 */
+$('arrMoreBtn').addEventListener('click', () => {
+  arrShowAll = !arrShowAll;
+  const btn = $('arrMoreBtn');
+  btn.textContent = (arrShowAll ? '▾ 少なく表示' : '▸ もっと見る');
+  btn.setAttribute('aria-expanded', arrShowAll ? 'true' : 'false');
+  buildArrangeButtons();
+  if(typeof syncControls === 'function' && song) syncControls();
+});
 $('arrangePick').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if(!b) return;
   pickArr = b.dataset.arr; if(song) makeNewSong();
@@ -12867,6 +12910,16 @@ boot();
   famRow.innerHTML = '<span class="t-label">使う楽器</span><div class="pat-btns" id="familyPick"></div>';
   pmRow.parentNode.insertBefore(famRow, pmRow);
 
+  /* 【2026-08-23 UI整理⑤】カテゴリ12個で175px使っていた。
+     よく使う6つだけ出し、残りは「もっと見る」で開く。 */
+  const famMoreRow = document.createElement('div');
+  famMoreRow.className = 'fx-row';
+  famMoreRow.style.marginTop = '-4px';
+  famMoreRow.innerHTML =
+    '<span class="t-label"></span>' +
+    '<button class="clr-btn" id="familyMoreBtn" aria-expanded="false">▸ もっと見る</button>';
+  pmRow.parentNode.insertBefore(famMoreRow, pmRow);
+
   const soloRow = document.createElement('div');
   soloRow.className = 'fx-row'; soloRow.id = 'familySoloRow';
   soloRow.innerHTML = '<span class="t-label">この楽器だけ</span><div class="pat-btns" id="familySoloPick"></div>';
@@ -12884,9 +12937,20 @@ boot();
   // 「いまどのカテゴリを開いているか」。ソロを選んでもカテゴリの選択は残す。
   let openFam = null;
 
+  /* よく使う6つ。1つの楽器で鳴らす細かい分類（打楽器・弦楽器・金管・木管・吹奏楽）は
+     「もっと見る」の中へ。いま選ばれているものは畳んでいても必ず出す。 */
+  const FAMILY_COMMON = ['random_all', 'piano', 'guitar', 'drum', 'band', 'full'];
+  let famShowAll = false;
+  function familyShownKeys(){
+    if(famShowAll) return FAMILY_ORDER;
+    const cur = openFam;
+    const list = FAMILY_COMMON.slice();
+    if(cur && list.indexOf(cur) < 0 && FAMILY_ORDER.indexOf(cur) >= 0) list.push(cur);
+    return list;
+  }
   function buildFamilyButtons(){
     famPick.innerHTML = '';
-    FAMILY_ORDER.forEach(key => {
+    familyShownKeys().forEach(key => {
       const isDrum = (key === DRUM_PM_KEY);
       const pm  = PLAY_MODES.find(p => p.key === pmKeyOf(key));
       if(!pm) return;
@@ -12899,6 +12963,11 @@ boot();
       if(isDrum) b.title = 'パターンだけランダム（42型すべてから選ぶ）';
       famPick.appendChild(b);
     });
+    const mb = document.getElementById('familyMoreBtn');
+    if(mb){
+      mb.textContent = famShowAll ? '▾ 少なく表示' : '▸ もっと見る';
+      mb.setAttribute('aria-expanded', famShowAll ? 'true' : 'false');
+    }
   }
 
   function buildSoloButtons(){
@@ -12973,6 +13042,13 @@ boot();
   famPick.addEventListener('click', e => {
     const b = e.target.closest('button'); if(!b) return;
     choose(b.dataset.pm, b.dataset.fam);
+  });
+  /* 【UI整理⑤】使う楽器の「もっと見る」。開閉するだけで曲は作り直さない。 */
+  const famMoreBtn = document.getElementById('familyMoreBtn');
+  if(famMoreBtn) famMoreBtn.addEventListener('click', () => {
+    famShowAll = !famShowAll;
+    buildFamilyButtons();
+    try{ markFamily(); }catch(e){}
   });
   soloPick.addEventListener('click', e => {
     const b = e.target.closest('button'); if(!b) return;
