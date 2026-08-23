@@ -71,6 +71,8 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
   padding:5px 8px; font-size:12.5px; font-family:inherit; }
 .badge{ display:inline-block; background:rgba(255,255,255,0.05); border:1px solid var(--border);
   border-radius:6px; padding:2px 9px; font-size:11px; color:var(--text-dim); }
+.save-mark{ font-size:11px; color:var(--teal); opacity:0; transition:opacity .35s;
+  white-space:nowrap; min-width:6.5em; }
 .status{ font-size:11.5px; color:var(--text-dim); min-height:1.5em; margin-top:8px; }
 .status.warn{ color:var(--accent); }
 .status.ok{ color:var(--teal); }
@@ -211,6 +213,9 @@ footer b{ color:var(--brass); }
     <span class="badge" id="lenBadge">長さ —</span>
     <span class="badge" id="seedBadge">曲番号 —</span>
     <button class="io-btn" id="undoBtn" disabled>↩ やり直す</button>
+    <!-- 【修正③】自動保存が本当に走っていることを見せる印。
+         普段は透明で場所だけ確保し、保存された瞬間だけ1.4秒ふわっと出る。 -->
+    <span id="saveMark" class="save-mark"></span>
       <button class="io-btn" id="cleanupBtn" title="ZCnova内部の音声処理を整理して再初期化します">🔧 動作を安定化</button>
     <!-- 「🔊 効果音を重ねる」（その場で1回鳴らすだけ）は 2026-08-23 に撤去。
          効果音レーン（トラック編集で好きな所に置ける／曲データに焼き込まれる
@@ -783,6 +788,41 @@ function swingOffset(song, s){
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 
 /* ---------- 曲番号（同じ曲を何度でも同じように組み立てる） ---------- */
+
+/* 【2026-08-23 修正④】番号入力の読み取り。
+   ------------------------------------------------------------
+   旧実装は v.replace(/[^0-9]/g,'') で半角数字しか拾わなかった。
+   日本語入力がONのとき数字は**全角で入るのが既定**なので、
+   「２６５５７０」と打った人はまるごと弾かれて
+   「数字を入れてください」と言われていた。控えた番号を貼り付けた場合も同様。
+   曲番号を控えて同じ曲を出す、というこのアプリの目玉機能が、
+   日本語環境では入口で詰まっていた。
+
+   ここで全角→半角に直してから読む。あわせて
+   ・小数点や符号を混ぜたときに黙って別の数になるのを防ぐ（-5→5, 12.9→129 だった）
+   ・桁数が違うときは、何桁だったかを添えて具体的に返す
+   ------------------------------------------------------------ */
+function zcToHalfWidth(v){
+  return String(v == null ? '' : v)
+    .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[\uFF0D\u2212\u30FC\u2010-\u2015]/g, '-')   // 全角ハイフン・長音の打ち間違い
+    .replace(/[\uFF0E\u3002]/g, '.')                        // 全角ピリオド・句点
+    .trim();
+}
+/* 戻り値: { n:番号 } / { err:'画面に出す文言' } */
+function zcReadSeed(raw){
+  const v = zcToHalfWidth(raw);
+  if(!v) return { err:'番号が空でした。6桁の数字を入れてください。' };
+  if(/[^0-9]/.test(v)){
+    return { err:`数字だけで入れてください（入力：「${raw}」）。` };
+  }
+  const n = parseInt(v, 10);
+  if(!(n >= 1)) return { err:'1以上の数字を入れてください。' };
+  if(v.length !== 6){
+    return { err:`6桁の数字で入れてください（入力は${v.length}桁でした）。` };
+  }
+  return { n };
+}
 let songRng = null;
 function makeRng(seed){
   let a = (seed >>> 0) || 1;
@@ -6990,8 +7030,12 @@ function makeRow(label, n, isOn, onClass, toggle, isAcc, trackKey){
 }
 let gridEditTimer = null;
 function onGridEdit(){
+  /* 【2026-08-23 修正③】保存はここで即座に予約する（旧実装は 500ms 待ってから
+     scheduleAutosave を呼んでいて、そこから更に 700ms 待つ二段構えになっていた）。
+     重い renderPhrases（音数の数え直し）だけを間引く。 */
+  scheduleAutosave();
   clearTimeout(gridEditTimer);
-  gridEditTimer = setTimeout(() => { scheduleAutosave(); renderPhrases(); }, 500);
+  gridEditTimer = setTimeout(() => { renderPhrases(); }, 500);
   if(playing) restartPlayback();
 }
 
@@ -7217,10 +7261,10 @@ $('makeBtn').addEventListener('click', () => makeNewSong());
 $('againBtn').addEventListener('click', () => makeNewSong());
 $('seedBtn').addEventListener('click', () => {
   const v = prompt('曲番号を入れてください（6桁の数字）', song ? String(song.seed) : '');
-  if(!v) return;
-  const n = parseInt(v.replace(/[^0-9]/g, ''), 10);
-  if(!n){ status('makeStatus', '数字を入れてください', 'warn'); return; }
-  makeNewSong(n);
+  if(v === null) return;                       // 「キャンセル」は黙って戻る
+  const r = zcReadSeed(v);                     // 【修正④】全角数字もそのまま通す
+  if(r.err){ status('makeStatus', r.err, 'warn'); return; }
+  makeNewSong(r.n);
 });
 
 /* ---------- ② 流れ ---------- */
@@ -7621,26 +7665,74 @@ function zcUnpackSong(sg){
 
 let autosaveTimer = null;
 let zcAutosaveWarned = false;
-function scheduleAutosave(){
-  clearTimeout(autosaveTimer);
-  autosaveTimer = setTimeout(() => {
+/* 【2026-08-23 修正③】自動保存が「打ち込み中はいつまでも走らない」状態だった。
+   ------------------------------------------------------------
+   旧実装は 700ms のデバウンスのみ。しかも onGridEdit() が更に 500ms 待って
+   から呼ぶ二段構えで、合計 1.2 秒。両方とも clearTimeout で毎回リセットされる
+   ため、**1.2 秒より速くマスを押し続けている限り保存が一度も発火しなかった**。
+   実測：9秒で30マス打ち込んだ時点で、画面の音数49に対し保存済みは28のまま。
+   ここでタブを閉じると21音ぶんが消えるのに、次回起動は
+   「前回の続きから再開しました」と表示するので、消えたことにも気づけなかった。
+
+   直し方：デバウンス（打ち終わりを待つ）に**最大待ち時間**を足す。
+   連続編集中でも、前回保存から ZC_SAVE_MAX_WAIT を超えたら必ず書き込む。
+   さらに、ページを離れるときに未保存があれば即座に書き込む（下の
+   visibilitychange / pagehide）。
+   ------------------------------------------------------------ */
+const ZC_SAVE_DEBOUNCE = 700;    // 打ち終わってから書くまで
+const ZC_SAVE_MAX_WAIT = 2500;   // 打ち続けていても、これを超えたら必ず書く
+let zcSaveDirtySince = 0;        // 未保存になった時刻（0＝未保存なし）
+let zcSaveMaxTimer = null;
+
+function zcWriteAutosave(quiet){
+  try{
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(zcPackSong(song)));
+    zcAutosaveWarned = false;
+    zcSaveDirtySince = 0;
+    clearTimeout(zcSaveMaxTimer); zcSaveMaxTimer = null;
+    clearTimeout(autosaveTimer);  autosaveTimer  = null;
+    if(!quiet) zcFlashSaved();
+    return true;
+  }catch(e){
     /* 【2026-08-23 修正】失敗を握りつぶさない。
        容量オーバーで自動保存が止まっていても画面に何も出ないため、
        次に開いたとき「続きから再開」できずに驚くことになっていた。 */
-    try{
-      localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(zcPackSong(song)));
-      zcAutosaveWarned = false;
-    }catch(e){
-      if(!zcAutosaveWarned){
-        zcAutosaveWarned = true;
-        status('ioStatus',
-          '自動保存できませんでした（ブラウザの保存容量がいっぱいです）。' +
-          '下の「保存した曲」から要らないものを削除するか、' +
-          '「ファイルに書き出す（.json）」で手元に残してください。', 'warn');
-      }
+    if(!zcAutosaveWarned){
+      zcAutosaveWarned = true;
+      status('ioStatus',
+        '自動保存できませんでした（ブラウザの保存容量がいっぱいです）。' +
+        '下の「保存した曲」から要らないものを削除するか、' +
+        '「ファイルに書き出す（.json）」で手元に残してください。', 'warn');
     }
-  }, 700);
+    return false;
+  }
 }
+/* 保存が走ったことを、邪魔にならない形で見せる（本当に保存されている実感が要る） */
+let zcSavedFlashTimer = null;
+function zcFlashSaved(){
+  const el = $('saveMark'); if(!el) return;
+  el.textContent = '✓ 自動保存しました';
+  el.style.opacity = '1';
+  clearTimeout(zcSavedFlashTimer);
+  zcSavedFlashTimer = setTimeout(() => { el.style.opacity = '0'; }, 1400);
+}
+function scheduleAutosave(){
+  if(!zcSaveDirtySince) zcSaveDirtySince = Date.now();
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => zcWriteAutosave(false), ZC_SAVE_DEBOUNCE);
+  /* 打ち続けていてもここが効いて、必ず一定間隔で書かれる */
+  if(!zcSaveMaxTimer){
+    const wait = Math.max(0, ZC_SAVE_MAX_WAIT - (Date.now() - zcSaveDirtySince));
+    zcSaveMaxTimer = setTimeout(() => { zcSaveMaxTimer = null; zcWriteAutosave(false); }, wait);
+  }
+}
+/* ページを離れる・裏に回る瞬間に、未保存があれば必ず書き切る。
+   （タブを閉じる／ホームに戻る／別アプリへ切り替える、いずれもここを通る。
+     visibilitychange はモバイルSafariでも確実に発火する経路。） */
+function zcSaveNow(){ if(zcSaveDirtySince) zcWriteAutosave(true); }
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') zcSaveNow(); });
+window.addEventListener('pagehide', zcSaveNow);
+window.addEventListener('beforeunload', zcSaveNow);
 function loadSongs(){
   try{
     const list = JSON.parse(localStorage.getItem(LIB_KEY) || '[]');
@@ -7835,45 +7927,124 @@ function download(blob, filename){
   /* iOS は <a download> が効かないので、押し直してもらう形にする。 */
   zcShowSaveButton(blob, filename);
 }
-// ファイル名に日本語が入ると、ブラウザが名前ごと捨てて download になる。
-// 半角英数の名前だけそのまま使い、それ以外は日付の名前に切り替える。
+/* 【2026-08-23 修正①⑤】ファイル名の作り方を入れ替えた。
+   ------------------------------------------------------------
+   旧実装は「日本語が入るとブラウザが名前ごと捨てるので、半角英数以外は
+   日付名に逃がす」というものだった。しかし実測すると、名前を捨てるのは
+   OSロケールが C/POSIX のときだけで、日本語Windows・Mac・iOS など
+   実際の利用環境（UTF-8ロケール）では『朝の支度.wav』がそのまま保存される。
+   つまり大多数の利用者にとって、曲名を捨てる理由が無かった。
+
+   旧実装の実害：
+   ・曲名欄のプレースホルダが「例：朝の支度」なので、案内どおりに
+     入れた人ほど名前を捨てられていた。
+   ・効果音は名前が必ず日本語（衝撃・ヒット 等）なので判定が100%失敗し、
+     `se_◯◯_番号` という名前は**一度も使われていなかった**。結果、
+     効果音を何個書き出しても全部 `bgm-日時` の同名になり、
+     ダウンロードフォルダで区別できなかった。
+   ・日時が分単位なので、同じ分に2つ書き出すと必ず衝突した。
+
+   新実装：
+   ・名前はそのまま活かす。OSが受け付けない文字だけ `_` に逃がす。
+   ・長すぎる名前は詰める（ファイル名の上限は環境により255バイト程度）。
+   ・名前が空のときだけ日付名。日時は**秒まで**入れて衝突を防ぐ。
+   ※ C/POSIXロケールのLinuxなど、ごく一部の環境では日本語名が
+     `download` に化ける可能性が残る。その場合は曲名を半角で入れてもらう。
+   ------------------------------------------------------------ */
+const FN_BAD = /[\\/:*?"<>|\x00-\x1F]/g;   // Windows / macOS / Linux が嫌う文字
+function fnStamp(){
+  const d = new Date(), z = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}` +
+         `-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`;
+}
+function fnClean(s, max){
+  let n = String(s || '').replace(FN_BAD, '_').replace(/\s+/g, ' ').trim();
+  n = n.replace(/^\.+/, '').replace(/\.+$/, '');   // 先頭・末尾のドットは外す
+  if(n.length > max) n = n.slice(0, max).trim();
+  return n;
+}
 function safeName(base, ext){
-  const n = (base || '').trim();
-  const d = new Date();
-  const stamp = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}` +
-                `-${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
-  return (/^[\x20-\x7E]+$/.test(n) && n) ? `${n}.${ext}` : `bgm-${stamp}.${ext}`;
+  const n = fnClean(base, 60);
+  return n ? `${n}.${ext}` : `bgm-${fnStamp()}.${ext}`;
+}
+/* 曲の書き出し名。名前が空のときは、あとから曲を特定できるよう
+   日時に加えて**曲番号**も入れる（書き出し中に曲を作り替えてしまっても
+   どのファイルがどの曲か追えるようにするため）。 */
+function songFileName(ext){
+  const n = fnClean($('songName').value, 48);
+  if(n) return `${n}.${ext}`;
+  const id = (song && song.seed != null) ? `_s${song.seed}` : '';
+  return `bgm-${fnStamp()}${id}.${ext}`;
 }
 $('exportJsonBtn').addEventListener('click', () => {
   download(new Blob([JSON.stringify(song, null, 1)], { type:'application/json' }),
-           safeName($('songName').value, 'json'));
+           songFileName('json'));
   status('ioStatus', 'ファイルに書き出しました', 'ok');
 });
 $('importJsonBtn').addEventListener('click', () => $('importFile').click());
+/* 【2026-08-23 修正②】読み込み失敗時に**必ず元の曲へ戻す**ようにした。
+   ------------------------------------------------------------
+   旧実装は「song を差し替える前に値を整えるので catch で戻せる」と
+   意図していたが、実際には差し替えの**あと**に renderAll() があり、
+   そこで落ちると song は既に壊れたものに替わっていた。
+   実測：中身の欠けた .json を読ませると「読み込めませんでした」と出るのに、
+   上部の曲情報は「2小節×0」の壊れた曲に差し替わっていた。さらに不正な
+   playMode が pickPM に流れ込み、次に作る曲の「使う楽器」まで勝手に変わった。
+
+   直し方：差し替える前に丸ごと控えを取り、renderAll() まで通って
+   初めて確定させる。1つでも失敗したら控えから戻して描き直す。
+   選択状態（pickMood 等）も、既知のキーだと確認できたものだけ採用する。
+   ------------------------------------------------------------ */
+function zcKnownOr(list, keyProp, v, fallback){
+  return list.some(x => x[keyProp] === v) ? v : fallback;
+}
 $('importFile').addEventListener('change', (e) => {
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
+  r.onerror = () => status('ioStatus', 'ファイルを読めませんでした（開き直してもう一度お試しください）', 'warn');
   r.onload = () => {
+    let d;
+    /* --- 第1段：解析と検査。ここで落ちても song には一切触れていない --- */
     try{
-      const d = zcUnpackSong(JSON.parse(r.result));
-      if(!d.phrases || !d.tracks) throw new Error('このアプリのファイルではないようです');
-      /* 【2026-08-23 修正⑤】song を差し替える**前に**、画面を組み立てる側が
-         必ず参照する値を整えておく。ここを通したあとで renderAll() が落ちると、
-         song は既に壊れたものに替わっているので catch では戻せない。
-         知らない値なら既定値へ寄せて、開けるところまでは開く。 */
+      d = zcUnpackSong(JSON.parse(r.result));
+      if(!d || typeof d !== 'object' || !d.phrases || !d.tracks || !Array.isArray(d.phrases)){
+        throw new Error('形式ちがい');
+      }
       if(!SCALES[d.scale]) d.scale = 'major';
       if(typeof d.key !== 'number' || !NOTE_NAMES[d.key]) d.key = 0;
       if(!Array.isArray(d.arrangement)) d.arrangement = [];
       d.arrangement = d.arrangement.filter(i => d.phrases[i]);
       if(!(d.bpm > 0)) d.bpm = 100;
+      if(!(d.bars > 0)) d.bars = 2;
+      if(!(d.targetSec > 0)) d.targetSec = 180;
+    }catch(err){
+      status('ioStatus', 'このアプリで作った .json ではないようです。いまの曲はそのままです。', 'warn');
+      return;
+    }
+    /* --- 第2段：差し替え。控えを取ってから入れ替え、描画まで通す --- */
+    const backup     = song;
+    const backMood   = pickMood, backBars = pickBars, backPM = pickPM, backSec = pickSec;
+    const backPhrase = curPhrase;
+    try{
       pushUndo();
       if(playing) stopPlayback();
       disposeLiveEngine();
       song = d; curPhrase = 0;
-      pickMood = song.moodKey; pickBars = song.bars; pickPM = song.playMode; pickSec = song.targetSec;
-      renderAll(); scheduleAutosave();
-      status('ioStatus', '読み込みました', 'ok');
-    }catch(err){ status('ioStatus', '読み込めませんでした：' + err.message, 'warn'); }
+      pickMood = zcKnownOr(MOODS,       'key', d.moodKey,  backMood);
+      pickPM   = zcKnownOr(PLAY_MODES,  'key', d.playMode, backPM);
+      pickBars = [1,2,4,8].includes(d.bars) ? d.bars : backBars;
+      pickSec  = d.targetSec;
+      renderAll();
+    }catch(err){
+      /* 描画まで通らなかった＝壊れている。丸ごと元へ戻す。 */
+      song = backup; curPhrase = backPhrase;
+      pickMood = backMood; pickBars = backBars; pickPM = backPM; pickSec = backSec;
+      try{ disposeLiveEngine(); renderAll(); }catch(e2){}
+      status('ioStatus', 'このファイルは開けませんでした。いまの曲はそのままです。', 'warn');
+      return;
+    }
+    scheduleAutosave();
+    status('ioStatus', '読み込みました', 'ok');
   };
   r.readAsText(f);
   e.target.value = '';
@@ -7901,7 +8072,7 @@ $('renderBtn').addEventListener('click', async () => {
     await new Promise(r => setTimeout(r, 0));   // 画面を1回描き直させる
     let blob = await encodeMp3(res, 192), ext = 'mp3';
     if(!blob){ blob = encodeWav(res); ext = 'wav'; }
-    download(blob, safeName($('songName').value, ext));
+    download(blob, songFileName(ext));
     const ms = Math.round(performance.now() - t0);
     status('ioStatus',
       `書き出しました（${fmtTime(res.seconds)}の曲／${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒で完了` +
@@ -7928,7 +8099,7 @@ $('renderWavBtn').addEventListener('click', async () => {
     tick.tell('WAVに変換しています…');
     await new Promise(r => setTimeout(r, 0));
     const blob = encodeWav(res);
-    download(blob, safeName($('songName').value, 'wav'));
+    download(blob, songFileName('wav'));
     const ms = Math.round(performance.now() - t0);
     status('ioStatus',
       `書き出しました（${fmtTime(res.seconds)}の曲／${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒で完了）`, 'ok');
@@ -7958,8 +8129,8 @@ $('oneStemBtn').addEventListener('click', async () => {
     const res = await renderOneStem(song, key, (m) => tick.tell(m));
     tick.tell('WAVにしています…');
     const blob = encodeWav(res);
-    const base = safeName($('songName').value, '').replace(/\.$/, '');
-    download(blob, (base ? base + '_' : '') + tr.label + '.wav');
+    const base = songFileName('').replace(/\.$/, '');
+    download(blob, `${base}_${tr.label}.wav`);
     const ms = Math.round(performance.now() - t0);
     status('ioStatus',
       `「${tr.label}」を書き出しました（${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒）`, 'ok');
@@ -8072,11 +8243,12 @@ $('seRandomBtn').addEventListener('click', () => {
 });
 $('seSeedBtn').addEventListener('click', () => {
   const v = prompt('SE番号を入れてください（6桁の数字）', String(seSeed));
-  if(!v) return;
-  const n = parseInt(v.replace(/[^0-9]/g, ''), 10);
-  if(!n){ status('seStatus', '数字を入れてください', 'warn'); return; }
-  seSeed = n;
+  if(v === null) return;                       // 「キャンセル」は黙って戻る
+  const r = zcReadSeed(v);                     // 【修正④】全角数字もそのまま通す
+  if(r.err){ status('seStatus', r.err, 'warn'); return; }
+  seSeed = r.n;
   setText('seSeedBadge', 'SE番号 ' + seSeed);
+  status('seStatus', `SE番号 ${seSeed} の音を出しました`, 'ok');
   playCurrentSE();
 });
 
@@ -8102,7 +8274,10 @@ async function doRenderSE(kind){
     } else {
       blob = encodeWav(res); ext = 'wav';
     }
-    download(blob, safeName(`se_${SE_TYPES[pickSE].label}_${seSeed}`, ext));
+    /* 【修正①】種類名は日本語ラベルではなく**ローマ字キー**（impact / swish …）を使う。
+       ラベルを使っていたせいで safeName の判定に必ず落ち、効果音が何個でも
+       同じ `bgm-日時` になっていた。キーなら種類も番号も名前に残り衝突しない。 */
+    download(blob, safeName(`se_${pickSE}_${seSeed}`, ext));
     const ms = Math.round(performance.now() - t0);
     status('seStatus',
       `書き出しました（${SE_TYPES[pickSE].label}／SE番号 ${seSeed}／${(blob.size/1024).toFixed(0)}KB／${(ms/1000).toFixed(1)}秒で完了` +
