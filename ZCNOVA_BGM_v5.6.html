@@ -647,7 +647,17 @@ footer b{ color:var(--brass); }
       <p style="margin-bottom:10px;"><b style="font-size:12.5px;">使用ライブラリ</b><br>
       本アプリでは、以下のオープンソースソフトウェアを使用しています。<br>
       ・Tone.js 14.8.49 ／ MIT License ／ Copyright (c) Yotam Mann and contributors<br>
-      ・lamejs 1.2.1 ／ LGPL License ／ Copyright (c) Zhuker<br>
+      <!-- 【2026-08-23 追加】LAME の LICENSE は次の3点を求めている。
+             1. LAME は別ファイル（lame.min.js）として読み込むこと
+             2. LAME を使っていることを明記し、lame.sourceforge.net へのリンクを張ること
+             3. 改変したら LGPL で LAME プロジェクトへ還元すること
+           1 は CDN から別ファイルで読んでいるので満たしている。
+           3 は改変していないので該当しない。
+           2 のリンクだけが抜けていたので、ここで補う。 -->
+      ・lamejs 1.2.1 ／ LGPL-3.0 ／ Copyright (c) Zhuker<br>
+      　MP3の書き出しには <b>LAME</b> を使用しています
+      （<a href="https://lame.sourceforge.net" target="_blank" rel="noopener noreferrer"
+           style="color:var(--teal);">lame.sourceforge.net</a>）。<br>
       ・Oswald / Inter（Google Fonts）／ SIL Open Font License 1.1<br>
       各ソフトウェアの著作権およびライセンスは、それぞれの権利者に帰属します。<br>
       いずれも外部から読み込んで利用しており、本アプリに同梱・改変はしていません。</p>
