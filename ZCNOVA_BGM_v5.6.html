@@ -678,15 +678,19 @@ footer b{ color:var(--brass); }
   </footer>
 
 </div>
-<!-- 【2026-08-23 ⑦ 未適用・要対応】外部から読む部品に integrity（SRI）が無い。
+<!-- 【2026-08-23 ⑦ 対応済み】外部から読む部品に integrity（SRI）を付けた。
      このHTMLは配布して第三者に開いてもらう前提なので、CDN側が差し替えられた
-     場合そのまま実行してしまう。付けるべきだが、ハッシュが1バイトでも違うと
-     ブラウザが読み込みを拒否して**アプリがまったく起動しなくなる**ため、
-     配信物そのものから取った値でなければ入れてはいけない。
-     （作業環境から cdnjs へ到達できず、検証済みの値を得られなかった。
-       npm 版のビルドは手元にあるが、cdnjs 配信物と同一である保証がない。）
+     場合に気づかず実行してしまうのを防ぐ。
+       Tone.js … 下の script タグの integrity
+       lamejs  … LAME_URL の読み込み箇所（s.integrity）
+     どちらも crossorigin / crossOrigin をセットで指定している
+     （これが無いと integrity は無視される）。
 
-     ネットワークの通る環境で、下記を実行して得た値をそのまま貼ること:
+     ★バージョンを上げるときは、必ずハッシュも取り直すこと。
+       値が1バイトでも違うとブラウザが読み込みを拒否し、
+       Tone.js 側はアプリがまったく起動しなくなる。
+       同梱の sri-hash-tool.html をブラウザで開けば値が取れる。
+       コマンドで取るなら:
 
        for u in \
          https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js \
@@ -694,17 +698,59 @@ footer b{ color:var(--brass); }
          echo "$u  sha384-$(curl -sL "$u" | openssl dgst -sha384 -binary | openssl base64 -A)"
        done
 
-     貼り方（このタグの場合）:
-       <script src="…/Tone.js"
-               integrity="sha384-（上で出た値）"
-               crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-     lamejs は実行時に appendChild で読むので、その場で
-       el.integrity = 'sha384-…'; el.crossOrigin = 'anonymous';
-     を設定する（LAME_URL の読み込み箇所）。
+     万一 Tone.js が読めなかったときは、下の案内スクリプトが理由を出す
+     （真っ黒な画面のまま放置しないため）。
 
-     恒久策としては3つとも同梱してしまう手もある。file:// 配布でも
-     オフラインでも動くようになり、CDN汚染の経路自体が無くなる。 -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+     なお、パッケージ版として配る場合は3つとも同梱する手もある。
+     file:// でもオフラインでも動くようになり、CDN汚染の経路自体が無くなる。
+     その場合 lamejs は LGPL のため、HTMLへ溶かし込まず
+     lame.min.js のまま別ファイルで置くこと。 -->
+<!-- 【2026-08-23 SRI】配信物が差し替えられていたら読み込まない。
+     integrity は cdnjs の配信物そのものから取った SHA-384。
+     ★ここの値が1バイトでもずれるとブラウザが読み込みを拒否し、アプリは
+       まったく動かなくなる。Tone.js のバージョンを上げるときは
+       必ずハッシュも取り直すこと（sri-hash-tool.html で取れる）。
+     crossorigin="anonymous" は integrity を効かせるために必須。 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"
+        integrity="sha384-c6Uo4N9c3SOEigMVzP6IshUG1wQ5uMp3xeoQFiHWAQ86joWdgyajkvopySyKy/Z6"
+        crossorigin="anonymous"
+        referrerpolicy="no-referrer"
+        onerror="window.__zcToneFailed=1"></script>
+<script>
+/* Tone.js が読めなかったときの案内。
+   ------------------------------------------------------------
+   これが無いと、読み込みに失敗したときユーザーには「真っ黒な画面」しか
+   見えない（音のライブラリが無いので以降のスクリプトが全部落ちる）。
+   起きうるのは ①ネットが繋がっていない ②CDNの障害
+   ③SRIのハッシュ不一致（＝配信物が変わった／貼った値が違う）の3つ。
+   どれなのかを本人が切り分けられる文面にしておく。 */
+(function(){
+  function show(){
+    if(window.Tone) return;                  // 読めているなら何もしない
+    var d = document.createElement('div');
+    d.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#14100c;color:#ede6d6;'
+      + 'font-family:system-ui,sans-serif;padding:32px 20px;line-height:1.9;overflow:auto;';
+    d.innerHTML =
+      '<div style="max-width:640px;margin:0 auto;">'
+      + '<h1 style="font-size:19px;color:#d85a30;margin-bottom:12px;">音のライブラリを読み込めませんでした</h1>'
+      + '<p style="font-size:13.5px;margin-bottom:16px;">'
+      + 'ZCnova は音を鳴らすために Tone.js を外部から読み込みます。'
+      + 'それが読めなかったため、このままでは動作しません。</p>'
+      + '<p style="font-size:13px;color:#a89a84;margin-bottom:8px;">考えられる原因</p>'
+      + '<ol style="font-size:13px;color:#a89a84;margin:0 0 18px 20px;">'
+      + '<li>インターネットに接続されていない</li>'
+      + '<li>配信元（cdnjs.cloudflare.com）が一時的に落ちている</li>'
+      + '<li>配信されているファイルが変わり、安全確認（SRI）に通らなかった</li>'
+      + '</ol>'
+      + '<p style="font-size:13px;">まずは<b style="color:#c8963e;">ページの再読み込み</b>をお試しください。'
+      + 'それでも直らない場合は、時間をおいてからもう一度開いてみてください。</p>'
+      + '</div>';
+    document.body.appendChild(d);
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show);
+  else show();
+})();
+</script>
 <script>
 /* ============================================================
    ZCnova BGM Studio
@@ -6032,6 +6078,12 @@ function loadLame(){
   lamePromise = new Promise((res) => {
     const s = document.createElement('script');
     s.src = LAME_URL;
+    /* 【2026-08-23 SRI】lamejs も配信物を検証する。
+       こちらは失敗しても onerror で false を返し、MP3の代わりに
+       WAVで書き出す道が既にあるので、致命傷にはならない。
+       crossOrigin は integrity を効かせるために必須。 */
+    s.integrity = 'sha384-xuasJXVcyv3hZq0eYpelEkBC8l4yufatZXDsKuyCU2rqfhDCb+ftuE/mSfZAteiK';
+    s.crossOrigin = 'anonymous';
     s.onload = () => res(!!window.lamejs);
     s.onerror = () => res(false);
     document.head.appendChild(s);
