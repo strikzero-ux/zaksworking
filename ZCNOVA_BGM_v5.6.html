@@ -4705,7 +4705,116 @@ function genChords(ph, song, mood){
     }
     ph.inv[b] = curInv;
   }
+  /* ============================================================
+     伴奏に小節ごとの変化をつける（2026-08-23）
+     ------------------------------------------------------------
+     【なにが起きていたか】
+     伴奏の鳴る位置は CHORD_PATTERNS の hits（例 [0,4,8]）を
+     再生時にそのまま当てていたため、**曲の全小節がまったく同じ位置・
+     同じ強さ**で鳴っていた。実測（3分・78小節）:
+         伴奏のリズムの種類  1種類（78小節すべて同一）
+         伴奏のアクセント    0/312拍（0%）
+       比較  キック6種 / ハイハット3種 / メロディ11種
+     しかも ph.acc.chord は配列を作るだけで一度も書き込まれておらず、
+     役割（イントロは薄く・サビは厚く）も伴奏には効いていなかった。
+     これが「どの曲もほぼ同じに聞こえる」の直接の原因。
+
+     【どう直すか】
+     小節ごとの「鳴らす位置」をここで作って **フレーズに焼き込む**。
+       ・抜き … 拍の頭以外を1つ抜いて隙間を作る
+       ・足し … 裏に1つ足して前へ押す
+       ・フィル … フレーズの最後の小節は詰めて、次へつなぐ
+       ・役割 … イントロ／アウトロは薄く、サビは厚く
+     強弱（acc.chord）もここで付ける。
+
+     ★ 乱数は seedNoise だけを使う（rnd() を消費しない）。
+       他のパートの生成結果は1音もズレない。
+     ★ 焼き込むので再生と書き出しは必ず一致する。
+     ★ ph.chordHits を持たない過去の保存データは、再生側が従来の
+       hits をそのまま使う＝**保存済みの曲の音は変わらない**。
+     ============================================================ */
+  zcBuildChordHits(ph, song);
   return prog;
+}
+
+function zcBuildChordHits(ph, song){
+  const CP  = chordPatterns(song);
+  const pat = CP[song.cpat] || CP.quarter;
+  const spb = stepsPerBar(song);
+  const bpb = beatsPerBar(song);
+  const role = PHRASE_ROLES.find(r => r.key === ph.role) || {};
+  /* 種にフレーズの識別（役割名）を混ぜる。
+     ここを曲番号だけにすると、全フレーズが同じ n1/n2/n3 を引いてしまい、
+     どのフレーズも小節0・小節1がまったく同じ変化になる
+     （＝曲全体で2種類しか出ない）。実測で平均2.3種類・最小1種類だった。 */
+  let zcRoleHash = 0;
+  const zcRoleKey = String(ph.role || ph.name || '');
+  for(let i = 0; i < zcRoleKey.length; i++)
+    zcRoleHash = (zcRoleHash * 31 + zcRoleKey.charCodeAt(i)) | 0;
+  const sd = ((song.seed || 1) ^ 0x7ad3c1f5 ^ Math.imul(zcRoleHash, 2654435761)) >>> 0;
+
+  /* 役割ごとの厚み。イントロ・アウトロは抜きやすく、サビは足しやすく。 */
+  const thinRole = (role.thin === 'intro' || role.thin === 'outro');
+  const quietRole = (role.thin === 'quiet');
+  const pDrop = thinRole ? 0.45 : (quietRole ? 0.30 : 0.22);
+  const pAdd  = thinRole ? 0.05 : ((role.dens || 1) >= 1.0 ? 0.26 : 0.14);
+
+  /* もとになる位置。arp は hits を持たないので、偶数ステップを土台にする
+     （再生側が s%2===0 のときだけ鳴らしているのに合わせる）。 */
+  let base = [];
+  if(pat.style === 'arp' || !pat.hits){
+    for(let k = 0; k < spb; k += 2) base.push(k);
+  } else {
+    base = pat.hits.filter(k => k < spb);
+  }
+
+  const beatHeads = beatStartsOf(song);
+  ph.chordHits = [];
+  for(let bar = 0; bar < ph.bars; bar++){
+    let hits = base.slice();
+    const last = (bar === ph.bars - 1);
+    const n1 = seedNoise(sd + bar * 101, 11);
+    const n2 = seedNoise(sd + bar * 101, 23);
+    const n3 = seedNoise(sd + bar * 101, 37);
+
+    /* 抜き：拍の頭でない音を1つ落とす。小節の頭は必ず残す（土台が消えると濁る）。 */
+    if(hits.length > 2 && n1 < pDrop){
+      const cand = hits.filter(k => k !== 0 && beatHeads.indexOf(k) < 0);
+      const pool = cand.length ? cand : hits.filter(k => k !== 0);
+      if(pool.length) {
+        const gone = pool[Math.floor(n2 * pool.length) % pool.length];
+        hits = hits.filter(k => k !== gone);
+      }
+    }
+    /* 足し：いま鳴っていない裏の位置に1つ足す。前のめりの推進力が出る。 */
+    if(n2 < pAdd){
+      const cand = [];
+      for(let k = 1; k < spb; k += 2) if(hits.indexOf(k) < 0) cand.push(k);
+      if(cand.length) hits.push(cand[Math.floor(n3 * cand.length) % cand.length]);
+    }
+    /* フィル：フレーズの最後の小節は後半を詰めて、次のフレーズへつなぐ。 */
+    if(last && !thinRole && n3 < 0.5){
+      for(let k = spb - (spb >> 2); k < spb; k += 2) if(hits.indexOf(k) < 0) hits.push(k);
+    }
+    if(!hits.length) hits = [0];
+    hits.sort((a, b) => a - b);
+    ph.chordHits.push(hits);
+  }
+
+  /* 強弱。小節の頭は少し強く、フレーズの頭とサビはさらに強く。
+     ここを書かないと ph.acc.chord は全部 false のまま＝強弱が一切付かない。 */
+  const beats = ph.bars * bpb;
+  if(!ph.acc || !ph.acc.chord || ph.acc.chord.length !== beats){
+    ph.acc = ph.acc || {};
+    ph.acc.chord = new Array(beats).fill(false);
+  }
+  for(let bt = 0; bt < beats; bt++){
+    const barTop = (bt % bpb) === 0;
+    if(!barTop){ ph.acc.chord[bt] = false; continue; }
+    const first = (bt === 0);
+    const r = seedNoise(sd + bt * 57, 71);
+    ph.acc.chord[bt] = first ? true : (r < ((role.dens || 1) >= 1.0 ? 0.5 : 0.3));
+  }
 }
 // その拍で鳴っているコード（直前に置かれたもの）を返す
 function chordAt(ph, beat){
@@ -5852,17 +5961,31 @@ function playStep(eng, song, ph, s, time){
       notes = zcInvertNotes(notes, ph.inv[beat] || 0);
     }
     const acc = ph.acc.chord[beat];
+    /* 【2026-08-23】小節ごとに鳴らす位置を変える。
+       genChords が ph.chordHits へ焼き込んでいればそれに従い、
+       持っていない過去の保存データは従来どおり pat.hits をそのまま使う
+       （＝保存済みの曲の音は1音も変わらない）。 */
+    const zcBar  = Math.floor(s / stepsPerBar(song));
+    const zcHits = (ph.chordHits && ph.chordHits[zcBar]) ? ph.chordHits[zcBar] : null;
+    /* コードが変わる拍は、抜きの対象にせず必ず鳴らす。
+       ここを外すと和音の土台が消えて濁って聞こえる。
+       （arp でも同じ。実測で seed 508275・cpat=arp のとき、
+         小節の途中でコードが変わる拍が1つ抜けていた） */
+    const isStart = isBeatStart(song, s) && ph.chord[beat] !== null && ph.chord[beat] !== undefined;
+
     if(pat.style === 'arp'){
       // ② 向き（上昇／下降／往復／1音飛ばし）。'up' なら従来と同じ音になる
       const note = notes[zcArpIndex(song, posInBeat(song, s), notes.length)];
-      if(s % 2 === 0){
+      const okArp = zcHits ? (zcHits.indexOf(inBar) >= 0 || isStart) : (s % 2 === 0);
+      if(okArp){
         try{ eng.parts.chord.synth.triggerAttackRelease(note, pat.dur, time,
              vel(0.7, acc) * pat.gain * pitchTilt(note)); }catch(err){}
       }
       return;
     }
-    const isStart = isBeatStart(song, s) && ph.chord[beat] !== null && ph.chord[beat] !== undefined;
-    if(pat.hits && pat.hits.indexOf(inBar) < 0 && !isStart) return;
+    if(zcHits){
+      if(zcHits.indexOf(inBar) < 0 && !isStart) return;
+    } else if(pat.hits && pat.hits.indexOf(inBar) < 0 && !isStart) return;
     const cv = vel(0.7, acc) * pat.gain;
     if(pat.style === 'strum'){
       /* かき鳴らし：弦を少しずつずらす。向きを交互にすると人の手らしくなる。
