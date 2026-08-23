@@ -362,6 +362,16 @@ footer b{ color:var(--brass); }
       <span class="hint" style="margin:0;">イントロ〜Aメロ〜サビの並べ方です</span>
     </div>
 
+    <!-- 【2026-08-23 追加E】曲のゆらぎ -->
+    <div class="fx-row">
+      <span class="t-label">曲のゆらぎ</span>
+      <div class="pat-btns" id="spreadPick"></div>
+    </div>
+    <div class="fx-row" style="margin-top:-4px;">
+      <span class="t-label"></span>
+      <span class="hint" style="margin:0;" id="spreadNote"></span>
+    </div>
+
     <div class="fx-row">
       <span class="t-label">音数</span>
       <input type="range" id="density" min="15" max="100" value="60">
@@ -4670,9 +4680,90 @@ function degreeName(deg, song){
   return root + (iv === 3 ? 'm' : '');
 }
 
+/* ============================================================
+   【2026-08-23 追加E】曲のゆらぎ（同じグループの曲調から候補を借りる）
+   ------------------------------------------------------------
+   【なぜ要るか】
+   在庫は 進行18種・ベース7種・伴奏31種あるのに、1つの曲調が持っている
+   候補は平均で 進行3.2 / ベース2.1 / 伴奏6.5 しかない。
+   31曲調のうち27曲調は進行の候補が3つだけで、同じ曲調を選び直すたびに
+   ほぼ同じ進行が出ていた。
+
+   【なぜ「全部の在庫から選ぶ」ではないか】
+   全在庫を開放すると、明るい曲調に暗い進行が来て曲調の意味が消える。
+   そこで **画面のカテゴリ（明るい／やさしい／かっこいい／和・洋風／
+   変わり種）の中でだけ借りる**。明るいが変わり種から借りることはない。
+   これで候補は 進行7〜14 / ベース3〜5 / 伴奏14〜17 まで増える。
+
+   【乱数について】
+   借りるかどうかは seedNoise（rnd() を消費しない）で決め、
+   選ぶのは今までどおり pick() 1回。pick() は配列の長さに関係なく
+   乱数を1回しか使わないので、乱数の流れは一切変わらない。
+   「いつもどおり」を選べば pick(mood[軸]) そのままなので、
+   出てくる曲もこれまでとビット単位で同じになる。
+   ============================================================ */
+const ZC_SPREAD = {
+  off:  { label:'いつもどおり', p:0,
+          note:'その曲調に決められた候補だけを使います（これまでと同じ曲）' },
+  some: { label:'すこし広め',   p:0.25,
+          note:'同じグループの曲調から、ときどき候補を借ります' },
+  wide: { label:'大きく広げる', p:0.45,
+          note:'同じグループから多めに借ります。曲調の色はやや薄まります' }
+};
+const ZC_SPREAD_DEFAULT = 'some';
+function zcSpreadP(song){
+  /* 設定を持たない古い保存データは「いつもどおり」＝従来の鳴り方にする。 */
+  return (ZC_SPREAD[song && song.spread] || ZC_SPREAD.off).p;
+}
+/* カテゴリ内の候補を合併したもの。曲調の数だけ回すので一度だけ作って使い回す。 */
+const ZC_CAT_POOL = {};
+function zcCatPool(mood, axis){
+  const cat = moodCatOf(mood.key);
+  const ck = cat + '/' + axis;
+  if(ZC_CAT_POOL[ck]) return ZC_CAT_POOL[ck];
+  const out = [];
+  moodsOfCat(cat).forEach(m => (m[axis] || []).forEach(v => { if(out.indexOf(v) < 0) out.push(v); }));
+  ZC_CAT_POOL[ck] = out;
+  return out;
+}
+/* 候補を1つ選ぶ。ゆらぎが 0 のときは pick(mood[axis]) と完全に同じ。
+   ok は「その候補がいま使えるか」の判定（拍子によって無い型があるため）。 */
+function zcPickWide(mood, axis, song, ph, salt, ok){
+  const own = mood[axis] || [];
+  const p = zcSpreadP(song);
+  if(p > 0 && own.length){
+    const sd = ph ? zcRoleSeed(ph, song, salt) : ((((song && song.seed) || 1) ^ salt) >>> 0);
+    if(seedNoise(sd, 41) < p){
+      const wide = zcCatPool(mood, axis).filter(k => !ok || ok(k));
+      if(wide.length > own.length) return pick(wide);
+    }
+  }
+  return pick(own);
+}
+/* BPM の幅。ゆらぎのぶんだけ、同じグループの上下へ少しだけ広げる。
+   乱数は使わないので irand() の消費回数は変わらない。 */
+function zcBpmRange(mood, song){
+  const lo = mood.bpm[0], hi = mood.bpm[1];
+  const p = zcSpreadP(song);
+  if(p <= 0) return [lo, hi];
+  let cLo = lo, cHi = hi;
+  moodsOfCat(moodCatOf(mood.key)).forEach(m => {
+    if(!m.bpm) return;
+    if(m.bpm[0] < cLo) cLo = m.bpm[0];
+    if(m.bpm[1] > cHi) cHi = m.bpm[1];
+  });
+  /* いきなりグループの端まで広げると別の曲調になってしまうので、
+     ゆらぎの 6割ぶんだけ寄せる（すこし広め＝端まで15%）。 */
+  const k = p * 0.6;
+  return [Math.round(lo - (lo - cLo) * k), Math.round(hi + (cHi - hi) * k)];
+}
+
 /* ---------- コード進行を置く ---------- */
 function genChords(ph, song, mood){
-  const prog = PROGRESSIONS.find(p => p.key === pick(mood.progs)) || PROGRESSIONS[0];
+  /* 【追加E】同じグループの曲調からも進行を借りる（ゆらぎの設定しだい） */
+  const progKey = zcPickWide(mood, 'progs', song, ph, 0x11a7c3d5,
+    k => PROGRESSIONS.some(p => p.key === k));
+  const prog = PROGRESSIONS.find(p => p.key === progKey) || PROGRESSIONS[0];
   const beats = ph.bars * beatsPerBar(song);
   // 1小節1コードを基本に、たまに2拍ごと・2小節のばすを混ぜる。
   // ③ 和声リズム：曲調が mood.harmSpeed を持っていればそちらを使う。
@@ -4896,7 +4987,13 @@ function zcBuildChordHits(ph, song, mood){
      ・曲全体の顔は song.cpat のままにしたいので、6割はそのまま
      ・残りは同じ曲調の候補から選ぶ＝曲調の性格は崩れない
      ・seedNoise で決めるので rnd() は消費しない＝他パートは不変 */
-  const cpPool = (mood && Array.isArray(mood.cpat) ? mood.cpat : []).filter(k => CP[k]);
+  /* 【追加E】フレーズごとの持ち替え先も、ゆらぎのぶんだけグループから借りる。 */
+  let cpSrc = (mood && Array.isArray(mood.cpat) ? mood.cpat : []);
+  if(zcSpreadP(song) > 0 && mood){
+    const wide = zcCatPool(mood, 'cpat');
+    if(wide.length > cpSrc.length) cpSrc = wide;
+  }
+  const cpPool = cpSrc.filter(k => CP[k]);
   let cpKey = song.cpat;
   if(cpPool.length > 1){
     const csd = zcRoleSeed(ph, song, 0x4e17b9d3);
@@ -4965,7 +5062,9 @@ function chordAt(ph, beat){
 /* ---------- ベース ---------- */
 function genBass(ph, song, mood){
   const BP = bassPatterns(song);
-  const pat = BP[pick(mood.bass)] || BP.root;
+  /* 【追加E】ベースの型も同じグループから借りる。
+     拍子によって無い型があるので、在ることを確かめてから候補に入れる。 */
+  const pat = BP[zcPickWide(mood, 'bass', song, ph, 0x22b3e7f1, k => !!BP[k])] || BP.root;
   const spb = stepsPerBar(song);
   const n = ph.bars * spb;
   ph.bass.fill(null);
@@ -5901,8 +6000,12 @@ function makeSong(moodKey, bars, playModeKey, targetSec, seed, opt){
       seed:s, moodKey:mood.key, bars,
       key: pick(mood.keys),
       scale: pick(mood.scales),
-      bpm: irand(mood.bpm[0], mood.bpm[1]),
-      cpat: pick(mood.cpat),
+      /* 【追加E】ゆらぎ。曲へ焼き込むので、保存・読み込みでも同じ曲になる。
+         ここより上で使うので、先に取り出しておく（下の zcBpmRange / zcPickWide が見る）。 */
+      bpm: irand(...zcBpmRange(mood, { spread: o.spread || ZC_SPREAD_DEFAULT })),
+      cpat: zcPickWide(mood, 'cpat', { seed:s, spread: o.spread || ZC_SPREAD_DEFAULT }, null, 0x33c5a9b7,
+                       k => !!chordPatterns({ meter: METERS[mood.meter] ? mood.meter : DEFAULT_METER })[k]),
+      spread: ZC_SPREAD[o.spread] ? o.spread : ZC_SPREAD_DEFAULT,
       // 曲ごとに「旋律の作り方」と「展開の型」を1つずつ選ぶ。
       // ここが変わると、同じ曲調でもまるで違う曲になる。
       melStyle: o.melStyle || pick(mood.mel || MELODY_STYLES.map(x => x.key)),
@@ -7558,6 +7661,25 @@ function syncSFXPick(){
   document.querySelectorAll('#sePick button').forEach(b =>
     b.classList.toggle('active', b.dataset.se === pickSE));
 }
+/* 【追加E】ゆらぎのボタン */
+function buildSpreadButtons(){
+  const w = $('spreadPick'); if(!w) return;
+  w.innerHTML = '';
+  Object.keys(ZC_SPREAD).forEach(k => {
+    const b = document.createElement('button');
+    b.className = 'pat-btn';
+    b.textContent = ZC_SPREAD[k].label;
+    b.dataset.spread = k;
+    b.title = ZC_SPREAD[k].note;
+    w.appendChild(b);
+  });
+}
+function updateSpreadNote(){
+  const e = $('spreadNote'); if(!e) return;
+  const cur = ZC_SPREAD[pickSpread] || ZC_SPREAD.off;
+  e.textContent = cur.note;
+}
+
 function markPicked(){
   if(!song) return;
   /* 【UI整理③】曲が別カテゴリの曲調に変わったときだけ、そのカテゴリを開く。
@@ -7582,6 +7704,12 @@ function markPicked(){
     b.classList.toggle('active', parseInt(b.dataset.sec, 10) === song.targetSec));
   document.querySelectorAll('#loopPick button').forEach(b =>
     b.classList.toggle('active', (b.dataset.loop === '1') === !!song.loop));
+  /* 【追加E】ゆらぎ。読み込んだ曲の設定を画面へ戻す
+     （設定を持たない古い曲は「いつもどおり」として見せる）。 */
+  pickSpread = ZC_SPREAD[song.spread] ? song.spread : 'off';
+  document.querySelectorAll('#spreadPick button').forEach(b =>
+    b.classList.toggle('active', b.dataset.spread === pickSpread));
+  try{ updateSpreadNote(); }catch(e){}
   try{ zcSyncSELaneUI(); }catch(e){}
   try{ buildOneStemPick(); }catch(e){}
   /* 【UI整理②】曲に焼き込まれているつまみを画面へ戻す。
@@ -8383,6 +8511,8 @@ let pickMood = MOODS[0].key, pickBars = 2, pickPM = 'random', pickSec = 180;
 let pickSE = 'impact';
 let seSeed = newSeed();
 let pickMel = 'auto', pickArr = 'auto', pickDensity = 60, pickHumanize = 35;
+/* 【追加E】曲のゆらぎ。曲へ焼き込むので、画面の値はここで持つ。 */
+let pickSpread = ZC_SPREAD_DEFAULT;
 
 $('moodPick').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if(!b) return;
@@ -8461,6 +8591,8 @@ function makeNewSong(seed){
     /* 【UI整理②】「くわしく決める」のつまみ。曲に焼き込むので、
        再生・書き出し・保存・読み込みのどれでも同じ結果になる。 */
     melTweak: melKnobOverride(),
+    /* 【追加E】曲のゆらぎ */
+    spread: pickSpread,
   });
   curPhrase = 0;
   renderAll();
@@ -8471,6 +8603,16 @@ function makeNewSong(seed){
     `${fmtTime(songSeconds(song))}・曲番号${song.seed}）`, 'ok');
   if(wasPlaying) restartPlayback();
 }
+/* 【追加E】ゆらぎを押したら作り直す */
+$('spreadPick').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if(!b || !b.dataset.spread) return;
+  pickSpread = b.dataset.spread;
+  updateSpreadNote();
+  document.querySelectorAll('#spreadPick button').forEach(x =>
+    x.classList.toggle('active', x.dataset.spread === pickSpread));
+  /* 同じ曲番号のまま作り直す＝ゆらぎの効きを聴き比べられる */
+  if(song) makeNewSong(song.seed);
+});
 $('melStylePick').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if(!b) return;
   pickMel = b.dataset.mel; if(song) makeNewSong();
@@ -9693,6 +9835,7 @@ function boot(){
   buildPlayModeButtons();
   buildMelStyleButtons();
   buildArrangeButtons();
+  buildSpreadButtons(); updateSpreadNote();   /* 【追加E】曲のゆらぎ */
   buildSEButtons();
   buildSFXQuickPick();
   setupFolds();
