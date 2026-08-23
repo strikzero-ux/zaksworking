@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZCnova — SRIハッシュ取得ツール</title>
+<style>
+  :root{ --bg:#14100c; --card:#201a14; --text:#ede6d6; --dim:#a89a84;
+         --brass:#c8963e; --teal:#4fb0a8; --accent:#d85a30;
+         --border:rgba(200,150,62,0.16); }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ background:var(--bg); color:var(--text); font-family:system-ui,sans-serif;
+        padding:28px 16px 60px; line-height:1.7; }
+  .wrap{ max-width:840px; margin:0 auto; }
+  h1{ font-size:20px; letter-spacing:1px; margin-bottom:4px; }
+  h1 span{ color:var(--brass); }
+  .sub{ font-size:12.5px; color:var(--dim); margin-bottom:20px; }
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:12px;
+         padding:16px; margin-bottom:14px; }
+  .card h2{ font-size:14px; color:var(--brass); margin-bottom:8px; }
+  button{ font-family:inherit; font-size:13px; padding:9px 18px; border-radius:8px;
+          cursor:pointer; background:var(--teal); border:none; color:#14100c; font-weight:700; }
+  button:disabled{ opacity:.45; cursor:not-allowed; }
+  button.copy{ background:rgba(255,255,255,.06); border:1px solid var(--border);
+               color:var(--text); font-weight:400; font-size:11.5px; padding:5px 12px; }
+  pre{ background:#1a150f; border:1px solid #4a3d2a; border-radius:8px; padding:12px;
+       overflow-x:auto; font-size:11.5px; white-space:pre-wrap; word-break:break-all;
+       margin:8px 0; color:#cfe6e2; }
+  .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
+  .status{ font-size:12.5px; color:var(--dim); min-height:1.6em; }
+  .ok{ color:var(--teal); } .ng{ color:var(--accent); }
+  .hint{ font-size:12px; color:var(--dim); margin-top:8px; }
+  .hint b{ color:var(--brass); }
+  ol{ margin:6px 0 0 20px; font-size:12.5px; color:var(--dim); }
+  li{ margin-bottom:4px; }
+  code{ background:#1a150f; padding:1px 5px; border-radius:4px; font-size:11.5px; color:var(--teal); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>ZCnova — <span>SRIハッシュ取得ツール</span></h1>
+  <div class="sub">
+    ZCnova BGM Studio が外部から読んでいる2つのファイルのハッシュ値を取得します。<br>
+    <b>このファイルをブラウザで開いて、下のボタンを押すだけです。</b>
+  </div>
+
+  <div class="card">
+    <h2>使い方</h2>
+    <ol>
+      <li>下の「ハッシュを取得する」を押す</li>
+      <li>結果をコピーして、そのまま渡す（またはHTMLに貼る）</li>
+    </ol>
+    <div class="hint">
+      ネットにつながっている環境で開いてください。
+      <b>ファイルをダブルクリックで開くと失敗する場合があります</b>
+      （ブラウザの制限）。その場合は ZCnova を置いているサイトと同じ場所に
+      このファイルを置いて、<code>https://…/sri-hash-tool.html</code> として開いてください。
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button id="go">ハッシュを取得する</button>
+      <button class="copy" id="copyAll" disabled>結果をまとめてコピー</button>
+    </div>
+    <div class="status" id="st">まだ実行していません。</div>
+  </div>
+
+  <div id="out"></div>
+
+  <div class="card">
+    <h2>うまくいかないときの代わりの方法</h2>
+    <div class="hint" style="margin-top:0;">
+      <b>方法A：Webサービスを使う</b><br>
+      <code>https://www.srihash.org/</code> を開き、下のURLを1つずつ貼って
+      「Hash!」を押すと、貼り付け用のタグがそのまま出ます。
+      <pre>https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js
+https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js</pre>
+
+      <b>方法B：Mac / Linux のターミナル</b>
+      <pre>for u in \
+  https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js \
+  https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js ; do
+  echo "$u"
+  echo "  sha384-$(curl -sL "$u" | openssl dgst -sha384 -binary | openssl base64 -A)"
+done</pre>
+
+      <b>方法C：Windows の PowerShell</b>
+      <pre>@(
+ "https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js",
+ "https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"
+) | ForEach-Object {
+  $b = (Invoke-WebRequest $_ -UseBasicParsing).Content
+  if ($b -is [string]) { $b = [Text.Encoding]::UTF8.GetBytes($b) }
+  $h = [Security.Cryptography.SHA384]::Create().ComputeHash($b)
+  "$_`n  sha384-$([Convert]::ToBase64String($h))"
+}</pre>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* 対象は ZCnova が実際に読んでいる2つ。バージョンを変えたらここも変える。 */
+const TARGETS = [
+  { name:'Tone.js 14.8.49',
+    url:'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js',
+    how:'script タグに integrity を付ける' },
+  { name:'lamejs 1.2.1',
+    url:'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js',
+    how:'loadLame() の中で s.integrity に入れる' },
+];
+
+const $ = id => document.getElementById(id);
+let results = [];
+
+/* innerHTML に入れる文字は必ず通す。
+   ここを通さずに '<script src>' のような文字列を入れたら、
+   ブラウザが本物のタグとして解釈して、後ろの内容ごと飲み込んでしまった。 */
+function esc(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function sha384(buf){
+  const h = await crypto.subtle.digest('SHA-384', buf);
+  let s = '';
+  new Uint8Array(h).forEach(b => { s += String.fromCharCode(b); });
+  return 'sha384-' + btoa(s);
+}
+
+function card(title, body){
+  const d = document.createElement('div');
+  d.className = 'card';
+  d.innerHTML = '<h2>' + title + '</h2>' + body;
+  return d;
+}
+
+$('go').addEventListener('click', async () => {
+  $('go').disabled = true;
+  $('copyAll').disabled = true;
+  $('out').innerHTML = '';
+  results = [];
+  const st = $('st');
+  let ngCount = 0;
+
+  for(const t of TARGETS){
+    st.className = 'status';
+    st.textContent = t.name + ' を取得しています…';
+    try{
+      /* CDNは Access-Control-Allow-Origin: * を返すので fetch で読める。
+         cache:'no-store' で、途中のキャッシュではなく配信物そのものを取る。 */
+      const res = await fetch(t.url, { cache:'no-store' });
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const buf = await res.arrayBuffer();
+      const hash = await sha384(buf);
+      results.push({ ...t, hash, bytes: buf.byteLength });
+
+      const tag = (t.name.indexOf('Tone') === 0)
+        ? '<script src="' + t.url + '"\n        integrity="' + hash + '"\n        crossorigin="anonymous"\n        referrerpolicy="no-referrer"><\/script>'
+        : "s.src = LAME_URL;\ns.integrity = '" + hash + "';\ns.crossOrigin = 'anonymous';";
+
+      $('out').appendChild(card(
+        '✅ ' + esc(t.name),
+        '<div class="hint" style="margin-top:0;">' + (buf.byteLength/1024).toFixed(0) + ' KB / ' + esc(t.how) + '</div>' +
+        '<pre>' + esc(hash) + '</pre>' +
+        '<div class="hint">貼り付け用</div>' +
+        '<pre>' + esc(tag) + '</pre>'
+      ));
+    }catch(e){
+      ngCount++;
+      $('out').appendChild(card(
+        '❌ ' + esc(t.name),
+        '<div class="hint ng" style="margin-top:0;">取得できませんでした：' + esc(e.message) + '</div>' +
+        '<div class="hint">下の「代わりの方法」をお試しください。' +
+        'ファイルをダブルクリックで開いている場合は、サイト上に置いて開くと通ることがあります。</div>'
+      ));
+    }
+  }
+
+  if(ngCount === 0){
+    st.className = 'status ok';
+    st.textContent = '全部取れました。下の「結果をまとめてコピー」で渡せます。';
+    $('copyAll').disabled = false;
+  } else if(ngCount < TARGETS.length){
+    st.className = 'status ng';
+    st.textContent = ngCount + '件だけ取得できませんでした。';
+    $('copyAll').disabled = false;
+  } else {
+    st.className = 'status ng';
+    st.textContent = '取得できませんでした。下の「代わりの方法」をお使いください。';
+  }
+  $('go').disabled = false;
+});
+
+$('copyAll').addEventListener('click', async () => {
+  const txt = results.map(r => r.url + '\n  ' + r.hash).join('\n\n');
+  try{
+    await navigator.clipboard.writeText(txt);
+    $('copyAll').textContent = 'コピーしました';
+    setTimeout(() => { $('copyAll').textContent = '結果をまとめてコピー'; }, 1600);
+  }catch(e){
+    /* クリップボードが使えない環境（file:// など）では選択できる形で出す */
+    const ta = document.createElement('textarea');
+    ta.value = txt;
+    ta.style.cssText = 'width:100%;height:120px;background:#1a150f;color:#cfe6e2;border:1px solid #4a3d2a;border-radius:8px;padding:10px;font-size:11.5px;';
+    $('out').prepend(card('手動でコピーしてください', ''));
+    $('out').firstChild.appendChild(ta);
+    ta.select();
+  }
+});
+</script>
+</body>
+</html>
