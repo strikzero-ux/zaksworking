@@ -180,6 +180,14 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
 .song-item button.danger{ color:#e79576; }
 .song-empty{ font-size:12px; color:var(--text-dim); padding:4px 2px; }
 
+/* ---- 【修正④】書き出し中に触れなくする ---- */
+.zc-locked{ position:relative; opacity:0.45; }
+.zc-locked *{ pointer-events:none !important; }
+.zc-locked::after{ content:'書き出し中は変更できません'; position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center; border-radius:12px;
+  background:rgba(20,16,12,0.55); color:var(--brass); font-size:12.5px;
+  letter-spacing:0.5px; pointer-events:none; }
+
 /* ---- ②以降の折りたたみ ---- */
 .fold .fold-head{ cursor:pointer; margin-bottom:0; }
 .fold .fold-head::after{ content:'▼'; margin-left:auto; color:var(--text-dim); font-size:10px; }
@@ -246,6 +254,9 @@ footer b{ color:var(--brass); }
     </span>
   </div>
 
+  <!-- 【修正⑦】再生できない理由は、押した指のすぐ近くに出す -->
+  <p class="status warn" id="playHint" style="display:none; margin:-10px 0 12px;"></p>
+
   <p class="hint" style="margin:-8px 0 14px;">
     <b>再生時に音が乱れることがあります。</b>ブラウザがその場で音を計算しているためで、
     パソコンの負荷や他のタブの影響を受けます。<b>書き出したファイルには影響しません</b>（書き出しは時間をかけて計算するため必ずきれいに出ます）。
@@ -253,7 +264,7 @@ footer b{ color:var(--brass); }
   </p>
 
   <!-- ===== ① 曲を作る ===== -->
-  <div class="card">
+  <div class="card" id="card1">
     <div class="card-head">
       <div class="card-title"><span class="stage-no">1</span>曲を作る<small>曲調と長さを選ぶと1曲できます</small></div>
     </div>
@@ -302,7 +313,7 @@ footer b{ color:var(--brass); }
     <div class="fx-row">
       <span class="t-label">音数</span>
       <input type="range" id="density" min="15" max="100" value="60">
-      <span class="fx-val" id="densityVal">ふつう</span>
+      <span class="fx-val" id="densityVal" style="min-width:110px;">ふつう（60%）</span>
       <span class="t-label" style="width:auto;">人間っぽさ</span>
       <input type="range" id="humanize" min="0" max="100" value="35">
       <span class="fx-val" id="humanizeVal">35%</span>
@@ -6285,6 +6296,31 @@ function status(id, msg, kind){
   const e = $(id); if(!e) return;
   e.textContent = msg || '';
   e.className = 'status' + (kind ? ' ' + kind : '');
+  /* 【2026-08-23 修正⑯】古いメッセージが残り続けないよう、時間で消す。
+     旧実装は一度出すと消えないので、①の操作をしたのに⑤には
+     「「曲5」を保存しました」が出たまま、といった食い違いが起きていた。
+     ユーザーは別の操作の結果を今の結果だと誤読する。
+     ・警告（warn）は消さない。読み飛ばされては困るため。
+     ・成功・案内は 12 秒でそっと消す。 */
+  clearTimeout(e._zcClear);
+  if(msg && kind !== 'warn'){
+    e._zcClear = setTimeout(() => { if(e.textContent === msg) e.textContent = ''; }, 12000);
+  }
+}
+
+/* 【2026-08-23 修正⑰】音数の目盛り表示。
+   旧実装は「すきまし」という誤字があり、しかも4段階しかないため
+   50→60、80→100 と動かしてもラベルが変わらず「効いていない」ように見えた。
+   6段階に分け、%も併記して動きが必ず目に見えるようにする。 */
+function zcDensityLabel(v){
+  const n = Math.round(v);
+  const w = n < 25 ? 'すかすか'
+          : n < 38 ? 'すきま多め'
+          : n < 52 ? '少なめ'
+          : n < 68 ? 'ふつう'
+          : n < 85 ? '多め'
+          :          'にぎやか';
+  return `${w}（${n}%）`;
 }
 /* ---------- 書き出し中の「動いてます」表示 ----------
    Tone.Offline の計算中はブラウザが1本の糸で回り続けるので、進捗の文字だけだと
@@ -6309,7 +6345,11 @@ function startRenderTicker(btnId, baseLabel, statusId){
   };
 }
 function fmtTime(sec){
-  const m = Math.floor(sec / 60), s = Math.round(sec % 60);
+  /* 【2026-08-23 修正⑩】旧実装は Math.round(sec % 60) だったため、
+     59.5秒以上で「0分60秒」「2分60秒」と表示されていた（実測：599.9→9分60秒）。
+     先に秒へ丸めてから分と秒に分ける。 */
+  const t = Math.max(0, Math.round(sec));
+  const m = Math.floor(t / 60), s = t % 60;
   return m + '分' + String(s).padStart(2, '0') + '秒';
 }
 function pushUndo(){
@@ -6543,7 +6583,13 @@ function renderTimeline(){
   if(!song.arrangement.length){
     const e = document.createElement('span');
     e.className = 'tl-empty'; e.textContent = '空です。「選んだ長さに合わせて組み直す」を押してください。';
-    w.appendChild(e); return;
+    w.appendChild(e);
+    /* 【2026-08-23 修正⑧】ここで return する前に説明文も更新する。
+       旧実装は更新せず抜けていたので、並びを空にした直後も
+       「42個並んでいます（3分02秒）」という古い表示が残り、
+       すぐ上の「空です」と真っ向から食い違っていた。 */
+    status('arrangeStatus', '並びが空です。曲の長さは0秒です。');
+    return;
   }
   // 10分の曲は148個並ぶ。全部出すと画面が埋まるので既定では畳む。
   const list = timelineExpanded ? song.arrangement : song.arrangement.slice(0, TL_SHOW);
@@ -7093,8 +7139,7 @@ function syncControls(){
   $('fadeOut').value = song.fadeOut; setText('fadeOutVal', song.fadeOut ? song.fadeOut + '秒' : 'なし');
   $('songName').value = song.name || '';
   $('density').value = song.density;
-  setText('densityVal', song.density < 30 ? 'すきまし' : (song.density < 50 ? '少なめ'
-    : (song.density < 75 ? 'ふつう' : 'にぎやか')));
+  setText('densityVal', zcDensityLabel(song.density));   /* 【修正⑰】 */
   $('humanize').value = song.humanize;
   setText('humanizeVal', song.humanize === 0 ? '機械的' : song.humanize + '%');
 }
@@ -7122,14 +7167,37 @@ async function restartPlayback(){
   await startPlayback(song, onStepPlayed);
 }
 let ZC_PLAY_LOCK = false; // Tone.start()中などの非同期区間で2回目が入るのを防ぐ
+/* 【2026-08-23 修正⑦】再生できない理由を、再生ボタンのすぐ横に出す。
+   ------------------------------------------------------------
+   旧実装は理由をカード①下端の makeStatus に出していた。実測すると
+   iPhone相当(390x844)では画面上端から 1904px 下＝2画面ぶんスクロールした先で、
+   押した瞬間には絶対に見えない。ユーザーからは「▶が反応しない」としか
+   見えず、連打して諦めることになる。
+   さらに文言も実態と違った：並びが空のときの正しい直し方は
+   「この設定で作る」ではなく②の「選んだ長さに合わせて組み直す」。 */
+function zcPlayHint(msg){
+  const el = $('playHint');
+  if(el){
+    el.textContent = msg;
+    el.style.display = msg ? 'block' : 'none';
+    clearTimeout(el._zcT);
+    if(msg) el._zcT = setTimeout(() => { el.style.display = 'none'; }, 8000);
+  }
+  if(msg) status('makeStatus', msg, 'warn');   // 従来どおり下にも残す
+}
 async function togglePlay(){
   if(ZC_PLAY_LOCK) return;
   ZC_PLAY_LOCK = true;
   try{
-    if(!song || !songSteps(song)){
-      status('makeStatus', 'まだ曲がありません。曲調を選んで「この設定で作る」を押してください。', 'warn');
+    if(!song || !song.phrases || !song.phrases.length){
+      zcPlayHint('まだ曲がありません。①の「この設定で作る」を押してください。');
       return;
     }
+    if(!songSteps(song)){
+      zcPlayHint('並びが空なので鳴らせません。②の「選んだ長さに合わせて組み直す」を押してください。');
+      return;
+    }
+    zcPlayHint('');
     if(zcTrackPreview !== null){ zcStopTrackPreview(); return; }
     if(playing){ stopPlayback(); clearHighlight(); $('playBtn').textContent = '▶'; }
     else { await restartPlayback(); $('playBtn').textContent = '⏸'; }
@@ -7247,8 +7315,7 @@ let zcDensityTouched = false, zcHumanizeTouched = false;
 $('density').addEventListener('input', (e) => {
   zcDensityTouched = true;
   pickDensity = parseInt(e.target.value, 10);
-  setText('densityVal', pickDensity < 30 ? 'すきまし' : (pickDensity < 50 ? '少なめ'
-    : (pickDensity < 75 ? 'ふつう' : 'にぎやか')));
+  setText('densityVal', zcDensityLabel(pickDensity));    /* 【修正⑰】 */
   regenSoon();
 });
 $('humanize').addEventListener('input', (e) => {
@@ -8056,12 +8123,34 @@ function onRenderStopped(){
   clearHighlight();
   $('playBtn').textContent = '▶';
 }
+/* 【2026-08-23 修正④】書き出し中は「曲を作り替える操作」を止める。
+   ------------------------------------------------------------
+   旧実装の rendering フラグは書き出しボタン同士しかガードしておらず、
+   曲調・メロディの作り方・曲の展開・フレーズ操作は素通りだった。
+   実測：MP3書き出し中に曲調を押すと、画面だけ新しい曲に変わり、
+   保存されたのは古い曲。曲番号863034の曲を書き出したのに画面は411260、
+   しかもファイル名が bgm-日時 なので、どちらが何か追跡できなかった。
+
+   書き出しには実測20〜44秒かかるので「待っている間に次の曲を探す」のは
+   ごく自然な行動。押せてしまうUIのほうが悪い。ここで丸ごと止める。 */
+const ZC_LOCK_CARDS = ['card1', 'card2', 'card3'];
+function zcSetEditLock(on){
+  ZC_LOCK_CARDS.forEach(id => {
+    const el = document.getElementById(id); if(!el) return;
+    el.classList.toggle('zc-locked', !!on);
+  });
+  ['makeBtn','againBtn','seedBtn','addPhraseBtn','dupPhraseBtn','delPhraseBtn',
+   'autoArrangeBtn','clearArrangeBtn','regenPhraseBtn','clearPhraseBtn'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.disabled = !!on;
+  });
+}
 let rendering = false;
 $('renderBtn').addEventListener('click', async () => {
   if(rendering) return;
   if(zcOfflineBusy){ status('ioStatus', 'いま別の試聴を計算中です。終わってからもう一度押してください。', 'warn'); return; }
   if(!song || !songSteps(song)){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
   rendering = true;
+  zcSetEditLock(true);                       /* 【修正④】曲を作り替える操作を止める */
   const btn = $('renderBtn');
   btn.classList.add('working'); btn.textContent = '● 書き出し中…';
   const t0 = performance.now();
@@ -8083,6 +8172,7 @@ $('renderBtn').addEventListener('click', async () => {
     tick.stop();
   }
   btn.classList.remove('working'); btn.textContent = '● MP3で書き出す';
+  zcSetEditLock(false);                      /* 【修正④】 */
   rendering = false;
 });
 $('renderWavBtn').addEventListener('click', async () => {
@@ -8090,6 +8180,7 @@ $('renderWavBtn').addEventListener('click', async () => {
   if(zcOfflineBusy){ status('ioStatus', 'いま別の試聴を計算中です。終わってからもう一度押してください。', 'warn'); return; }
   if(!song || !songSteps(song)){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
   rendering = true;
+  zcSetEditLock(true);                       /* 【修正④】曲を作り替える操作を止める */
   const btn = $('renderWavBtn');
   btn.classList.add('working'); btn.textContent = '● 書き出し中…';
   const t0 = performance.now();
@@ -8109,6 +8200,7 @@ $('renderWavBtn').addEventListener('click', async () => {
     tick.stop();
   }
   btn.classList.remove('working'); btn.textContent = '● WAVで書き出す';
+  zcSetEditLock(false);                      /* 【修正④】 */
   rendering = false;
 });
 $('oneStemBtn').addEventListener('click', async () => {
@@ -8121,6 +8213,7 @@ $('oneStemBtn').addEventListener('click', async () => {
     status('ioStatus', 'そのパートは鳴っていません', 'warn'); return;
   }
   rendering = true;
+  zcSetEditLock(true);                       /* 【修正④】曲を作り替える操作を止める */
   const btn = $('oneStemBtn');
   btn.classList.add('working'); btn.textContent = '● 書き出し中…';
   const t0 = performance.now();
@@ -8140,6 +8233,7 @@ $('oneStemBtn').addEventListener('click', async () => {
     tick.stop();
   }
   btn.classList.remove('working'); btn.textContent = '● このパートだけ';
+  zcSetEditLock(false);                      /* 【修正④】 */
   rendering = false;
 });
 
@@ -9999,7 +10093,11 @@ boot();
     const zcTell = async (msg) => {
       if(onProgress){
         const sec = Math.round((performance.now() - zcT0) / 1000);
-        onProgress(`${zcBar()}  ${zcDone}/${zcSteps}　${msg}　［経過 ${sec}秒］`);
+        /* 【2026-08-23 修正⑨】ここで経過秒を足すのをやめた。
+           呼び出し側の startRenderTicker が同じものを足すので二重になり、
+           しかも別タイマーなので「［経過 3秒］　［経過 7秒］」と数字がずれて
+           表示されていた。経過秒は共通ティッカー側に一本化する。 */
+        onProgress(`${zcBar()}  ${zcDone}/${zcSteps}　${msg}`);
       }
       await new Promise(r => setTimeout(r, 0));
     };
@@ -10649,7 +10747,7 @@ boot();
 })();
 </script>
 
-\n<script>
+<script>
 /* ============================================================
    ZCNOVA SOLO REALISM — CLARINET FINAL
    「クラリネットだけ」の時だけ専用演奏モデルを使用。
