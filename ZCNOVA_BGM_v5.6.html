@@ -4792,6 +4792,99 @@ function zcVaryBar(base, spb, sd, bar, opt){
   return hits;
 }
 
+/* ============================================================
+   【2026-08-23 追加E】副次パート（対旋律・サブ・管楽器）の小節ごとの出入り
+   ------------------------------------------------------------
+   【なぜ要るか】
+   これまで sub / wind1 / wind2 は「フレーズ単位で鳴るか鳴らないか」しか
+   無かった。一度入れば4小節ずっと鳴りっぱなし、外れれば4小節まるごと無音で、
+   曲の途中で顔を出す・引っ込むという動きが一切なかった。
+   実測（30曲平均）: サブの稼働率 31% / 管楽器1 33% で、しかも
+   「鳴っているフレーズの中では全小節鳴っている」状態。
+   ここで2方向に動かす。
+     ・鳴っているフレーズ   … いくつかの小節を休ませて息継ぎを作る
+     ・鳴っていないフレーズ … 小節の後半にだけ短く顔を出す（合いの手）
+   【安全性】
+   合いの手はコードの構成音から組み立てるので rnd() を1回も消費しない。
+   休ませるほうも seedNoise だけ。したがって旋律・進行・伴奏は一切ズレない。
+   呼ぶのは zcEnsureAudibleNotes（保険）のあと。先に呼ぶと
+   「空だから埋める」保険の判定を狂わせてしまう。
+   ============================================================ */
+const ZC_PART_INOUT = {
+  /* pRest = その小節を休ませる確率 / pIn = 無音フレーズに合いの手を入れる確率
+     minKeep = もとの鳴っている小節数のうち、最低これだけは残す割合 */
+  mel2 : { salt:0x5b8f2d11, pRest:0.18, pIn:0,    oct:3, minKeep:0.55 },
+  sub  : { salt:0x71c4a3e7, pRest:0.34, pIn:0.55, oct:4, minKeep:0.50 },
+  wind1: { salt:0x2ad9f60b, pRest:0.30, pIn:0.45, oct:4, minKeep:0.50 },
+  wind2: { salt:0x3e6b1c8d, pRest:0.30, pIn:0.35, oct:3, minKeep:0.50 }
+};
+function zcPartInOut(ph, song, skip){
+  const spb = stepsPerBar(song), bpb = beatsPerBar(song);
+  const heads = beatStartsOf(song);
+  Object.keys(ZC_PART_INOUT).forEach(key => {
+    /* 役割が意図して消したパートは触らない（イントロのサブなど）。
+       保険で後から入れたパートも、それが唯一の音かもしれないので触らない。 */
+    if(skip && skip.indexOf(key) >= 0) return;
+    if(ph.rescuedTrack && String(ph.rescuedTrack).indexOf(key) >= 0) return;
+    const cfg = ZC_PART_INOUT[key];
+    const arr = ph[key], acc = ph.acc[key];
+    if(!arr || !acc) return;
+    const sd = zcRoleSeed(ph, song, cfg.salt);
+    // 小節ごとに、もともと音が入っているか
+    const had = [];
+    for(let b = 0; b < ph.bars; b++){
+      let any = false;
+      for(let k = 0; k < spb; k++) if(arr[b * spb + k]){ any = true; break; }
+      had.push(any);
+    }
+    const live = had.filter(Boolean).length;
+    if(live > 0){
+      /* ── 鳴っているフレーズ：息継ぎを入れる ── */
+      const minKeep = Math.max(1, Math.ceil(live * cfg.minKeep));
+      let kept = live;
+      for(let b = 0; b < ph.bars; b++){
+        if(!had[b] || kept <= minKeep) continue;
+        if(seedNoise(sd + b * 61, 7) >= cfg.pRest) continue;
+        for(let k = 0; k < spb; k++){ const i = b * spb + k; arr[i] = null; acc[i] = false; }
+        had[b] = false; kept--;
+      }
+    } else if(cfg.pIn > 0 && ph.bars >= 2 && seedNoise(sd, 3) < cfg.pIn){
+      /* ── 鳴っていないフレーズ：合いの手で1小節だけ顔を出す ──
+         6割はフレーズの最後の小節（次へのつなぎ）、残りは途中の小節。 */
+      const last = ph.bars - 1;
+      const cbars = [(seedNoise(sd, 9) < 0.6)
+        ? last
+        : 1 + (Math.floor(seedNoise(sd, 13) * ph.bars) % Math.max(1, ph.bars - 1))];
+      /* 長いフレーズは1小節だけだと元より薄くなるので、もう1小節足す */
+      if(ph.bars >= 4 && seedNoise(sd, 19) < 0.55){
+        const b2 = (cbars[0] === last) ? 1 : last;
+        if(cbars.indexOf(b2) < 0) cbars.push(b2);
+      }
+      const from = Math.max(1, heads.length >> 1);   // 小節の後半の拍から
+      const oct  = cfg.oct + zcOct(song, key);
+      cbars.forEach(b => {
+        for(let bi = from; bi < heads.length; bi++){
+          const head = b * spb + heads[bi];
+          if(head >= arr.length) break;
+          /* 主旋律とぶつかる所は避け、裏拍にずらす（合いの手にする）。
+             裏も埋まっていたらその拍はあきらめる。 */
+          const nextHead = (bi + 1 < heads.length) ? heads[bi + 1] : spb;
+          const off = b * spb + heads[bi] + ((nextHead - heads[bi]) >> 1);
+          const s = !ph.mel1[head] ? head : (off < arr.length && !ph.mel1[off] ? off : -1);
+          if(s < 0) continue;
+          const deg = chordAt(ph, b * bpb + bi);
+          if(deg === null || deg === undefined) continue;
+          const tones = degreeNotes(deg, song, oct, 3);
+          const t = tones[Math.floor(seedNoise(sd + b * 17 + bi, 29) * tones.length) % tones.length];
+          if(!t) continue;
+          arr[s] = ph.keyShift ? zcTranspose(t, ph.keyShift) : t;
+          acc[s] = (bi === from);
+        }
+      });
+    }
+  });
+}
+
 function zcBuildChordHits(ph, song, mood){
   const CP  = chordPatterns(song);
   /* 【2026-08-23 追加C】伴奏の型をフレーズごとに持ち替える。
@@ -5685,6 +5778,13 @@ function generatePhrase(song, bars, opts){
      opts で thin を直接指定されたときは従来の3段階で動かす（互換）。 */
   const thin = o.thin !== undefined ? o.thin : role.thin;
   const layers = (o.thin === undefined) ? ROLE_LAYERS[role.key] : null;
+  /* 【追加E】役割が意図して消すパートの控え。
+     このあとの zcPartInOut が、消したはずのパートに合いの手を入れて
+     役割の作り分けを台無しにしないようにするため。 */
+  const roleMuted = layers ? layers.mute.slice()
+    : (thin === 'intro' ? ['mel1','sub','wind1','wind2']
+    :  thin === 'quiet' ? ['sub','wind2']
+    :  thin === 'outro' ? ['sub','mel2','wind1','wind2'] : []);
   if(layers){
     layers.mute.forEach(k => { if(ph[k]) ph[k].fill(null); });
     layers.drumOff.forEach(k => { if(ph.drum[k]) ph.drum[k].fill(false); });
@@ -5705,6 +5805,10 @@ function generatePhrase(song, bars, opts){
      誤認してしまう。 */
   ph.rescuedTrack = zcEnsureAudibleNotes(ph, song, mood,
     { center, style, roleDens: role.dens, thin });
+
+  /* 【追加E】副次パートを小節単位で出入りさせる。
+     保険（zcEnsureAudibleNotes）のあとに置くこと。 */
+  zcPartInOut(ph, song, roleMuted);
 
   humanizePhrase(ph, song);
   return ph;
