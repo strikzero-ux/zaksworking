@@ -475,7 +475,8 @@ footer b{ color:var(--brass); }
 
     <div class="fx-row">
       <span class="t-label">曲名</span>
-      <input type="text" id="songName" placeholder="例：朝の支度" style="width:200px;">
+      <input type="text" id="songName" placeholder="例：朝の支度／morning" style="width:200px;"
+             title="ここに入れた名前がそのままファイル名になります。空のままなら日時と曲番号から自動で付きます。">
       <button class="io-btn" id="saveBtn">この曲を保存</button>
       <button class="io-btn" id="exportJsonBtn">ファイルに書き出す（.json）</button>
       <button class="io-btn" id="importJsonBtn">ファイルを読み込む</button>
@@ -8094,7 +8095,9 @@ function zcShowSaveButton(blob, filename){
   document.body.appendChild(w);
 }
 
+let zcLastSavedName = '';
 function download(blob, filename){
+  zcLastSavedName = filename;   /* 【修正⑤】どの名前で保存したかを画面に出せるように控える */
   /* PC・Android は従来方式で問題なく保存できるので、挙動を変えない。
      （ここで共有シートに切り替えると、今まで直接保存できていた人に
        余計な一手間が増えてしまう） */
@@ -8154,7 +8157,7 @@ function songFileName(ext){
 $('exportJsonBtn').addEventListener('click', () => {
   download(new Blob([JSON.stringify(song, null, 1)], { type:'application/json' }),
            songFileName('json'));
-  status('ioStatus', 'ファイルに書き出しました', 'ok');
+  status('ioStatus', `ファイルに書き出しました：${zcLastSavedName}`, 'ok');
 });
 $('importJsonBtn').addEventListener('click', () => $('importFile').click());
 /* 【2026-08-23 修正②】読み込み失敗時に**必ず元の曲へ戻す**ようにした。
@@ -8272,7 +8275,7 @@ $('renderBtn').addEventListener('click', async () => {
     download(blob, songFileName(ext));
     const ms = Math.round(performance.now() - t0);
     status('ioStatus',
-      `書き出しました（${fmtTime(res.seconds)}の曲／${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒で完了` +
+      `書き出しました：${zcLastSavedName}（${fmtTime(res.seconds)}の曲／${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒で完了` +
       (ext === 'wav' ? '／MP3の変換ができなかったのでWAVにしました' : '') + '）', 'ok');
   }catch(err){
     status('ioStatus', '書き出せませんでした：' + err.message, 'warn');
@@ -8301,7 +8304,7 @@ $('renderWavBtn').addEventListener('click', async () => {
     download(blob, songFileName('wav'));
     const ms = Math.round(performance.now() - t0);
     status('ioStatus',
-      `書き出しました（${fmtTime(res.seconds)}の曲／${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒で完了）`, 'ok');
+      `書き出しました：${zcLastSavedName}（${fmtTime(res.seconds)}の曲／${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒で完了）`, 'ok');
   }catch(err){
     status('ioStatus', '書き出せませんでした：' + err.message, 'warn');
   }finally{
@@ -8334,7 +8337,7 @@ $('oneStemBtn').addEventListener('click', async () => {
     download(blob, `${base}_${tr.label}.wav`);
     const ms = Math.round(performance.now() - t0);
     status('ioStatus',
-      `「${tr.label}」を書き出しました（${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒）`, 'ok');
+      `「${tr.label}」を書き出しました：${zcLastSavedName}（${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒）`, 'ok');
   }catch(err){
     status('ioStatus', '書き出せませんでした：' + err.message, 'warn');
   }finally{
@@ -8482,7 +8485,7 @@ async function doRenderSE(kind){
     download(blob, safeName(`se_${pickSE}_${seSeed}`, ext));
     const ms = Math.round(performance.now() - t0);
     status('seStatus',
-      `書き出しました（${SE_TYPES[pickSE].label}／SE番号 ${seSeed}／${(blob.size/1024).toFixed(0)}KB／${(ms/1000).toFixed(1)}秒で完了` +
+      `書き出しました：${zcLastSavedName}（${SE_TYPES[pickSE].label}／SE番号 ${seSeed}／${(blob.size/1024).toFixed(0)}KB／${(ms/1000).toFixed(1)}秒で完了` +
       (kind === 'mp3' && ext === 'wav' ? '／MP3の変換ができなかったのでWAVにしました' : '') + '）', 'ok');
   }catch(err){
     status('seStatus', '書き出せませんでした：' + err.message, 'warn');
