@@ -6,7 +6,7 @@
      壊れた自動保存で起動できなくなる、書き出し中に曲を書き換えられる） */
 export const name = '④ 画面の通し操作';
 
-export async function run({ page, errors }){
+export async function run({ page, errors, notes }){
   const checks = [];
   const add = (ok, label, info = '') => checks.push({ ok, label, info });
   const txt = (id) => page.evaluate(i => { const e = document.getElementById(i); return e ? e.textContent.trim() : '<無し>'; }, id);
@@ -119,7 +119,18 @@ export async function run({ page, errors }){
   add(alive, '再生ボタンを6連打しても曲が残っている');
   await page.evaluate(() => { try{ Tone.Transport.stop(); }catch(e){} });
 
-  /* --- 9. ここまでで画面のJSエラーが出ていないこと --- */
+  /* --- 9. 開発用の記録が既定で出ていないこと ---
+     ふつうに使う人のコンソールを埋めないようにするための確認。
+     ?debug=1 か localStorage の zc-debug=1 のときだけ出る。 */
+  const dbg = await page.evaluate(() => ({
+    ある: typeof zcLog === 'function',
+    既定: typeof ZC_DEBUG !== 'undefined' ? ZC_DEBUG : null,
+  }));
+  add(dbg.ある && dbg.既定 === false && (notes || []).length === 0,
+      `開発用の記録が既定では出ない（起動時の console.log ${(notes || []).length}件）`,
+      (notes || []).slice(0, 4).join(' / '));
+
+  /* --- 10. ここまでで画面のJSエラーが出ていないこと --- */
   add(errors.length === 0, '通し操作でJSエラーが出ない',
       errors.length ? errors.slice(0, 6).join('\n      ') : '');
 

@@ -36,8 +36,16 @@ export async function openApp(url, opt = {}){
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   const errors = [];
+  /* 開発用の記録（console.log）が既定で出ていないことも見たいので、
+     種類を分けて全部ためておく。 */
+  const notes = [];
   page.on('pageerror', e => errors.push('[例外] ' + e.message));
   page.on('console', m => {
+    if(m.type() === 'log'){
+      /* Tone.js 自身が起動時に版を1行出す。こちらでは消せないので除く。 */
+      if(!/Tone\.js v/.test(m.text())) notes.push(m.text());
+      return;
+    }
     if(m.type() !== 'error') return;
     if(isNoise(m.text())) return;
     errors.push('[console.error] ' + m.text());
@@ -50,5 +58,5 @@ export async function openApp(url, opt = {}){
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => typeof window.makeSong === 'function', null, { timeout: 20000 });
   await page.waitForTimeout(opt.settleMs || 1200);
-  return { browser, page, errors };
+  return { browser, page, errors, notes };
 }

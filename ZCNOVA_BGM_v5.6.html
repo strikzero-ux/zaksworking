@@ -763,6 +763,33 @@ footer b{ color:var(--brass); }
 </script>
 <script>
 /* ============================================================
+   【2026-08-23 整理】開発用の記録を1つのスイッチにまとめる
+   ------------------------------------------------------------
+   各モジュールの「読み込み終わりました」という console.log が10箇所
+   残っていて、ふつうに使う人のコンソールを埋めていた。
+   消してしまうと不具合を追うときに困るので、既定では黙らせ、
+   必要なときだけ出せるようにする。
+
+     ・URL の末尾に ?debug=1 を付ける
+     ・または開発者コンソールで
+         localStorage.setItem('zc-debug','1')
+       と入れて開き直す（戻すときは removeItem）
+
+   ⚠️ console.warn / console.error はここに含めない。
+      あれは「設定がおかしい」「音色の定義が足りない」といった
+      本当の警告なので、いつでも見えている必要がある。
+   ============================================================ */
+var ZC_DEBUG = false;
+try{
+  ZC_DEBUG = /[?&]debug=1\b/.test(location.search)
+          || localStorage.getItem('zc-debug') === '1';
+}catch(e){ /* localStorage が使えない設定でも動くようにする */ }
+function zcLog(){
+  if(!ZC_DEBUG) return;
+  try{ console.log.apply(console, arguments); }catch(e){}
+}
+
+/* ============================================================
    ZCnova BGM Studio
    ------------------------------------------------------------
    動画用BGMを自動で作る道具。音は全部その場で計算して作っている
@@ -11921,7 +11948,7 @@ boot();
     accordion:true
   };
 
-  console.log('ZCNOVA FINAL: バイオリン / チェロ / アコーディオン / クラリネット / サックス 組み込み完了');
+  zcLog('ZCNOVA FINAL: バイオリン / チェロ / アコーディオン / クラリネット / サックス 組み込み完了');
 })();
 </script>
 
@@ -11972,7 +11999,7 @@ boot();
 
 
   try{ if(typeof renderAll==='function' && typeof song!=='undefined' && song) renderAll(); }catch(e){console.warn(e);}
-  console.log('ZCNOVA: bowed strings repaired and connected to existing engine');
+  zcLog('ZCNOVA: bowed strings repaired and connected to existing engine');
 })();
 </script>
 
@@ -12112,7 +12139,7 @@ boot();
   if(typeof buildPlayModeButtons==='function') buildPlayModeButtons();
   if(typeof renderAll==='function' && typeof song!=='undefined' && song){try{renderAll()}catch(e){}}
 
-  console.log('ZCNOVA SOLO REALISM FINAL: バイオリン / サックス / トランペット 統合完了');
+  zcLog('ZCNOVA SOLO REALISM FINAL: バイオリン / サックス / トランペット 統合完了');
 })();
 </script>
 
@@ -12190,7 +12217,7 @@ boot();
   window.ZCNOVA_SOLO_REALISM_CCA={version:'FINAL',cello:true,contrabass:true,accordion:true};
   try{if(typeof buildPlayModeButtons==='function')buildPlayModeButtons();}catch(e){}
   try{if(typeof renderAll==='function'&&typeof song!=='undefined'&&song)renderAll();}catch(e){}
-  console.log('ZCNOVA SOLO REALISM FINAL: チェロ / コントラバス / アコーディオン 統合完了');
+  zcLog('ZCNOVA SOLO REALISM FINAL: チェロ / コントラバス / アコーディオン 統合完了');
 })();
 </script>
 
@@ -12324,7 +12351,7 @@ boot();
     if(typeof renderAll==='function' && typeof song!=='undefined' && song) renderAll();
   }catch(e){}
 
-  console.log('ZCNOVA SOLO REALISM FINAL: クラリネット統合完了');
+  zcLog('ZCNOVA SOLO REALISM FINAL: クラリネット統合完了');
 })();
 </script>
 
@@ -12403,7 +12430,7 @@ boot();
     soloVoicesNamed:Object.keys(SOLO_VOICES).length,
     playModes:PLAY_MODES.length
   };
-  console.log('ZCNOVA 整理: 表示の整合を適用しました');
+  zcLog('ZCNOVA 整理: 表示の整合を適用しました');
 })();
 </script>
 
@@ -13355,7 +13382,7 @@ boot();
     }
   };
 
-  console.log('ZCNOVA: アコースティック音源モジュールを適用しました（' +
+  zcLog('ZCNOVA: アコースティック音源モジュールを適用しました（' +
               Object.keys(MAP).length + '音色）');
 })();
 </script>
@@ -13885,7 +13912,7 @@ boot();
       }));
     });
     if(bad.length) console.error('ZCNOVA: 楽器カテゴリの pool に問題', bad);
-    else console.log('ZCNOVA: 楽器カテゴリUI を適用しました（' + FAMILY_ORDER.length +
+    else zcLog('ZCNOVA: 楽器カテゴリUI を適用しました（' + FAMILY_ORDER.length +
                      'カテゴリ／ソロ・トグル ' +
                      Object.keys(FAMILY_SOLOS).reduce((n,f) => n + solosOf(f).length, 0) + '個）');
   })();
@@ -13978,7 +14005,7 @@ boot();
     added++;
   });
 
-  console.log('ZCNOVA: ランダム編成の候補を' + added + '曲調ぶん登録しました' +
+  zcLog('ZCNOVA: ランダム編成の候補を' + added + '曲調ぶん登録しました' +
               (skipped.length ? '（見送り: ' + skipped.join(', ') + '）' : ''));
 })();
 
@@ -14009,7 +14036,7 @@ boot();
        markPicked()（曲調・小節・長さ・編成）と syncControls()（メロ型・展開ほか）は
        別々の担当なので、両方を通す renderAll() を使う。 */
     if(typeof renderAll === 'function' && typeof song !== 'undefined' && song) renderAll();
-    console.log('ZCNOVA: 選択ボタンを組み直しました' +
+    zcLog('ZCNOVA: 選択ボタンを組み直しました' +
       `（曲調${MOODS.length} / メロ型${MELODY_STYLES.length} / 展開${ARRANGE_TYPES.length} / 効果音${Object.keys(SE_TYPES).length}）`);
   }catch(e){ console.warn('ZCNOVA: 選択ボタンの組み直しに失敗', e); }
 })();

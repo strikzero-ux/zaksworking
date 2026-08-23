@@ -22,12 +22,12 @@ const files = fs.readdirSync(path.join(HERE, 'cases')).filter(f => f.endsWith('.
 if(!files.length){ console.error('走らせる検査がありません:', only); process.exit(1); }
 
 const server = await startServer();
-let browser, page, errors;
+let browser, page, errors, notes;
 let pass = 0, fail = 0;
 const started = Date.now();
 
 try{
-  ({ browser, page, errors } = await openApp(server.url));
+  ({ browser, page, errors, notes } = await openApp(server.url));
   console.log('ZCNOVA BGM Studio 検査\n' + '='.repeat(56));
 
   for(const f of files){
@@ -35,7 +35,7 @@ try{
     const t0 = Date.now();
     let res;
     try{
-      res = await mod.run({ page, errors, root: ROOT, url: server.url });
+      res = await mod.run({ page, errors, notes, root: ROOT, url: server.url });
     }catch(e){
       res = { checks: [{ ok: false, label: '検査そのものが落ちた', info: e.stack || e.message }] };
     }
