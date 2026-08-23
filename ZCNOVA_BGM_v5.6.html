@@ -7883,6 +7883,15 @@ function zcPlayHint(msg){
 }
 async function togglePlay(){
   if(ZC_PLAY_LOCK) return;
+  /* 【2026-08-23 追記】書き出し中は鳴らさない。
+     画面では「書き出し中は再生を止めます（同時に動かすと不安定になるため）」と
+     案内しているのに、実際は押せば鳴り始めた（実装が説明に追いついていなかった）。
+     書き出し自体は別のコンテキストで走るので壊れはしないが、
+     同じCPUを取り合うぶん書き出しが遅くなる。案内どおりの動きにそろえる。 */
+  if(typeof rendering !== 'undefined' && rendering){
+    zcPlayHint('書き出しが終わるまでお待ちください。');
+    return;
+  }
   ZC_PLAY_LOCK = true;
   try{
     if(!song || !song.phrases || !song.phrases.length){
@@ -8919,14 +8928,31 @@ function onRenderStopped(){
    書き出しには実測20〜44秒かかるので「待っている間に次の曲を探す」のは
    ごく自然な行動。押せてしまうUIのほうが悪い。ここで丸ごと止める。 */
 const ZC_LOCK_CARDS = ['card1', 'card2', 'card3'];
+/* 【2026-08-23 追記】カードの外にある操作も止める。
+   ------------------------------------------------------------
+   最初はカード①②③だけを止めていたが、上のトランスポート帯にある
+   「↩ やり直す」「🔧 動作を安定化」「効果音レーン」はカードの外なので
+   素通りだった。実測すると書き出し中に：
+     ・やり直す      → 曲番号が変わり、画面と保存ファイルが食い違う
+     ・効果音レーン  → 曲の効果音レーンが書き換わる（実測で中身が変化）
+     ・動作を安定化  → 書き出しの最中に音声処理を作り直そうとする
+   カードのロックと同じ理由で、ここも止める。 */
+const ZC_LOCK_CTRL = ['makeBtn','againBtn','seedBtn','addPhraseBtn','dupPhraseBtn','delPhraseBtn',
+  'autoArrangeBtn','clearArrangeBtn','regenPhraseBtn','clearPhraseBtn',
+  'undoBtn','cleanupBtn','seLoopOn','seLoopEvery','seLoopBeat','seLoopOff','seLoopVol'];
+let zcUndoWasDisabled = false;
 function zcSetEditLock(on){
   ZC_LOCK_CARDS.forEach(id => {
     const el = document.getElementById(id); if(!el) return;
     el.classList.toggle('zc-locked', !!on);
   });
-  ['makeBtn','againBtn','seedBtn','addPhraseBtn','dupPhraseBtn','delPhraseBtn',
-   'autoArrangeBtn','clearArrangeBtn','regenPhraseBtn','clearPhraseBtn'].forEach(id => {
-    const el = document.getElementById(id); if(el) el.disabled = !!on;
+  /* 「やり直す」は元から無効なことがある（積んだ履歴が無いとき）。
+     ロック解除でむやみに有効化しないよう、直前の状態を覚えておく。 */
+  if(on){ const u = document.getElementById('undoBtn'); zcUndoWasDisabled = u ? u.disabled : true; }
+  ZC_LOCK_CTRL.forEach(id => {
+    const el = document.getElementById(id); if(!el) return;
+    if(id === 'undoBtn' && !on){ el.disabled = zcUndoWasDisabled; return; }
+    el.disabled = !!on;
   });
 }
 let rendering = false;
@@ -9206,17 +9232,43 @@ function boot(){
   let restored = null;
   /* 圧縮して保存してあるので戻す。古い（圧縮前の）データはそのまま通る。 */
   try{ restored = zcUnpackSong(JSON.parse(localStorage.getItem(AUTOSAVE_KEY) || 'null')); }catch(e){}
-  if(restored && restored.phrases && restored.tracks){
-    song = restored;
-    pickMood = song.moodKey; pickBars = song.bars; pickPM = song.playMode; pickSec = song.targetSec || 180;
-    pickDensity = song.density === undefined ? 60 : song.density;
-    pickHumanize = song.humanize === undefined ? 35 : song.humanize;
-    renderAll();
-    status('makeStatus', '前回の続きから再開しました');
-  } else {
+  /* 【2026-08-23 修正】自動保存の中身をちゃんと検査する。
+     ------------------------------------------------------------
+     旧実装は `restored.phrases && restored.tracks` だけを見ていたが、
+     **空配列 [] は truthy** なので `{"phrases":[],"tracks":{}}` が通ってしまい、
+     直後の renderAll() が落ちて**アプリが白紙のまま起動しなくなる**。
+     しかも壊れた値は localStorage に残るので、開き直しても直らず詰む。
+     読み込み(.json)側には検査を入れていたのに、ここが抜けていた。
+
+     ・中身を検査してから使う
+     ・それでも描画に失敗したら、壊れた自動保存を**捨てて**新しい曲で起動する
+       （ユーザーが自力で復帰できない状態を作らない） */
+  const looksUsable = !!(restored && typeof restored === 'object'
+    && Array.isArray(restored.phrases) && restored.phrases.length
+    && restored.tracks && typeof restored.tracks === 'object');
+  let restoredOK = false;
+  if(looksUsable){
+    try{
+      song = restored;
+      pickMood = song.moodKey; pickBars = song.bars; pickPM = song.playMode; pickSec = song.targetSec || 180;
+      pickDensity = song.density === undefined ? 60 : song.density;
+      pickHumanize = song.humanize === undefined ? 35 : song.humanize;
+      renderAll();
+      status('makeStatus', '前回の続きから再開しました');
+      restoredOK = true;
+    }catch(e){
+      /* 描画まで通らなかった＝壊れている。捨てて作り直す。 */
+      try{ localStorage.removeItem(AUTOSAVE_KEY); }catch(e2){}
+      restoredOK = false;
+    }
+  }
+  if(!restoredOK){
+    pickMood = MOODS.some(m => m.key === pickMood) ? pickMood : MOODS[0].key;
     song = makeSong(pickMood, pickBars, pickPM, pickSec);
     renderAll();
-    status('makeStatus', '曲調を選ぶと、その場で1曲できます');
+    status('makeStatus', looksUsable
+      ? '前回のデータが読めなかったので、新しい曲を作りました'
+      : '曲調を選ぶと、その場で1曲できます');
   }
   renderSongList();
 }
