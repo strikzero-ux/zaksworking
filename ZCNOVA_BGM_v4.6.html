@@ -825,17 +825,27 @@ function zcTranspose(name, semi){
   return (m == null) ? name : midiToName(Math.max(0, Math.min(127, m + semi)));
 }
 const zcLadderCache = {};
-function zcLadder(song){
-  const k = song.scale + '/' + song.key;
+/* 【2026-08-23 修正⑨-b】フレーズごとの転調（ph.keyShift）を受け取る。
+   ------------------------------------------------------------
+   対旋律ルール（parallel3 / parallel6 など）は mel1 の音を「音階の段」で
+   数えて下げる。ところがこのはしごは song.scale と song.key だけで作られ、
+   ⑥転調で持ち上がったフレーズの音は載っていなかった。
+   すると zcStepInScale が「はしごに無い音」と判断して半音近似に落ち、
+   **音階に無い音**が mel2 に書き込まれていた（実測200曲で16音）。
+   その音はどんなに編集グリッドを広げても行が存在せず、表示も編集もできない。
+   転調ぶんを足したはしごを使えば、段数で正しく数えられて音階内に収まる。 */
+function zcLadder(song, shift){
+  const sh = shift | 0;
+  const k = song.scale + '/' + song.key + '/' + sh;
   if(zcLadderCache[k]) return zcLadderCache[k];
-  const names = scaleNotes(song.scale, 1, 48).map(nm => midiToName(noteToMidi(nm) + song.key));
+  const names = scaleNotes(song.scale, 1, 48).map(nm => midiToName(noteToMidi(nm) + song.key + sh));
   const index = {};
   names.forEach((nm, i) => { const m = noteToMidi(nm); if(index[m] === undefined) index[m] = i; });
   return (zcLadderCache[k] = { names, index });
 }
 /* 音階の段を n 段ずらす（3度下＝2段下、6度下＝5段下） */
-function zcStepInScale(song, name, steps){
-  const L = zcLadder(song);
+function zcStepInScale(song, name, steps, shift){
+  const L = zcLadder(song, shift);
   const m = noteToMidi(name);
   let i = L.index[m];
   if(i === undefined){
@@ -4400,13 +4410,14 @@ function applyCounterRule(ph, song, rule, opt){
   const dst = ph.mel2, dstAcc = ph.acc.mel2;
   const n = src.length;
   dst.fill(null); dstAcc.fill(false);
-  const L = zcLadder(song);
+  const ksh = ph.keyShift || 0;      // 修正⑨-b：このフレーズの転調ぶん
+  const L = zcLadder(song, ksh);
 
   if(rule === 'parallel3' || rule === 'parallel6'){
     const down = (rule === 'parallel3') ? 2 : 5;
     for(let s = 0; s < n; s++){
       if(!src[s]) continue;
-      dst[s] = zcStepInScale(song, src[s], -down);
+      dst[s] = zcStepInScale(song, src[s], -down, ksh);
       dstAcc[s] = srcAcc[s];
     }
   } else if(rule === 'contrary'){
@@ -6038,8 +6049,68 @@ function melodyRows(trackKey, ph){
   const p = ph || (song.phrases && song.phrases[curPhrase]);
   const ksh = (p && p.keyShift) || 0;
   const oct = t.oct + zcOct(song, trackKey);
-  return scaleNotes(song.scale, oct, t.rows)
+  const build = (o, r) => scaleNotes(song.scale, o, r)
     .map(nm => midiToName(noteToMidi(nm) + song.key + ksh));
+
+  const rows = build(oct, t.rows);
+
+  /* 【2026-08-23 修正⑨-c】はしごの窓を、実際に置かれている音まで広げる。
+     ------------------------------------------------------------
+     高さを合わせても、窓の**幅**が足りないと同じ害が残る。生成側は
+     窓の外にも音を置くため（ベースのオクターブ跳躍、対旋律の導出など）、
+     実測300曲では
+
+       ・101/120曲（84.2%）に窓の外の音がある
+       ・その列は1つも点灯しないので「空の列」に見える
+       ・そこをクリックすると ph[t.key][s] = 表示中の音 で**上書き**され、
+         元の音（例: D3）が別の音（例: F2）に化けて消える
+
+     という、見えない・触れない・消える の3つが同時に起きていた。
+     窓を内容に合わせて広げれば、どの音も必ずどこかの行に出る＝
+     見えるし、消せるし、間違って上書きすることもない。
+
+     既定の窓は必ず含めるので、いつもの音域が消えることはない。
+     広げるのは必要なぶんだけで、上限（48行）も切ってある。 */
+  const notes = (p && Array.isArray(p[trackKey])) ? p[trackKey].filter(Boolean) : [];
+  if(!notes.length) return rows;
+  if(notes.every(nt => rows.indexOf(nt) >= 0)) return rows;   // 収まっている＝従来どおり
+
+  const wide = build(0, 80);
+  const idx = notes.map(nt => wide.indexOf(nt)).filter(i => i >= 0);
+
+  let out;
+  if(idx.length){
+    let lo = Math.min.apply(null, idx), hi = Math.max.apply(null, idx);
+    const dLo = wide.indexOf(rows[0]), dHi = wide.indexOf(rows[rows.length - 1]);
+    if(dLo >= 0) lo = Math.min(lo, dLo);
+    if(dHi >= 0) hi = Math.max(hi, dHi);
+
+    const MAX_ROWS = 48;
+    if(hi - lo + 1 > MAX_ROWS){
+      // 極端に離れた音があるときは、音の側を優先して窓を切る
+      lo = Math.min.apply(null, idx); hi = Math.max.apply(null, idx);
+      if(hi - lo + 1 > MAX_ROWS) hi = lo + MAX_ROWS - 1;
+    }
+    out = wide.slice(lo, hi + 1);
+  } else {
+    out = rows.slice();
+  }
+
+  /* 【2026-08-23 修正⑨-d】音階に乗らない音も必ず行にする。
+     ------------------------------------------------------------
+     はしごを広げるだけでは足りない。窓の外ではなく「そもそも音階に無い」音が
+     残るためで、実測では幻想／透明の曲で mel1 に C8 が現れ、
+     はしごが A4〜B7 だったので**どの行にも存在しない**ままだった。
+     そういう音も列に混ぜて音の高さ順に並べれば、由来に関係なく
+     「置かれている音は必ずどこかの行に出る」が保証できる。
+     増えるのは実際に出た音の種類ぶんだけ（多くて数行）。 */
+  const have = new Set(out);
+  const extra = [];
+  notes.forEach(nt => { if(!have.has(nt)){ have.add(nt); extra.push(nt); } });
+  if(extra.length){
+    out = out.concat(extra).sort((a, b) => (noteToMidi(a) || 0) - (noteToMidi(b) || 0));
+  }
+  return out;
 }
 /* ---------- パート単体の試聴 ----------
    いま編集しているフレーズだけを、そのパートだけ鳴らして繰り返す。
