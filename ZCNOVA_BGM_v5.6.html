@@ -1842,6 +1842,25 @@ const MELODY_STYLES = [
   { key:'etude',    label:'粒ぞろい',      dens:1.10, leap:0.5, rest:0.7, long:0.05, rep:0.10, beat:'even',   spread:0.90 },
   { key:'jazzy',    label:'おしゃれ',      dens:0.95, leap:1.1, rest:1.0, long:0.25, rep:0.08, landing:'seventh', chrom:true },
   { key:'sweet',    label:'甘い',          dens:0.85, leap:0.6, rest:1.0, long:0.40, rep:0.10, landing:'third', spread:0.80 },
+
+  /* ---- 追加11型（2026-08-23 / B-3 跳躍の幅・B-4 動機の変形・B-5 音価/アクセント/終止）----
+     B-3：跳ぶ確率だけでなく「幅」を決める型
+     B-4：用意済みの動機変形6種のうち、どれを使うかを決める型
+     B-5：長い音価・裏拍アクセント・終わり方を決める型
+     ------------------------------------------------------------------------- */
+  { key:'octave',   label:'オクターブ跳び', dens:0.80, leap:1.6, rest:1.0, long:0.25, rep:0.05, leapSize:[6,8], span:9 },
+  { key:'gentle',   label:'3度どまり',      dens:0.95, leap:0.9, rest:1.0, long:0.30, rep:0.10, leapSize:[2,2], spread:0.80 },
+  { key:'yearn',    label:'憧れ',           dens:0.85, leap:1.2, rest:1.1, long:0.40, rep:0.05, leapSize:[4,5], cadence:'up' },
+
+  { key:'baroque',  label:'バロック',       dens:1.05, leap:0.8, rest:0.8, long:0.10, rep:0.05, motifOps:['orig','up'],            motif:0.95, cadence:'tonic' },
+  { key:'fugue',    label:'フーガ風',       dens:1.00, leap:0.9, rest:0.9, long:0.15, rep:0.05, motifOps:['orig','inv','retro'],   motif:0.90 },
+  { key:'freeform', label:'気まま',         dens:0.85, leap:1.1, rest:1.1, long:0.30, rep:0.08, motifOps:['wide','head','retro'],  motif:0.35 },
+
+  { key:'chorale',  label:'コラール',       dens:0.50, leap:0.4, rest:1.0, long:0.80, rep:0.10, longSpan:6,  beat:'head', landing:'root', cadence:'tonic' },
+  { key:'drone',    label:'ドローン',       dens:0.30, leap:0.3, rest:1.3, long:0.90, rep:0.30, longSpan:12, contour:'flat', span:3 },
+  { key:'offacc',   label:'裏を強く',       dens:1.05, leap:0.9, rest:0.8, long:0.10, rep:0.15, beat:'off',  accent:0.55, accentAt:'off' },
+  { key:'hanging',  label:'宙ぶらり',       dens:0.85, leap:0.9, rest:1.1, long:0.35, rep:0.10, cadence:'open' },
+  { key:'settle',   label:'着地',           dens:0.90, leap:0.7, rest:1.0, long:0.30, rep:0.10, cadence:'tonic', accent:0.5, accentAt:'beat' },
 ];
 
 /* ============================================================
@@ -1878,7 +1897,15 @@ const MEL_PAIR = {
   backbeat:'funk',   funk:'backbeat',
   tango:'bossa',     bossa:'tango',
   ma:'etude',        etude:'ma',
-  jazzy:'sweet',     sweet:'jazzy'
+  jazzy:'sweet',     sweet:'jazzy',
+  /* ---- 追加11型ぶん（2026-08-23）---- */
+  octave:'gentle',   gentle:'octave',
+  yearn:'settle',    settle:'yearn',
+  baroque:'fugue',   fugue:'baroque',
+  freeform:'baroque',
+  chorale:'drone',   drone:'chorale',
+  offacc:'funk',
+  hanging:'settle'
 };
 /* ============================================================
    音源（すべて計算で作る。録音した素材は1つも使っていない）
@@ -4748,6 +4775,12 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
   /* #1 曲ごとの動機。トラックによって変形の掛かり方をずらすので、
      主旋律と管が同じ動機の違う姿になる（対位法と同じ考え方）。 */
   const motifSeq = genMotif(song);
+  /* B-4：型が候補を絞っていればそれだけを使う。絞っていなければ従来どおり全6種。 */
+  const motifPool = (() => {
+    if(!st.motifOps) return MOTIF_OPS;
+    const f = MOTIF_OPS.filter(x => st.motifOps.indexOf(x.key) >= 0);
+    return f.length ? f : MOTIF_OPS;
+  })();
   const moTrack = (o.oct || 4) + Math.round((o.span || 6));
   let prev = centerRow;
   let motif = null;
@@ -4760,8 +4793,12 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
     /* 反復進行：同じ形を段ずつずらして繰り返す。4小節で一巡させて
        音域から飛び出さないようにする（最終的に row でも丸める）。 */
     seqShift = seqStep ? seqStep * (bar % 4) : 0;
-    /* #1 この小節で使う動機の姿。小節ごとに変形が変わる。 */
-    const mo = MOTIF_OPS[(bar + moTrack) % MOTIF_OPS.length].f(motifSeq);
+    /* #1 この小節で使う動機の姿。小節ごとに変形が変わる。
+       B-4（2026-08-23）：原形・反行・逆行・移高・拡大・頭だけ の6種が
+       用意されているのに、どれを使うかは小節番号任せで型から選べなかった。
+       motifOps を持つ型はその候補だけを回す（厳格に反復するバロック風、
+       反行を混ぜるフーガ風、崩して使う自由な型、を作り分けられる）。 */
+    const mo = motifPool[(bar + moTrack) % motifPool.length].f(motifSeq);
     let mIdx = 0;
     // 「問い→答え」は、前半のリズムを後半でも使い、終わり方だけ変える
     const answering = st.call && (bar % 2 === 1);
@@ -4816,7 +4853,11 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
         const tones = chordToneRows(landDeg, o.rows, song.scale, landing && landing.degs);
         row = zcPickLanding(tones, mTarget, landDeg, song.scale, o.rows, landing);
       } else {
-        const step = chance(leap) ? irand(2, 4) : 1;
+        /* B-3 跳躍の幅（2026-08-23）。
+           旧実装は irand(2, 4) のハードコードで、跳ぶ「確率」だけが型で変えられ、
+           跳ぶ「幅」は全型共通だった。leapSize を持つ型だけ幅を差し替える
+           （irand は1回しか乱数を使わないので、持たない型は消費数も同じ）。 */
+        const step = chance(leap) ? (st.leapSize ? irand(st.leapSize[0], st.leapSize[1]) : irand(2, 4)) : 1;
         /* spread（輪郭への忠実さ）。
            未指定の型は従来どおり「上か下かのコイン投げ」。乱数の消費数を
            変えないため、指定がある型だけ向きの決め方を差し替える。 */
@@ -4848,13 +4889,73 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
       arr[sIdx] = rows[row];
       // のばす音（long）。長い音があると歌っているように聞こえる
       if(st.long > 0 && chance(st.long) && k + 2 < spb){
-        // 次の音の位置を空けることで、結果的に長く伸びて聞こえる
-        const nxt = cell[idx + 1];
-        if(nxt !== undefined && nxt - k <= 2) cell[idx + 1] = -1;
+        /* B-5a 音価（2026-08-23）。
+           旧実装は「次の1音が2ステップ以内なら消す」だけの2値で、
+           26型を通しても平均音価は 2.13〜4.30 ステップ（幅2.2）しか散らず、
+           全音符のような長い音は原理的に出せなかった。
+           longSpan を持つ型は、届く範囲の音をまとめて飲み込んで
+           本当に長い音価を作る。持たない型は従来どおり。 */
+        if(st.longSpan){
+          for(let j = idx + 1; j < cell.length; j++){
+            if(cell[j] === undefined || cell[j] < 0 || cell[j] - k > st.longSpan) break;
+            cell[j] = -1;
+          }
+        } else {
+          // 次の音の位置を空けることで、結果的に長く伸びて聞こえる
+          const nxt = cell[idx + 1];
+          if(nxt !== undefined && nxt - k <= 2) cell[idx + 1] = -1;
+        }
       }
-      if(accArr && k === 0) accArr[sIdx] = chance(0.35);
+      /* B-5b アクセント（2026-08-23）。
+         旧実装は確率0.35の固定で、しかも k===0（小節の頭）にしか付かなかった。
+         26型を通してもアクセント率は 2.5〜6.2%（幅3.7）しか散らない。
+         accent を持つ型は確率と付ける場所を選べる
+           head=小節の頭（従来） / beat=各拍の頭 / off=裏拍だけ
+         裏拍アクセントはファンク・レゲエの「跳ね」に直結する。 */
+      if(accArr){
+        if(st.accent === undefined){
+          if(k === 0) accArr[sIdx] = chance(0.35);          // 従来どおり
+        } else {
+          const at = st.accentAt || 'head';
+          const hit = at === 'off'  ? !isBeatStart(song, k)
+                    : at === 'beat' ?  isBeatStart(song, k)
+                    :                  (k === 0);
+          if(hit) accArr[sIdx] = chance(st.accent);
+        }
+      }
       prev = row;
     });
+  }
+  /* B-5c 終止（カデンツ）（2026-08-23）。
+     ------------------------------------------------------------
+     旧実装はフレーズの終わりに特別な処理が無く、最後の音は
+     たまたまそこに来た音のままだった。だからどの型も「終わった感じ」が
+     出ず、フレーズが切れているだけに聞こえていた。
+     cadence を持つ型だけ、最後の音を落ち着き先へ寄せる。
+       tonic … 主音に着地（終わった感じ）
+       open  … 属音で止める（続きがある感じ・宙ぶらり）
+       up    … 一段持ち上げて終わる（次へ引っぱる）
+     ------------------------------------------------------------ */
+  if(st.cadence){
+    let li = -1;
+    for(let i = n - 1; i >= 0; i--){ if(arr[i]){ li = i; break; } }
+    if(li >= 0){
+      const per = ((SCALES[song.scale] || SCALES.major).steps || []).length || 7;
+      const cur = rows.indexOf(arr[li]);
+      if(cur >= 0){
+        const wantDeg = (st.cadence === 'open') ? (4 % per)
+                      : (st.cadence === 'up')   ? (2 % per)
+                      :                           0;
+        let best = cur, bd = Infinity;
+        for(let r = 0; r < o.rows; r++){
+          if(r % per !== wantDeg) continue;
+          const d = Math.abs(r - cur);
+          if(d < bd){ bd = d; best = r; }
+        }
+        if(st.cadence === 'up' && best <= cur) best = Math.min(o.rows - 1, best + per);
+        if(rows[best]) arr[li] = rows[best];
+      }
+    }
   }
   // ペンタ型：音階の中でも使う音を絞って、素朴で外れにくい旋律にする
   if(st.penta){
