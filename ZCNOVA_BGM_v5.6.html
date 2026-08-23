@@ -5622,6 +5622,54 @@ function zcArticFamily(song, trackKey){
   return null;
 }
 
+/* ============================================================
+   【2026-08-23 追加】スラー（弓を返さずに次の音へ移る）の判定
+   ------------------------------------------------------------
+   【なぜ要るか】
+   これまでは音符ごとに必ず弓を当て直していた。実際の奏者は、近い音へ
+   なめらかに移るとき弓を返さず指だけを動かす。1音ごとに「ザッ」という
+   当たりの音が入るのが、弦が打ち込み臭く聞こえるいちばんの原因だった。
+
+   【判定の決まり】
+   ・直前の音との間に休みが無い（間隔が音符の長さ以内）
+   ・音程差が1〜4半音（同じ音や大きな跳躍は弓を返す）
+   ・その音に強拍の印（acc）が付いていない
+   ・4音つながったらいったん弓を返す（弓の長さには限りがある）
+
+   【安全性】
+   ph（フレーズのデータ）だけから決めるので乱数を一切使わない。
+   再生と書き出しのどちらでも必ず同じ結果になる。曲データも変えない。
+   ============================================================ */
+const ZC_DUR_STEPS = { '32n':0.5, '16n':1, '16n.':1.5, '8n':2, '8n.':3,
+                       '4n':4, '4n.':6, '2n':8, '2n.':12, '1n':16 };
+function zcDurSteps(dur){
+  return ZC_DUR_STEPS[dur] !== undefined ? ZC_DUR_STEPS[dur] : 2;
+}
+function zcPrevNoteAt(ph, k, s){
+  for(let q = s - 1; q >= 0; q--) if(ph[k][q]) return q;
+  return -1;
+}
+/* 戻り値: null（弓を返す）／ { fromCents: 直前の音との差 } */
+function zcSlurAt(ph, k, s, durSteps){
+  if(!ph[k][s]) return null;
+  let run = 0, at = s;
+  while(run < 32){
+    const p = zcPrevNoteAt(ph, k, at);
+    if(p < 0) break;
+    if(ph.acc && ph.acc[k] && ph.acc[k][at]) break;   // 強く出す音は当て直す
+    if(at - p > durSteps) break;                      // 間に休みがある
+    const a = noteToMidi(ph[k][at]), b = noteToMidi(ph[k][p]);
+    if(a === null || b === null) break;
+    const iv = Math.abs(a - b);
+    if(iv === 0 || iv > 4) break;                     // 同音・跳躍は弓を返す
+    run++; at = p;
+  }
+  if(run === 0 || run % 4 === 0) return null;         // 4音ごとに弓を返す
+  const p = zcPrevNoteAt(ph, k, s);
+  if(p < 0) return null;
+  return { fromCents: (noteToMidi(ph[k][p]) - noteToMidi(ph[k][s])) * 100 };
+}
+
 function humanizePhrase(ph, song){
   const amt = (song.humanize === undefined ? 35 : song.humanize) / 100;
   ph.vel = ph.vel || {};
@@ -6297,6 +6345,13 @@ function playStep(eng, song, ph, s, time){
       for(let q = s - 1; q >= 0; q--){ if(ph[k][q]){ prev = ph[k][q]; break; } }
       const jump = prev ? Math.abs(noteToMidi(note) - noteToMidi(prev)) : 0;
       syn.setSlide(jump >= 3 ? Math.min(1, (jump - 2) / 10) : 0);
+    }
+    /* 【追加】弓で擦る楽器だけ、なめらかに続く所で弓を返さない。
+       毎音必ず呼ぶこと（呼ばないと前の音の設定が残る）。 */
+    if(syn && syn.setSlur){
+      const sl = (zcArticFamily(song, k) === 'bow')
+        ? zcSlurAt(ph, k, s, zcDurSteps(dur)) : null;
+      syn.setSlur(!!sl, sl ? sl.fromCents : 0);
     }
     try{ syn.triggerAttackRelease(note, dur, at, v); }catch(err){}
   });
@@ -13071,6 +13126,22 @@ boot();
        ここで乱数を持たない理由は setSlide と同じ（再生と書き出しで音源の
        寿命が違うため、履歴を持つと結果がずれる）。呼び出し側が毎回渡す。 */
     setHit(pos){ this._hit = pos || 0; return this; }
+    /* 【2026-08-23 追加】スラー（弓を返さずに次の音へ移る）。
+       ------------------------------------------------------------
+       これまでは音符ごとに必ず新しく弓を当てていたので、なめらかに続く
+       はずの所でも毎回「ザッ」という当たりの音が入り、打ち込み臭さの
+       いちばんの原因になっていた。実際の奏者は近い音へ移るとき弓を
+       返さず、指だけを動かす。
+       fromCents は「直前の音から何セント離れているか」。ここを入れると
+       指を滑らせる音（ポルタメント）になる。
+       ⚠️ setHit と同じく、履歴はここに持たない。再生は音源を使い回し、
+          書き出しはフレーズごとに作り直すため、履歴を持つと両者で
+          結果が変わる。呼ぶ側（playStep）がフレーズから毎回計算する。 */
+    setSlur(on, fromCents){
+      this._slur = on ? 1 : 0;
+      this._slurFrom = on ? (fromCents || 0) : 0;
+      return this;
+    }
 
     _one(note, duration, time, velocity, chord){
       var p = this.p;
@@ -13114,6 +13185,10 @@ boot();
             （実際に踏んだ：nBase が NaN になり setValueAtTime が失敗した）。 */
       var hit = p.percussive ? (this._hit || 0) : 0;
       this._hit = 0;                                   // 1音ぶんで使い切る
+      /* 【追加】スラー。和音では使わない（弓の返しの話なので単音だけ）。 */
+      var slur = (!chord && this._slur) ? 1 : 0;
+      var slurFrom = slur ? (this._slurFrom || 0) : 0;
+      this._slur = 0; this._slurFrom = 0;              // 1音ぶんで使い切る
       var shortness = sec < 0.20 ? 1 : (sec < 0.44 ? (0.44 - sec) / 0.24 : 0);
       var velStep = vel < VEL_REF * 0.8 ? 0 : (vel > VEL_REF * 1.12 ? 2 : 1);
       /* 端を叩いたときは1段暗い倍音表を使う。
@@ -13126,6 +13201,9 @@ boot();
       var atk = Math.max(0.003, p.env.attack);
       var sec0 = sec;
       atk = Math.max(0.0025, atk * (1 - 0.45 * (sec0 < 0.20 ? 1 : (sec0 < 0.44 ? (0.44 - sec0) / 0.24 : 0))));
+      /* 【追加】スラーの音は弓が既に動いているので、立ち上がりが緩い。
+         上限を置いているのは、遅い曲で音の頭が聞こえなくなるのを防ぐため。 */
+      if(slur) atk = Math.min(0.13, atk * 2.6);
       var releaseAt = t + Math.max(atk + 0.02, sec);
       var stopAt = releaseAt + p.env.release + 0.2;
       /* 叩いて鳴らす楽器（percussive）は、撥や桴が離れても板・皮・金属が鳴り続ける。
@@ -13168,6 +13246,13 @@ boot();
           o.detune.setValueAtTime(base + p.scoopCents, t);
           o.detune.linearRampToValueAtTime(base, t + p.scoopMs / 1000);
         }
+        /* 【追加】スラーのときは直前の音の高さから指を滑らせて入る。
+           45ms は実際の運指の速さに合わせた値。長くすると音痴に聞こえる。 */
+        if(slurFrom){
+          var b2 = o.detune.value;
+          o.detune.setValueAtTime(b2 + slurFrom, t);
+          o.detune.linearRampToValueAtTime(b2, t + 0.045);
+        }
         o.chain(g, sum);
         o.start(t); o.stop(stopAt);
         oscs.push(o); dis.push(o, g);
@@ -13181,11 +13266,14 @@ boot();
 
       /* --- ビブラート（遅れてかかる／短い音符には掛けない） ---
          楽器で共有している揺れを、音ごとの Gain で「遅れて開く」。 */
-      if(!lean && sec > 0.34 && this.vib){
+      /* 【追加】スラーのときは弓が動き続けているので、短い音にも乗る。
+         0.34秒の足切りを下げ、掛かり始めも早くする。 */
+      if(!lean && sec > (slur ? 0.16 : 0.34) && this.vib){
         var vg = new Tone.Gain({ gain:0, context:C });
+        var vibDelay = slur ? p.vibrato.delay * 0.30 : p.vibrato.delay;
         this.vib.connect(vg);
-        vg.gain.setValueAtTime(0, t + p.vibrato.delay);
-        vg.gain.linearRampToValueAtTime(1, t + p.vibrato.delay + 0.18);
+        vg.gain.setValueAtTime(0, t + vibDelay);
+        vg.gain.linearRampToValueAtTime(1, t + vibDelay + 0.18);
         oscs.forEach(function(o){ vg.connect(o.detune); });
         dis.push(vg);
       }
@@ -13207,7 +13295,10 @@ boot();
                   * (1 + Math.abs(hit) * 0.20)      // ③ 端を叩くほど撥の音が目立つ
                   * (1 + shortness * 0.40);          // ④ 短い音はタンギング／撥が強い
         nz.chain(nf, ng);
-        ng.gain.setValueAtTime(nBase * p.noise.burst, t);
+        /* 【追加】スラーは弓を当て直さないので、頭の「ザッ」を大きく減らす。
+           ここがいちばん効く（打ち込み臭さの主因）。 */
+        var burst = slur ? (1 + (p.noise.burst - 1) * 0.25) : p.noise.burst;
+        ng.gain.setValueAtTime(nBase * burst, t);
         ng.gain.linearRampToValueAtTime(nBase, t + p.noise.burstMs / 1000);
         nz.start(t); nz.stop(stopAt);
         dis.push(nz, nf, ng);
@@ -13238,9 +13329,13 @@ boot();
       var cut = Math.max(180, Math.min(18000,
         p.tone.cutoff * Math.pow(freq / this.refFreq, p.tone.keyTrack) * Math.pow(2, velOct)));
       var open = Math.max(200, Math.min(20000, cut * Math.pow(2, p.tone.envOct)));
-      var filt = new Tone.Filter({ type:'lowpass', Q:p.tone.q, frequency:cut * 0.55, context:C });
-      filt.frequency.setValueAtTime(cut * 0.55, t);
-      filt.frequency.linearRampToValueAtTime(open, t + atk * 0.8);
+      /* 【追加】スラーの音は前の音から音色が続いているので、
+         フィルタを閉じた所から開き直さない（「ワウ」に聞こえてしまう）。 */
+      var filtStart = cut * (slur ? 0.90 : 0.55);
+      var filtOpen  = slur ? cut * Math.pow(2, p.tone.envOct * 0.35) : open;
+      var filt = new Tone.Filter({ type:'lowpass', Q:p.tone.q, frequency:filtStart, context:C });
+      filt.frequency.setValueAtTime(filtStart, t);
+      filt.frequency.linearRampToValueAtTime(filtOpen, t + atk * 0.8);
       filt.frequency.linearRampToValueAtTime(cut, t + atk + p.tone.envMs / 1000);
       preFilt.connect(filt);
       if(nOut) nOut.connect(filt);        /* 息の音は歪ませず管体だけ通す */
@@ -13249,7 +13344,8 @@ boot();
       /* --- 音量エンベロープ（少し行き過ぎてからサステインへ） --- */
       var env = new Tone.Gain({gain:0, context:C});
       filt.connect(env);
-      var peak = vel * p.ampOvershoot;
+      /* 【追加】スラーは弓を当て直さないので、頭で音量が跳ねない。 */
+      var peak = vel * (slur ? 1 : p.ampOvershoot);
       var sus = vel * p.env.sustain;
       env.gain.setValueAtTime(0, t);
       env.gain.linearRampToValueAtTime(peak, t + atk);
