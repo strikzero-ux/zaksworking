@@ -1805,6 +1805,26 @@ const MELODY_STYLES = [
      なっていた。この型だけ音階の外の音を混ぜる（st.chrom を持たない
      既存の型はこの枝を通らないので、響きは1ミリも変わらない）。 */
   { key:'chrom',  label:'経過音',     dens:0.85, leap:0.8, rest:1.0, long:0.25, rep:0.10, chrom:true },
+
+  /* ---- 追加14型（2026-08-23）------------------------------------
+     新しいつまみ span / spread / seq / motif / sync / gap を使い分けた型。
+     既存12型は値を持たないので、これらの枝には一切入らない
+     （＝控えてある曲番号の曲は1音も変わらない）。
+     ---------------------------------------------------------------- */
+  { key:'wave',      label:'波',            dens:0.90, leap:0.9,  rest:1.0, long:0.30, rep:0.08, contour:'wave' },
+  { key:'arch',      label:'山なり',        dens:0.95, leap:0.8,  rest:0.9, long:0.25, rep:0.10, contour:'arch' },
+  { key:'still',     label:'ひとこと',      dens:0.35, leap:0.5,  rest:1.8, long:0.70, rep:0.20, contour:'flat', spread:0.70, span:4 },
+  { key:'smooth',    label:'なめらか',      dens:1.00, leap:0.15, rest:0.9, long:0.30, rep:0.05, spread:0.70 },
+  { key:'hold',      label:'のばす',        dens:0.40, leap:0.6,  rest:1.2, long:0.85, rep:0.10 },
+  { key:'chant',     label:'唱えるよう',    dens:0.70, leap:0.2,  rest:1.3, long:0.30, rep:0.60, contour:'flat', span:3 },
+  { key:'callFall',  label:'問い→答え（沈む）', dens:0.90, leap:1.0, rest:1.1, long:0.30, rep:0.10, call:true, contour:'fall' },
+  { key:'pentaLeap', label:'ペンタ跳躍',    dens:0.90, leap:1.8,  rest:1.0, long:0.25, rep:0.05, penta:true, span:8 },
+  { key:'seq',       label:'反復進行',      dens:0.90, leap:0.7,  rest:1.0, long:0.25, rep:0.10, seq:1,  motif:0.95 },
+  { key:'seqDown',   label:'下る反復',      dens:0.90, leap:0.7,  rest:1.0, long:0.25, rep:0.10, seq:-1, motif:0.95 },
+  { key:'sync',      label:'食う',          dens:1.00, leap:0.9,  rest:0.9, long:0.20, rep:0.10, sync:true },
+  { key:'gap',       label:'間をとる',      dens:1.10, leap:0.9,  rest:0.8, long:0.35, rep:0.10, gap:true },
+  { key:'wander',    label:'さまよう',      dens:0.85, leap:1.2,  rest:1.1, long:0.30, rep:0.05, spread:0.15 },
+  { key:'straight',  label:'素直',          dens:0.85, leap:0.7,  rest:1.0, long:0.35, rep:0.10, spread:0.95 },
 ];
 
 /* ============================================================
@@ -1822,7 +1842,20 @@ const MEL_PAIR = {
   call:'fall',  fall:'call',
   leap:'cinema', cinema:'leap',
   arp:'rhythm', rhythm:'arp',
-  penta:'call', chrom:'sing'
+  penta:'call', chrom:'sing',
+  /* ---- 追加14型ぶん（2026-08-23）----------------------------------
+     ここに載っていない型はサビでも同じ型のままになり、
+     「サビが立たない型」が混ざってしまうので必ず対にしておく。
+     静かな型はサビで動く型へ、動く型はサビで落ち着く型へ、を基本にした。 */
+  wave:'arch',       arch:'wave',
+  still:'straight',  straight:'still',
+  smooth:'seq',      seq:'smooth',
+  hold:'sync',       sync:'hold',
+  chant:'gap',       gap:'chant',
+  callFall:'rise',
+  pentaLeap:'penta',
+  seqDown:'seq',
+  wander:'straight'
 };
 /* ============================================================
    音源（すべて計算で作る。録音した素材は1つも使っていない）
@@ -4567,6 +4600,23 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
   const hi = Math.max(lo + 1, Math.round(mood.dens[1] * st.dens * densMul * o.roleDens));
   const leap = Math.min(0.85, mood.leap * st.leap);
   const rest = Math.min(0.6, mood.rest * st.rest);
+  /* 【2026-08-23 追加】メロ型の新しいつまみ。
+     ------------------------------------------------------------
+     span   … 音域の広さ（輪郭の振れ幅と跳躍の上限）。未指定なら従来の o.span。
+     spread … 輪郭への忠実さ。1に近いほど狙った形どおりに動き（素直）、
+              0に近いほど上下が気まぐれになる（さまよう）。
+     seq    … 反復進行。小節ごとに動機を +1 / -1 段ずつ動かす。
+     motif  … 前の小節の動機を使い回す確率（未指定なら従来の0.75）。
+     sync   … 食う。拍の頭ではなく、その1つ手前で次の和音に着地する。
+     gap    … 間をとる。小節の終盤の音を抜いて余白を作る。
+
+     ★ どれも「その型が値を持っているときだけ」枝に入る。
+       持っていない既存12型は乱数の消費数まで従来と完全に同じなので、
+       控えてある曲番号から出る曲は1音も変わらない（検証済み）。
+     ------------------------------------------------------------ */
+  const span     = (st.span   !== undefined) ? st.span   : o.span;
+  const motifP   = (st.motif  !== undefined) ? st.motif  : 0.75;
+  const seqStep  = st.seq || 0;
 
   // ⑥ 転調：フレーズごとの移調量を、音の並び（はしご）ごと持ち上げる。
   //    生成の段階で音名に焼き込むので、再生・書き出し側は何も変えなくてよい。
@@ -4586,17 +4636,21 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
   const moTrack = (o.oct || 4) + Math.round((o.span || 6));
   let prev = centerRow;
   let motif = null;
+  let seqShift = 0;                 /* 反復進行の積み上げ量（seq型のみ動く） */
 
   for(let bar = 0; bar < ph.bars; bar++){
     const off = bar * spb;
     // #6 前半は contour、後半は contour2
     const useContour = (bar < ph.bars / 2) ? contour : contour2;
+    /* 反復進行：同じ形を段ずつずらして繰り返す。4小節で一巡させて
+       音域から飛び出さないようにする（最終的に row でも丸める）。 */
+    seqShift = seqStep ? seqStep * (bar % 4) : 0;
     /* #1 この小節で使う動機の姿。小節ごとに変形が変わる。 */
     const mo = MOTIF_OPS[(bar + moTrack) % MOTIF_OPS.length].f(motifSeq);
     let mIdx = 0;
     // 「問い→答え」は、前半のリズムを後半でも使い、終わり方だけ変える
     const answering = st.call && (bar % 2 === 1);
-    const repeatBar = motif && (bar % 2 === 1) && (answering || chance(0.75));
+    const repeatBar = motif && (bar % 2 === 1) && (answering || chance(motifP));
     let cell;
     if(repeatBar){ cell = motif.slice(); }
     else {
@@ -4613,11 +4667,17 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
          ①のばす音が一度も効かず ②前の小節の最後の16分に音が書き込まれていた
          （小節0だけは配列の "-1" プロパティに落ちて無害だった）。 */
       if(k < 0 || sIdx >= n) return;
+      /* gap（間をとる）：小節の終盤を抜いて余白を作る。gap型だけが通る。 */
+      if(st.gap && idx > 0 && k >= spb - (spb >> 2) && chance(0.55)) return;
       const t = (bar + k / spb) / ph.bars;
       const deg = chordAt(ph, beatIndexOf(song, sIdx));
+      /* sync（食う）：拍の頭ではなく1つ手前で、次の拍の和音へ先に着地する。
+         sync型だけが通る（それ以外は syncAhead が常に false）。 */
+      const syncAhead = !!st.sync && !isBeatStart(song, k) && isBeatStart(song, k + 1) && (off + k + 1) < n;
+      const landDeg = syncAhead ? chordAt(ph, beatIndexOf(song, sIdx + 1)) : deg;
       // 「答え」の小節は輪郭を反転して、問いかけに応える形にする
       const shape = answering ? -useContour.f(t) : useContour.f(t);
-      const target = Math.round(centerRow + shape * o.span);
+      const target = Math.round(centerRow + shape * span) + seqShift;
       let row;
       if(st.rep > 0 && idx > 0 && chance(st.rep)){
         row = prev;                                   // 同じ音を続ける（リズム主体・反復型）
@@ -4625,7 +4685,7 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
         // アルペジオ型：コードの構成音だけを順に使う
         const tones = chordToneRows(deg, o.rows, song.scale);
         row = tones[(idx + bar) % tones.length];
-      } else if(deg !== null && (isBeatStart(song, k) || idx === 0)){
+      } else if(landDeg !== null && (isBeatStart(song, k) || idx === 0 || syncAhead)){
         /* 拍の頭はコードの音に着地させる（ここを外すと濁って聞こえる）。
            #1 どこへ着地するかは動機が決める。動機は「音階の段の相対値」なので、
            そのまま鳴らすと和音から外れることがある。だから
@@ -4633,15 +4693,23 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
            こうすると動機の形は残ったまま、響きは濁らない。 */
         let mTarget = target;
         if(mo && mo.length){
-          mTarget = centerRow + mo[mIdx % mo.length];
+          mTarget = centerRow + mo[mIdx % mo.length] + seqShift;
           mIdx++;
         }
-        const tones = chordToneRows(deg, o.rows, song.scale);
+        const tones = chordToneRows(landDeg, o.rows, song.scale);
         row = tones.reduce((best, r) => Math.abs(r - mTarget) < Math.abs(best - mTarget) ? r : best, tones[0]);
       } else {
         const step = chance(leap) ? irand(2, 4) : 1;
-        row = prev + (chance(0.5) ? step : -step);
-        if(Math.abs(row - target) > o.span) row = target;
+        /* spread（輪郭への忠実さ）。
+           未指定の型は従来どおり「上か下かのコイン投げ」。乱数の消費数を
+           変えないため、指定がある型だけ向きの決め方を差し替える。 */
+        if(st.spread === undefined){
+          row = prev + (chance(0.5) ? step : -step);
+        } else {
+          const toward = (target >= prev) ? 1 : -1;
+          row = prev + (chance(st.spread) ? toward : -toward) * step;
+        }
+        if(Math.abs(row - target) > span) row = target;
         /* #4 経過音。次の着地音へ半音下からぶつける。
            st.chrom を持つ型（「経過音」）だけが通る。 */
         if(st.chrom && chance(0.35)){
@@ -12611,6 +12679,38 @@ boot();
 
   console.log('ZCNOVA: ランダム編成の候補を' + added + '曲調ぶん登録しました' +
               (skipped.length ? '（見送り: ' + skipped.join(', ') + '）' : ''));
+})();
+
+/* ============================================================
+   選択ボタンの再構築（2026-08-23 追加）
+   ------------------------------------------------------------
+   【なぜ要るか】
+   buildMoodButtons / buildMelStyleButtons / buildArrangeButtons / buildSEButtons は
+   boot() の中で**1回だけ**呼ばれる。ところが boot() の後ろには
+   パッチ用の <script> が11個あり、このファイルの拡張は全部そこで行う流儀に
+   なっている。つまり後ろのパッチで MOODS / MELODY_STYLES / ARRANGE_TYPES /
+   SE_TYPES に項目を足しても、**ボタンは既に作り終わっているので画面に出ない**。
+
+   足した本人からは「増やしたのに適用されていない」ようにしか見えず、
+   しかも「おまかせ」は生成時に配列を読むので、選べないのに たまに その型の曲が
+   出る、という一番分かりにくい壊れ方をする。
+
+   ここで最後にもう一度組み直しておけば、今後どのパッチ位置に足しても
+   必ず画面へ出る。選択中の印は syncControls() が付け直す。
+   ============================================================ */
+(() => {
+  try{
+    if(typeof buildMoodButtons      === 'function') buildMoodButtons();
+    if(typeof buildMelStyleButtons  === 'function') buildMelStyleButtons();
+    if(typeof buildArrangeButtons   === 'function') buildArrangeButtons();
+    if(typeof buildSEButtons        === 'function') buildSEButtons();
+    /* 組み直すと「選択中」の印が消えるので付け直す。
+       markPicked()（曲調・小節・長さ・編成）と syncControls()（メロ型・展開ほか）は
+       別々の担当なので、両方を通す renderAll() を使う。 */
+    if(typeof renderAll === 'function' && typeof song !== 'undefined' && song) renderAll();
+    console.log('ZCNOVA: 選択ボタンを組み直しました' +
+      `（曲調${MOODS.length} / メロ型${MELODY_STYLES.length} / 展開${ARRANGE_TYPES.length} / 効果音${Object.keys(SE_TYPES).length}）`);
+  }catch(e){ console.warn('ZCNOVA: 選択ボタンの組み直しに失敗', e); }
 })();
 </script>
 </body>
