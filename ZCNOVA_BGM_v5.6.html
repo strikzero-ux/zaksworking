@@ -1825,6 +1825,23 @@ const MELODY_STYLES = [
   { key:'gap',       label:'間をとる',      dens:1.10, leap:0.9,  rest:0.8, long:0.35, rep:0.10, gap:true },
   { key:'wander',    label:'さまよう',      dens:0.85, leap:1.2,  rest:1.1, long:0.30, rep:0.05, spread:0.15 },
   { key:'straight',  label:'素直',          dens:0.85, leap:0.7,  rest:1.0, long:0.35, rep:0.10, spread:0.95 },
+
+  /* ---- 追加10型（2026-08-23 / B-1 リズムの置き場所・B-2 着地音）----------
+     これまでのメロ型は「音高の動き」しか作り分けていなかった（実測：
+     跳躍率は幅19.2ポイント散っているのに、拍頭に乗る割合は幅9.3ポイントしか
+     散っていない）。beat と landing の2軸を使い、リズムの表情と響きの色で
+     分ける型をここに置く。
+     ---------------------------------------------------------------------- */
+  { key:'march',    label:'行進',          dens:0.95, leap:0.6, rest:0.8, long:0.15, rep:0.20, beat:'head',   landing:'root'  },
+  { key:'hymn',     label:'讃美歌',        dens:0.55, leap:0.4, rest:1.1, long:0.70, rep:0.15, beat:'head',   landing:'fifth', spread:0.85 },
+  { key:'backbeat', label:'裏で跳ねる',    dens:1.05, leap:0.9, rest:0.8, long:0.10, rep:0.15, beat:'off'    },
+  { key:'funk',     label:'ファンク',      dens:1.30, leap:0.7, rest:0.6, long:0.05, rep:0.35, beat:'off',    landing:'seventh' },
+  { key:'tango',    label:'食い込む',      dens:1.00, leap:1.0, rest:0.9, long:0.20, rep:0.10, beat:'push'   },
+  { key:'bossa',    label:'ボサノバ',      dens:0.90, leap:0.8, rest:1.0, long:0.35, rep:0.10, beat:'push',   landing:'ninth', spread:0.75 },
+  { key:'ma',       label:'間',            dens:0.45, leap:0.6, rest:1.5, long:0.60, rep:0.10, beat:'sparse', span:5 },
+  { key:'etude',    label:'粒ぞろい',      dens:1.10, leap:0.5, rest:0.7, long:0.05, rep:0.10, beat:'even',   spread:0.90 },
+  { key:'jazzy',    label:'おしゃれ',      dens:0.95, leap:1.1, rest:1.0, long:0.25, rep:0.08, landing:'seventh', chrom:true },
+  { key:'sweet',    label:'甘い',          dens:0.85, leap:0.6, rest:1.0, long:0.40, rep:0.10, landing:'third', spread:0.80 },
 ];
 
 /* ============================================================
@@ -1855,7 +1872,13 @@ const MEL_PAIR = {
   callFall:'rise',
   pentaLeap:'penta',
   seqDown:'seq',
-  wander:'straight'
+  wander:'straight',
+  /* ---- 追加10型ぶん（2026-08-23）---- */
+  march:'hymn',      hymn:'march',
+  backbeat:'funk',   funk:'backbeat',
+  tango:'bossa',     bossa:'tango',
+  ma:'etude',        etude:'ma',
+  jazzy:'sweet',     sweet:'jazzy'
 };
 /* ============================================================
    音源（すべて計算で作る。録音した素材は1つも使っていない）
@@ -4234,8 +4257,56 @@ const BEAT_CELLS = {
 function beatCellsFor(len){
   return BEAT_CELLS[len] || BEAT_CELLS[4];
 }
-function buildBarCell(song, want){
+/* ============================================================
+   B-1 リズムの置き場所（2026-08-23 追加）
+   ------------------------------------------------------------
+   【なぜ要るか】
+   buildBarCell は「何個鳴らすか（want）」しか受け取っておらず、
+   「拍のどこで鳴らすか」はメロ型から一切いじれなかった。
+   実測すると、26型あっても拍頭に乗る音の割合は 25.4〜34.7%（幅9.3ポイント）に
+   固まっていて、**どの型もリズムの表情がほぼ同じ**という状態だった。
+   跳躍率は 25.7〜44.9%（幅19.2）とよく散っているので、
+   音高だけが作り分けられ、リズムは作り分けられていない。
+
+   【やること】
+   拍の部品（BEAT_CELLS）を選ぶとき、型の指定 st.beat で重み付けする。
+   部品そのものは増やさないので、既存の拍子対応（3/4・5/4・7/8 など）は
+   そのまま効く。
+
+     head   … 拍の頭を優先（行進曲・讃美歌）
+     off    … 拍の裏を優先（レゲエ・スカ・ファンク）
+     push   … 拍の直前に置く（タンゴ・ボサノバの食い）
+     even   … 均等割り（練習曲のように粒がそろう）
+     sparse … 間引いて置く（和風の間・アンビエント）
+
+   ★ st.beat を持たない型は cands / pool をそのまま一様抽選するので、
+     従来と乱数の消費数まで含めて完全に同じ（既存26型は無傷）。
+   ============================================================ */
+function zcBeatWeight(mode, cell, len){
+  if(!cell.length) return 1;
+  const head = cell.filter(k => k === 0).length;                 // 拍の頭
+  const off  = cell.filter(k => k * 2 >= len).length;            // 拍の後ろ半分
+  const last = cell.filter(k => k === len - 1).length;           // 拍の直前（食い）
+  switch(mode){
+    case 'head':   return 1 + head * 4;
+    case 'off':    return 1 + off  * 3;
+    case 'push':   return 1 + last * 5;
+    case 'even':   return 1 + (cell.length >= 2 ? 3 : 0);
+    case 'sparse': return 1 + (cell.length <= 1 ? 4 : 0);
+    default:       return 1;
+  }
+}
+function zcPickWeighted(list, mode, len){
+  if(!mode || list.length < 2) return pick(list);
+  const w = list.map(c => zcBeatWeight(mode, c, len));
+  const total = w.reduce((s, x) => s + x, 0);
+  let t = rnd() * total;
+  for(let i = 0; i < list.length; i++){ t -= w[i]; if(t <= 0) return list[i]; }
+  return list[list.length - 1];
+}
+function buildBarCell(song, want, st){
   const bs = beatStartsOf(song);
+  const mode = st && st.beat;
   const out = [];
   let left = want;
   for(let b = 0; b < bs.length; b++){
@@ -4243,7 +4314,9 @@ function buildBarCell(song, want){
     const pool = beatCellsFor(len);
     const need = Math.max(0, Math.round(left / (bs.length - b)));
     const cands = pool.filter(c => Math.abs(c.length - need) <= 1);
-    const c = (cands.length ? pick(cands) : pick(pool));
+    /* mode が無いときは従来どおり pick()。乱数の消費数も同じ。 */
+    const c = cands.length ? zcPickWeighted(cands, mode, len)
+                           : zcPickWeighted(pool,  mode, len);
     c.forEach(k => { if(k < len) out.push(bs[b] + k); });
     left -= c.length;
   }
@@ -4365,13 +4438,54 @@ function phraseHasNotes(ph){
 }
 
 /* ---------- コードの構成音 ---------- */
-function chordToneRows(deg, rowCount, scaleKey){
+/* ============================================================
+   B-2 旋律が着地する和音の音（2026-08-23 追加）
+   ------------------------------------------------------------
+   【なぜ要るか】
+   ここが [0,2,4]（1度・3度・5度）で固定されていたため、
+   **旋律は7thにも9thにも絶対に着地できなかった**。
+   伴奏側は ② コードの拡張音（chordColor / chordTones）で7th・9thが
+   鳴るようになっているのに、旋律だけ三和音に縛られていて、
+   「進行はジャズなのに旋律の響きは童謡のまま」という状態だった。
+
+   degs を渡せるようにするだけで、旋律も拡張音に着地できる。
+   省略時は [0,2,4] なので、渡していない既存の呼び出しは1音も変わらない。
+   ============================================================ */
+function chordToneRows(deg, rowCount, scaleKey, degs){
   const st = (SCALES[scaleKey] || SCALES.major).steps;
   const n = st.length;
-  // 1度・3度・5度（音階の上で1つ飛ばし）
-  return [0, 2, 4].map(i => (deg + i) % n)
+  // 既定は 1度・3度・5度（音階の上で1つ飛ばし）
+  return (degs || [0, 2, 4]).map(i => (deg + i) % n)
     .flatMap(d => { const out = []; for(let o = 0; o * n + d < rowCount; o++) out.push(o * n + d); return out; })
     .sort((a,b) => a-b);
+}
+/* 型ごとの「着地音の好み」。
+   near   … 一番近い和音の音（従来の動き）
+   root   … 根音に寄る（素朴・童謡・民謡）
+   third  … 3度に寄る（甘い・やさしい）
+   fifth  … 5度に寄る（開けた・壮大）
+   seventh… 7thを含めて狙う（おしゃれ・ジャズ・ネオソウル）
+   ninth  … 9thまで含める（浮遊・シティポップ）
+   ※ landing を持たない型は degs=undefined で従来どおり [0,2,4]。 */
+const ZC_LANDING = {
+  near:    { degs:null,         want:null },
+  root:    { degs:[0, 2, 4],    want:0 },
+  third:   { degs:[0, 2, 4],    want:2 },
+  fifth:   { degs:[0, 2, 4],    want:4 },
+  seventh: { degs:[0, 2, 4, 6], want:6 },
+  ninth:   { degs:[0, 2, 4, 6, 8], want:8 }
+};
+/* 狙いの度数に当たる段を、目標の高さの近くから選ぶ。
+   狙いが無い（near）ときは今までどおり「一番近い音」。 */
+function zcPickLanding(tones, target, deg, scaleKey, rowCount, land){
+  if(!land || land.want === null){
+    return tones.reduce((best, r) => Math.abs(r - target) < Math.abs(best - target) ? r : best, tones[0]);
+  }
+  const n = ((SCALES[scaleKey] || SCALES.major).steps || []).length || 7;
+  const wantRow = (deg + land.want) % n;
+  const hits = tones.filter(r => r % n === wantRow);
+  const from = hits.length ? hits : tones;
+  return from.reduce((best, r) => Math.abs(r - target) < Math.abs(best - target) ? r : best, from[0]);
 }
 /* ② コードの拡張音（2026-08-22 フェーズ1）
    ------------------------------------------------------------
@@ -4614,6 +4728,7 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
        持っていない既存12型は乱数の消費数まで従来と完全に同じなので、
        控えてある曲番号から出る曲は1音も変わらない（検証済み）。
      ------------------------------------------------------------ */
+  const landing  = st.landing ? (ZC_LANDING[st.landing] || null) : null;   /* B-2 着地音の好み */
   const span     = (st.span   !== undefined) ? st.span   : o.span;
   const motifP   = (st.motif  !== undefined) ? st.motif  : 0.75;
   const seqStep  = st.seq || 0;
@@ -4655,7 +4770,7 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
     if(repeatBar){ cell = motif.slice(); }
     else {
       const want = irand(lo, hi);
-      cell = buildBarCell(song, want);        // #2 拍ごとに組み立てる
+      cell = buildBarCell(song, want, st);    // #2 拍ごとに組み立てる（B-1: 置き場所も型で決める）
       if(cell.length > 1 && chance(rest)) cell.splice(1 + Math.floor(rnd() * (cell.length - 1)), 1);
       motif = cell.slice();
     }
@@ -4683,7 +4798,7 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
         row = prev;                                   // 同じ音を続ける（リズム主体・反復型）
       } else if(st.arp && deg !== null){
         // アルペジオ型：コードの構成音だけを順に使う
-        const tones = chordToneRows(deg, o.rows, song.scale);
+        const tones = chordToneRows(deg, o.rows, song.scale, landing && landing.degs);
         row = tones[(idx + bar) % tones.length];
       } else if(landDeg !== null && (isBeatStart(song, k) || idx === 0 || syncAhead)){
         /* 拍の頭はコードの音に着地させる（ここを外すと濁って聞こえる）。
@@ -4696,8 +4811,10 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
           mTarget = centerRow + mo[mIdx % mo.length] + seqShift;
           mIdx++;
         }
-        const tones = chordToneRows(landDeg, o.rows, song.scale);
-        row = tones.reduce((best, r) => Math.abs(r - mTarget) < Math.abs(best - mTarget) ? r : best, tones[0]);
+        /* B-2：型が着地音の好みを持っていれば、そこへ寄せる。
+           持っていなければ従来どおり「一番近い和音の音」。 */
+        const tones = chordToneRows(landDeg, o.rows, song.scale, landing && landing.degs);
+        row = zcPickLanding(tones, mTarget, landDeg, song.scale, o.rows, landing);
       } else {
         const step = chance(leap) ? irand(2, 4) : 1;
         /* spread（輪郭への忠実さ）。
