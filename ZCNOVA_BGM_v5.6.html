@@ -7525,9 +7525,28 @@ function buildTrackArea(){
     head.appendChild(tri);
     box.appendChild(head);
 
-    // ---- 中身 ----
+    /* ---- 中身（2026-08-23 遅延生成）----
+       ------------------------------------------------------------
+       畳んであるトラックも中身を全部作っていたため、画面に1ピクセルも
+       出ていないマスがDOMに大量に残っていた。
+       実測（8小節）: 全14,464マスのうち 11,520マス（80%）が閉じたトラックのもの。
+       各マスには click / pointerdown / pointermove / pointerup /
+       pointerleave / pointercancel の6個の監視が付くので、
+       見えないマスのために約69,000個の監視が動いていた。
+
+       開いているものだけ先に作り、閉じているものは帯を押された瞬間に作る。
+       一度作ったら _zcFilled が立つので、開閉を繰り返しても作り直さない。
+       ※ makeRow の中で zcStepCells / zcCellReg へ登録するので、
+         あとから作ったマスも再生ハイライトと列の塗り直しに正しく参加する
+         （この2つは buildTrackArea の先頭でしか初期化しない）。 */
     const body = document.createElement('div');
     body.className = 'trk-body';
+    box.appendChild(body);
+    area.appendChild(box);
+
+    box._zcFill = () => {
+    if(box._zcFilled) return;
+    box._zcFilled = true;
     const scroll = document.createElement('div');
     scroll.className = 'grid-scroll';
 
@@ -7567,8 +7586,8 @@ function buildTrackArea(){
       }
     }
     body.appendChild(scroll);
-    box.appendChild(body);
-    area.appendChild(box);
+    };
+    if(openTracks[t.key]) box._zcFill();
   });
 
   /* ---- 効果音レーン ----
@@ -7655,15 +7674,26 @@ function buildTrackArea(){
     tri.className = 'tri'; tri.textContent = openTracks.se ? '▲' : '▼';
     ctrl.appendChild(tri);
     head.appendChild(ctrl);
-    head.addEventListener('click', () => {
-      openTracks.se = !openTracks.se;
-      box.classList.toggle('open', openTracks.se);
-      tri.textContent = openTracks.se ? '▲' : '▼';
-    });
+    /* 【2026-08-23 修正】ここに付けていた開閉リスナーを撤去した。
+       ------------------------------------------------------------
+       #trackArea 側にも .trk-head の開閉を受ける委譲リスナーがあり、
+       効果音レーンだけ**両方が発火して2回トグル**していた。
+         自前のリスナー : openTracks.se = undefined → true（開く）
+         委譲のリスナー : openTracks.se = true → false（すぐ閉じる）
+       結果、効果音レーンの帯は**何度押しても開かない**状態だった。
+       説明文では「好きな所に置けます」と案内しているのに、
+       画面から効果音を打ち込む手段が無かった（v5.6 以前からの既存不具合）。
+       開閉は委譲リスナー1本に任せる（あちらが _zcFill・open・▲▼を全部やる）。 */
     box.appendChild(head);
 
     const body = document.createElement('div');
     body.className = 'trk-body';
+    box.appendChild(body);
+    area.appendChild(box);
+
+    box._zcFill = () => {
+    if(box._zcFilled) return;
+    box._zcFilled = true;
     const scroll = document.createElement('div');
     scroll.className = 'grid-scroll';
 
@@ -7679,8 +7709,8 @@ function buildTrackArea(){
         null, 'se'));
     });
     body.appendChild(scroll);
-    box.appendChild(body);
-    area.appendChild(box);
+    };
+    if(openTracks.se) box._zcFill();
   }
   /* ⑨ 拍子を表示に出す。拍子は曲調に紐づいていて単独では選べないので、
      「いま何拍子で編集しているか」がここだけで分かるようにしておく。
@@ -8233,9 +8263,13 @@ $('trackArea').addEventListener('click', (e) => {
   }
   const head = e.target.closest('.trk-head');
   if(head){
-    const k = head.parentElement.dataset.trk;
+    const box = head.parentElement;
+    const k = box.dataset.trk;
     openTracks[k] = !openTracks[k];
-    head.parentElement.classList.toggle('open', openTracks[k]);
+    /* 【2026-08-23 遅延生成】開くときに、まだ作っていなければここで中身を作る。
+       閉じたままのトラックはDOMを持たないので、8小節で 14,464→2,944 マスに減る。 */
+    if(openTracks[k] && typeof box._zcFill === 'function') box._zcFill();
+    box.classList.toggle('open', openTracks[k]);
     head.querySelector('.tri').textContent = openTracks[k] ? '▲' : '▼';
     return;
   }
