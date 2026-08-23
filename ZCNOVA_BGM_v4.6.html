@@ -3519,7 +3519,35 @@ const ZC_INST_TRIM = {
   airPad:                         4.00,   // (0.045)
   lead:                           3.40    // (0.131)
 };
-function zcInstTrim(key){ return ZC_INST_TRIM[key] || 1; }
+/* 【2026-08-23 修正】「この楽器だけ」のときは音色ごとのそろえを掛けない。
+   ------------------------------------------------------------
+   この表は**合奏で音色どうしの釣り合いを取る**ために作ったもので、
+   50音色を同条件で測ってピークが45倍ひらいていたのを詰めるのが目的だった。
+   ところが「楽器1つ」のモードは1種類しか鳴らないので、釣り合いを取る相手が
+   そもそも居ない。にもかかわらず倍率が掛かるため、利用者が耳で詰めた
+   単体演奏の音量・質感が上書きされていた。実測した影響は次の4モード:
+
+     シンセだけ        lead                          ×3.40（+10.6dB）
+     トランペットだけ  __zc_solo_trumpet_real_final  ×0.69（-3.2dB）
+     ブラスだけ        brass                         ×0.84（-1.5dB）
+     サックスだけ      sax（単体演奏）               ×0.84（-1.5dB）
+
+   とくにシンセだけは +10.6dB で、リミッターに突っ込んで潰れた音になり、
+   別の楽器に聞こえていた。音源そのものは v3.6 と同一（実測 RMS比 0.999〜1.001）
+   なので、変わっていたのはここだけ。
+   合奏側の釣り合いはそのまま残したいので、表は消さずに
+   「楽器1つのときは通さない」とする。 */
+function zcIsSoloMode(playMode){
+  if(!playMode) return false;
+  try{
+    const pm = PLAY_MODES.find(p => p.key === playMode);
+    return !!(pm && pm.group === '楽器1つ');
+  }catch(e){ return false; }
+}
+function zcInstTrim(key, playMode){
+  if(zcIsSoloMode(playMode)) return 1;
+  return ZC_INST_TRIM[key] || 1;
+}
 
 function buildEngine(cfg){
   const ksCache = new Map();
@@ -3576,7 +3604,7 @@ function buildEngine(cfg){
     const pan  = new Tone.Panner(Math.max(-0.9, Math.min(0.9, PAN[k] + (PANJ[k] || 0))));
     /* 音色ごとの出力そろえ。ミキサーの音量（gain）とは別の段にしておく。
        ここを gain に混ぜると、ミキサーの数字と実際の音量がずれて分かりにくくなる。 */
-    const trim = new Tone.Gain(zcInstTrim(t.inst));
+    const trim = new Tone.Gain(zcInstTrim(t.inst, cfg.playMode));
     own(gain, pan, trim);
     gain.chain(pan, master);
     gain.connect(revSend);
@@ -4978,6 +5006,8 @@ function engineConfig(song, live){
     tracks: JSON.parse(JSON.stringify(song.tracks)),
     // ⑤ 曲ごとの定位のずらし幅。無い曲は従来の固定配置のまま
     pan: (song.perf && song.perf.pan) || null,
+    // 「楽器1つ」かどうか。音色ごとのそろえを通すか決めるのに使う
+    playMode: song.playMode || null,
   };
 }
 /* 【2026-08-23 修正】エンジンを丸ごと捨てる。
@@ -5047,7 +5077,7 @@ function swapVoice(song, key){
        直後で必ず無音なので、ここで滑らかに変える意味がない。むしろ
        音が止まっている（AudioContext が suspended の）あいだは rampTo が
        進まず、値が途中で止まったままになる。 */
-    try{ p.trim.gain.value = zcInstTrim(song.tracks[key].inst); }catch(e){}
+    try{ p.trim.gain.value = zcInstTrim(song.tracks[key].inst, song.playMode); }catch(e){}
     p.synth.connect(p.trim);
   }else{
     p.synth.connect(p.gain);
