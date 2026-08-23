@@ -4733,13 +4733,85 @@ function genChords(ph, song, mood){
      ★ ph.chordHits を持たない過去の保存データは、再生側が従来の
        hits をそのまま使う＝**保存済みの曲の音は変わらない**。
      ============================================================ */
-  zcBuildChordHits(ph, song);
+  zcBuildChordHits(ph, song, mood);
   return prog;
 }
 
-function zcBuildChordHits(ph, song){
+/* ============================================================
+   小節ごとに鳴らす位置を散らす（2026-08-23）
+   ------------------------------------------------------------
+   伴奏・ベース・ドラムはどれも「型の hits を s % stepsPerBar で
+   全小節に当てる」実装で、曲じゅう同じ位置・同じ強さで鳴っていた。
+   実測（30曲平均の小節ごとの種類）:
+       ベース 1.8（稼働率100%） / ハイハット 1.9（92%）
+       キック 2.9（85%） / スネア 2.0（65%）
+     比較  メロディ 7.7（98%）
+   ここで小節ごとの位置を作って**フレーズに焼き込む**。
+
+   ★ 乱数は seedNoise のみ（rnd() を消費しない）＝他パートは1音もズレない
+   ★ 焼き込むので再生と書き出しは必ず一致する
+   ★ 過去の保存データは焼き込みを持たないので従来どおり鳴る
+   ============================================================ */
+function zcRoleSeed(ph, song, salt){
+  let h = 0;
+  const k = String(ph.role || ph.name || '');
+  for(let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) | 0;
+  return ((song.seed || 1) ^ salt ^ Math.imul(h, 2654435761)) >>> 0;
+}
+/* base の位置を、抜き・足し・フィルで小節ごとに散らす。
+   keep に入れた位置は絶対に落とさない（骨格を壊さないため）。 */
+function zcVaryBar(base, spb, sd, bar, opt){
+  const o = opt || {};
+  const keep = o.keep || [];
+  const beatHeads = o.beatHeads || [0];
+  let hits = base.slice();
+  const n1 = seedNoise(sd + bar * 101, 11);
+  const n2 = seedNoise(sd + bar * 101, 23);
+  const n3 = seedNoise(sd + bar * 101, 37);
+  /* 抜き：拍の頭でも keep でもない音を1つ落とす */
+  if(hits.length > (o.minHits || 2) && n1 < (o.pDrop || 0)){
+    const pool = hits.filter(k => keep.indexOf(k) < 0 && beatHeads.indexOf(k) < 0);
+    const pool2 = pool.length ? pool : hits.filter(k => keep.indexOf(k) < 0 && k !== 0);
+    if(pool2.length){
+      const gone = pool2[Math.floor(n2 * pool2.length) % pool2.length];
+      hits = hits.filter(k => k !== gone);
+    }
+  }
+  /* 足し：鳴っていない裏の位置に1つ足す */
+  if(n2 < (o.pAdd || 0)){
+    const cand = [];
+    for(let k = 1; k < spb; k += 2) if(hits.indexOf(k) < 0) cand.push(k);
+    if(cand.length) hits.push(cand[Math.floor(n3 * cand.length) % cand.length]);
+  }
+  /* フィル：フレーズの最後の小節は後半を詰める */
+  if(o.fill && n3 < (o.pFill || 0.5)){
+    for(let k = spb - (spb >> 2); k < spb; k += 2) if(hits.indexOf(k) < 0) hits.push(k);
+  }
+  if(!hits.length) hits = keep.length ? keep.slice() : [0];
+  hits.sort((a, b) => a - b);
+  return hits;
+}
+
+function zcBuildChordHits(ph, song, mood){
   const CP  = chordPatterns(song);
-  const pat = CP[song.cpat] || CP.quarter;
+  /* 【2026-08-23 追加C】伴奏の型をフレーズごとに持ち替える。
+     ------------------------------------------------------------
+     ドラムとベースは genDrums / genBass の中で pick(mood.*) を
+     フレーズごとに引き直しているのに、伴奏だけ song.cpat の1つを
+     曲じゅう使い回していた。曲調の候補（mood.cpat）の中から
+     フレーズごとに選び直す。
+     ・曲全体の顔は song.cpat のままにしたいので、6割はそのまま
+     ・残りは同じ曲調の候補から選ぶ＝曲調の性格は崩れない
+     ・seedNoise で決めるので rnd() は消費しない＝他パートは不変 */
+  const cpPool = (mood && Array.isArray(mood.cpat) ? mood.cpat : []).filter(k => CP[k]);
+  let cpKey = song.cpat;
+  if(cpPool.length > 1){
+    const csd = zcRoleSeed(ph, song, 0x4e17b9d3);
+    const r = seedNoise(csd, 3);
+    if(r >= 0.6) cpKey = cpPool[Math.floor(seedNoise(csd, 7) * cpPool.length) % cpPool.length];
+  }
+  ph.cpat = cpKey;
+  const pat = CP[cpKey] || CP.quarter;
   const spb = stepsPerBar(song);
   const bpb = beatsPerBar(song);
   const role = PHRASE_ROLES.find(r => r.key === ph.role) || {};
@@ -4747,11 +4819,7 @@ function zcBuildChordHits(ph, song){
      ここを曲番号だけにすると、全フレーズが同じ n1/n2/n3 を引いてしまい、
      どのフレーズも小節0・小節1がまったく同じ変化になる
      （＝曲全体で2種類しか出ない）。実測で平均2.3種類・最小1種類だった。 */
-  let zcRoleHash = 0;
-  const zcRoleKey = String(ph.role || ph.name || '');
-  for(let i = 0; i < zcRoleKey.length; i++)
-    zcRoleHash = (zcRoleHash * 31 + zcRoleKey.charCodeAt(i)) | 0;
-  const sd = ((song.seed || 1) ^ 0x7ad3c1f5 ^ Math.imul(zcRoleHash, 2654435761)) >>> 0;
+  const sd = zcRoleSeed(ph, song, 0x7ad3c1f5);
 
   /* 役割ごとの厚み。イントロ・アウトロは抜きやすく、サビは足しやすく。 */
   const thinRole = (role.thin === 'intro' || role.thin === 'outro');
@@ -4771,34 +4839,10 @@ function zcBuildChordHits(ph, song){
   const beatHeads = beatStartsOf(song);
   ph.chordHits = [];
   for(let bar = 0; bar < ph.bars; bar++){
-    let hits = base.slice();
-    const last = (bar === ph.bars - 1);
-    const n1 = seedNoise(sd + bar * 101, 11);
-    const n2 = seedNoise(sd + bar * 101, 23);
-    const n3 = seedNoise(sd + bar * 101, 37);
-
-    /* 抜き：拍の頭でない音を1つ落とす。小節の頭は必ず残す（土台が消えると濁る）。 */
-    if(hits.length > 2 && n1 < pDrop){
-      const cand = hits.filter(k => k !== 0 && beatHeads.indexOf(k) < 0);
-      const pool = cand.length ? cand : hits.filter(k => k !== 0);
-      if(pool.length) {
-        const gone = pool[Math.floor(n2 * pool.length) % pool.length];
-        hits = hits.filter(k => k !== gone);
-      }
-    }
-    /* 足し：いま鳴っていない裏の位置に1つ足す。前のめりの推進力が出る。 */
-    if(n2 < pAdd){
-      const cand = [];
-      for(let k = 1; k < spb; k += 2) if(hits.indexOf(k) < 0) cand.push(k);
-      if(cand.length) hits.push(cand[Math.floor(n3 * cand.length) % cand.length]);
-    }
-    /* フィル：フレーズの最後の小節は後半を詰めて、次のフレーズへつなぐ。 */
-    if(last && !thinRole && n3 < 0.5){
-      for(let k = spb - (spb >> 2); k < spb; k += 2) if(hits.indexOf(k) < 0) hits.push(k);
-    }
-    if(!hits.length) hits = [0];
-    hits.sort((a, b) => a - b);
-    ph.chordHits.push(hits);
+    ph.chordHits.push(zcVaryBar(base, spb, sd, bar, {
+      keep:[0], beatHeads, pDrop, pAdd,
+      fill: (bar === ph.bars - 1) && !thinRole, pFill:0.5,
+    }));
   }
 
   /* 強弱。小節の頭は少し強く、フレーズの頭とサビはさらに強く。
@@ -4833,12 +4877,38 @@ function genBass(ph, song, mood){
   const n = ph.bars * spb;
   ph.bass.fill(null);
   const st = (SCALES[song.scale] || SCALES.major).steps;
+  /* 【2026-08-23】小節ごとに位置を散らす。
+     実測でベースは稼働率100%なのに小節ごとの種類が1.8しかなく、
+     曲じゅう同じ形を刻み続けていた。土台なので抜きは控えめ、
+     小節の頭と拍の頭は必ず残す。 */
+  const bsd = zcRoleSeed(ph, song, 0x1f3a77c5);
+  const bRole = PHRASE_ROLES.find(r => r.key === ph.role) || {};
+  const bThin = (bRole.thin === 'intro' || bRole.thin === 'outro');
+  const bHeads = beatStartsOf(song);
+  const bBase = pat.hits.filter(k => k < spb);
+  const bHits = [];
+  for(let bar = 0; bar < ph.bars; bar++){
+    bHits.push(zcVaryBar(bBase, spb, bsd, bar, {
+      keep:[0], beatHeads:bHeads, minHits:2,
+      pDrop: bThin ? 0.40 : 0.20,
+      pAdd:  bThin ? 0.04 : ((bRole.dens || 1) >= 1.0 ? 0.22 : 0.12),
+      fill: (bar === ph.bars - 1) && !bThin, pFill:0.35,
+    }));
+  }
+  ph.bassHits = bHits;
   for(let s = 0; s < n; s++){
-    if(pat.hits.indexOf(s % spb) < 0) continue;
+    if(bHits[Math.floor(s / spb)].indexOf(s % spb) < 0) continue;
     const deg = chordAt(ph, beatIndexOf(song, s));
     if(deg === null) continue;
-    // 拍の頭は根音、それ以外は5度も混ぜて動きを出す
-    const useFifth = !isBarStart(song, s) && chance(0.35);
+    /* 拍の頭は根音、それ以外は5度も混ぜて動きを出す。
+       【2026-08-23 修正】ここは chance(0.35) だった＝**鳴らす音の数だけ
+       乱数を消費する**ため、小節ごとに位置を散らすと消費数が変わり、
+       このあとに作られる旋律（genMelodyInto）まで全部ずれてしまった。
+       実測：伴奏の変化を入れた時点で 40曲中36曲の旋律が変わっていた。
+       曲番号から決まる seedNoise に替えて、消費数を 0 に固定する。
+       これで genBass の乱数消費は pick(mood.bass) の1回だけになり、
+       位置をどう散らしても後続の生成はまったくズレない。 */
+    const useFifth = !isBarStart(song, s) && seedNoise(bsd + s * 7, 401) < 0.35;
     const d = useFifth ? (deg + 4) % st.length : deg % st.length;
     const up = useFifth && (deg + 4) >= st.length ? 12 : 0;
     ph.bass[s] = midiToName(12 * (2 + 1) + song.key + (ph.keyShift || 0) + st[d] + up);
@@ -4856,10 +4926,48 @@ function genDrums(ph, song, mood){
   const spb = stepsPerBar(song);
   const n = ph.bars * spb;
   DRUM_LANES.forEach(d => ph.drum[d.key].fill(false));
+  /* 【2026-08-23】小節ごとに位置を散らす。
+     実測（30曲平均の小節ごとの種類）:
+       ハイハット1.9（稼働率92%）/ キック2.9（85%）/ スネア2.0（65%）
+     骨格（キック・スネア）は抜きを控えめにし、刻み系は大きく動かす。
+     レーンごとに種を変えないと、全レーンが同じ小節で同じ抜け方をして
+     「まとめて抜けた」ように聞こえるので salt をずらす。 */
+  const dsd = zcRoleSeed(ph, song, 0x63b1e2a9);
+  const dRole = PHRASE_ROLES.find(r => r.key === ph.role) || {};
+  const dThin = (dRole.thin === 'intro' || dRole.thin === 'outro');
+  const dQuiet = (dRole.thin === 'quiet');
+  const dHeads = beatStartsOf(song);
+  /* レーンごとの動かし方。骨格ほど pDrop を小さく。 */
+  const DRUM_VARY = {
+    kick:    { pDrop:0.16, pAdd:0.18, keep:[0] },
+    snare:   { pDrop:0.14, pAdd:0.16, keep:[] },
+    hihat:   { pDrop:0.30, pAdd:0.28, keep:[] },
+    shaker:  { pDrop:0.34, pAdd:0.26, keep:[] },
+    openhat: { pDrop:0.30, pAdd:0.20, keep:[] },
+    clap:    { pDrop:0.22, pAdd:0.14, keep:[] },
+    tom:     { pDrop:0.30, pAdd:0.18, keep:[] },
+  };
+  ph.drumHits = {};
+  DRUM_LANES.forEach((d, di) => {
+    const base = (pat[d.key] || []).filter(k => k < spb);
+    if(d.key === 'crash' || !base.length){ ph.drumHits[d.key] = null; return; }
+    const cfg = DRUM_VARY[d.key] || { pDrop:0.24, pAdd:0.18, keep:[] };
+    const sd = (dsd ^ Math.imul(di + 1, 0x9e3779b1)) >>> 0;
+    const rows = [];
+    for(let bar = 0; bar < ph.bars; bar++){
+      rows.push(zcVaryBar(base, spb, sd, bar, {
+        keep: cfg.keep, beatHeads: dHeads, minHits:1,
+        pDrop: cfg.pDrop * (dThin ? 2.0 : (dQuiet ? 1.4 : 1)),
+        pAdd:  cfg.pAdd  * (dThin ? 0.2 : ((dRole.dens || 1) >= 1.0 ? 1.2 : 0.7)),
+      }));
+    }
+    ph.drumHits[d.key] = rows;
+  });
   for(let s = 0; s < n; s++){
-    const k = s % spb;
+    const k = s % spb, bar = Math.floor(s / spb);
     DRUM_LANES.forEach(d => {
-      const hits = pat[d.key];
+      const rows = ph.drumHits[d.key];
+      const hits = rows ? rows[bar] : pat[d.key];
       if(hits && hits.indexOf(k) >= 0) ph.drum[d.key][s] = true;
     });
     // シンバルはフレーズの頭だけ。毎小節鳴らすと動画に使えない。
@@ -4897,6 +5005,40 @@ function genDrums(ph, song, mood){
       }
     }
   }
+  /* 【2026-08-23 追加B】フレーズの切れ目にフィルを入れる。
+     ------------------------------------------------------------
+     タム(1.1)・クラップ(1.5)・オープンハット(1.4) は在庫としてレーンが
+     あるのに、ほぼ据え置きで使われていなかった（数字は30曲平均の
+     小節ごとの種類）。クラッシュもフレーズ頭のみで、フィルは皆無。
+     最後の小節の後半に、既存のレーンだけで一言入れる。
+     ・薄い役割（イントロ・アウトロ）には入れない
+     ・キック／スネアの骨格は消さない（上から足すだけ）
+     ・乱数は seedNoise（rnd() を消費しない） */
+  if(ph.bars >= 1 && !dThin){
+    const fsd = zcRoleSeed(ph, song, 0x2c9e77b3);
+    if(seedNoise(fsd, 5) < 0.55){
+      const lastBar = ph.bars - 1;
+      const half = spb >> 1;                       // 最後の小節の後半だけ
+      const kind = Math.floor(seedNoise(fsd, 9) * 3) % 3;
+      for(let k = half; k < spb; k++){
+        const i = lastBar * spb + k;
+        if(i >= n) break;
+        const r = seedNoise(fsd + k, 13);
+        if(kind === 0){                            // タム回し
+          if(r < 0.55 && !ph.drum.kick[i] && !ph.drum.snare[i]) ph.drum.tom[i] = true;
+        } else if(kind === 1){                     // スネア詰め
+          if(r < 0.5 && !ph.drum.kick[i]) ph.drum.snare[i] = true;
+        } else {                                   // 開いたハイハット＋手拍子
+          if(r < 0.4) ph.drum.openhat[i] = true;
+          else if(r < 0.6 && !ph.drum.snare[i]) ph.drum.clap[i] = true;
+        }
+      }
+      /* 次のフレーズへ入る合図。フレーズ末の1つ手前にオープンハット。 */
+      const cue = n - 2;
+      if(cue > 0 && seedNoise(fsd, 17) < 0.5 && !ph.drum.snare[cue]) ph.drum.openhat[cue] = true;
+    }
+  }
+
   /* ⑦ ゴーストノート（2026-08-22 フェーズ2）
      ------------------------------------------------------------
      これまで ph.acc.drum の ON/OFF（強打1.28倍）しか無く、弱打が無かった。
@@ -5935,7 +6077,9 @@ function playStep(eng, song, ph, s, time){
   // 和音
   if(audible('chord')){
     const CP = chordPatterns(song);
-    const pat = CP[song.cpat] || CP.quarter;
+    /* 【追加C】フレーズが自分の型を持っていればそれを使う。
+       持っていない過去の保存データは曲の型（song.cpat）のまま。 */
+    const pat = CP[ph.cpat || song.cpat] || CP.quarter;
     if(pat.style === 'none') return;
     const beat = beatIndexOf(song, s);
     const deg = chordAt(ph, beat);
