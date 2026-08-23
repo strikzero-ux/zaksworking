@@ -5581,9 +5581,13 @@ function fillThinBars(ph, song){
         ['mel1','mel2','sub','bass','wind1','wind2'].forEach(t => { if(ph[t][i]) c++; });
         DRUM_LANES.forEach(d => { if(ph.drum[d.key][i]) c++; });
       }
-      // 和音も数に入れる（伸ばす伴奏でも1小節に何回か鳴る）
+      /* 和音も数に入れる（伸ばす伴奏でも1小節に何回か鳴る）
+         【2026-08-23 修正】ここも曲の型を見ていたが、実際に鳴るのは
+         フレーズの型（ph.cpat）。実測では見積りが 51%の小節でずれていた
+         （判定そのものがひっくり返る小節は 0/1110 だったので鳴り方は
+         変わらないが、しきい値を変えたときに効いてくる）。 */
       const CP = chordPatterns(song);
-      const pat = CP[song.cpat] || CP.quarter;
+      const pat = CP[ph.cpat || song.cpat] || CP.quarter;
       c += (pat.style === 'arp') ? 8 : (pat.hits ? pat.hits.length : 0);
       return c;
     };
@@ -7839,10 +7843,30 @@ function renderNow(){
   const pm = PLAY_MODES.find(p => p.key === song.playMode) || PLAY_MODES[0];
   const ms = MELODY_STYLES.find(m => m.key === song.melStyle) || {};
   const at = ARRANGE_TYPES.find(a => a.key === song.arrange) || {};
+  /* 【2026-08-23 修正】伴奏の型はフレーズごとに持ち替えるようになったのに、
+     ここは曲の型（song.cpat）1つだけを出していた。
+     さらに song.cpat は曲を作ったあとに曲調別の表で選び直されるため、
+     実測で **67%のフレーズが表示と食い違っていた**（鳴っている型と違う名前が
+     出ていた）。実際に並んでいるフレーズを数えて、いちばん多い型を出す。
+     2種類以上あるときは「ほか」を付けて、1つに決まらないことを示す。 */
+  const cpLabel = (() => {
+    const CP = chordPatterns(song);
+    const nameOf = k => ((CP[k] || CHORD_PATTERNS[k] || {}).label) || '—';
+    const cnt = {};
+    (song.arrangement || []).forEach(pi => {
+      const ph = song.phrases[pi]; if(!ph) return;
+      const k = ph.cpat || song.cpat;
+      if(k) cnt[k] = (cnt[k] || 0) + 1;
+    });
+    const keys = Object.keys(cnt);
+    if(!keys.length) return nameOf(song.cpat);
+    keys.sort((a, b) => cnt[b] - cnt[a]);
+    return keys.length > 1 ? nameOf(keys[0]) + ' ほか' : nameOf(keys[0]);
+  })();
   setHTML('nowPlaying',
     `<b>${mood.label}</b>　${keyName}${scaleDef.label}・${song.bpm}BPM　` +
     `${song.bars}小節×${song.arrangement.length}　${pm.label}<br>` +
-    `<span style="color:var(--text-dim)">旋律「${ms.label || '—'}」／展開「${at.label || '—'}」／伴奏${(CHORD_PATTERNS[song.cpat] || {}).label || '—'}</span>`);
+    `<span style="color:var(--text-dim)">旋律「${ms.label || '—'}」／展開「${at.label || '—'}」／伴奏${cpLabel}</span>`);
   setText('lenBadge', '長さ ' + fmtTime(songSeconds(song)));
 }
 
@@ -9861,7 +9885,10 @@ async function doRenderSE(kind){
     /* 【修正①】種類名は日本語ラベルではなく**ローマ字キー**（impact / swish …）を使う。
        ラベルを使っていたせいで safeName の判定に必ず落ち、効果音が何個でも
        同じ `bgm-日時` になっていた。キーなら種類も番号も名前に残り衝突しない。 */
-    download(blob, safeName(`se_${pickSE}_${seSeed}`, ext));
+    /* 【2026-08-23 修正】ここに SE番号 を入れていたが、番号で音を管理する
+       しくみをやめたので日時にする。番号を残しても入力する場所がもう無く、
+       意味の分からない数字になるため。 */
+    download(blob, safeName(`se_${pickSE}_${fnStamp()}`, ext));
     const ms = Math.round(performance.now() - t0);
     status('seStatus',
       `書き出しました：${zcLastSavedName}（${SE_TYPES[pickSE].label}／${(blob.size/1024).toFixed(0)}KB／${(ms/1000).toFixed(1)}秒で完了` +

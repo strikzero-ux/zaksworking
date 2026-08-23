@@ -119,6 +119,29 @@ export async function run({ page, errors, notes }){
   add(alive, '再生ボタンを6連打しても曲が残っている');
   await page.evaluate(() => { try{ Tone.Transport.stop(); }catch(e){} });
 
+  /* --- 8.4 上部に出る「伴奏◯◯」が、実際に鳴る型と合っていること ---
+     伴奏はフレーズごとに持ち替えるので、曲の型ひとつでは言い表せない。
+     以前はここが 67% のフレーズで食い違っていた。 */
+  const disp = await page.evaluate(() => {
+    const CP = k => (chordPatterns(song)[k] || CHORD_PATTERNS[k] || {}).label || '—';
+    let ng = 0; const 例 = [];
+    for(let i = 0; i < 24; i++){
+      song = makeSong(MOODS[i % MOODS.length].key, [2,4][i % 2], 'fam_random_all', 90, 93000 + i * 41);
+      renderAll();
+      const m = document.getElementById('nowPlaying').textContent.match(/伴奏(.+)$/);
+      const label = m ? m[1].trim() : '';
+      const cnt = {};
+      song.arrangement.forEach(pi => { const ph = song.phrases[pi]; if(!ph) return;
+        const k = ph.cpat || song.cpat; cnt[k] = (cnt[k] || 0) + 1; });
+      const keys = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]);
+      const want = keys.length > 1 ? CP(keys[0]) + ' ほか' : CP(keys[0]);
+      if(label !== want){ ng++; if(例.length < 3) 例.push(`表示「${label}」/ あるべき「${want}」`); }
+    }
+    return { ng, 例 };
+  });
+  add(disp.ng === 0, '上部の「伴奏◯◯」が実際に鳴る型と合っている（24曲）', disp.例.join(' / '));
+  await page.click('#makeBtn'); await page.waitForTimeout(500);
+
   /* --- 8.5 保存が上部にあり、名前が空でも1押しで通ること ---
      曲番号での管理をやめたので、曲を残す手段は保存だけになった。
      カード⑤を開かなくても押せること、名前を入れ忘れても失敗しないことが
