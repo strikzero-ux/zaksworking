@@ -315,7 +315,7 @@ footer b{ color:var(--brass); }
     </div>
 
     <div class="fx-row">
-      <span class="t-label">曲の長さ</span>
+      <span class="t-label" title="曲はフレーズ単位で並べるので、ぴったりの秒数にはなりません。上のバーに実際の長さが出ます。">曲の長さ<small style="color:var(--text-dim);font-weight:400;">（目安）</small></span>
       <div class="pat-btns" id="lengthPick">
         <button class="pat-btn" data-sec="30">30秒</button>
         <button class="pat-btn" data-sec="60">1分</button>
@@ -396,7 +396,9 @@ footer b{ color:var(--brass); }
       <b>メロディ</b>を変えると、同じコード進行でもまるで違う曲になります（いちばん効きます）。
       <b>くわしく決める</b>を開くと、形・リズム・ひびき・終わり方を自分で組み合わせられます。<br>
       <b>曲の組み立て方</b>はイントロ〜Aメロ〜Bメロ〜サビの並べ方です。どちらも「おまかせ」なら曲調に合うものが自動で選ばれます。<br>
-      <b>音数</b>を下げても、1小節が薄くなりすぎないよう自動で下限を保ちます。
+      <b>音数</b>を下げても、1小節が薄くなりすぎないよう自動で下限を保ちます。<br>
+      <b>曲の長さ</b>は目安です。曲はフレーズ単位で並べるため、ぴったりの秒数にはなりません。
+      動画で使うぶんが足りなくならないよう<b>指定より少し長めに作ります</b>（実際の長さは上のバーに出ます）。
     </p>
     <div class="status" id="makeStatus"></div>
   </div>
@@ -5581,7 +5583,30 @@ function songSeconds(song){
 function autoArrange(song){
   const at = ARRANGE_TYPES.find(a => a.key === song.arrange) || ARRANGE_TYPES[0];
   const per = song.bars * stepsPerBar(song) * stepDur(song);      // 1フレーズの秒数
-  const need = Math.max(1, Math.round(song.targetSec / per));
+  /* 【2026-08-23 修正⑳】Math.round だったため、指定した長さより**短い曲**が
+     普通にできていた。
+     ------------------------------------------------------------
+     targetSec/per が 2.4 なら need=2 になり、17%短い曲になる。
+     実測（曲調31 × 曲番号3 × 小節4 の372通り）:
+       30秒指定 → 最短 20.2秒（-9.8秒）、48%が指定より短い、5秒以上不足が30件
+       3分指定  → 最短 2分47秒（-13秒）、38%が指定より短い
+     動画に合わせて長さを選ぶ人にとって、短いのは実害（末尾が無音になる）。
+     ------------------------------------------------------------
+     ただし単純に ceil（必ず切り上げ）にすると逆に行き過ぎる。
+     1フレーズが29秒（8小節・遅いテンポ）のとき、30秒指定で 2フレーズ＝58秒。
+     実測でも最大 +28秒 まで伸びた。ほぼ倍の長さは、書き出し時間も
+     ファイルサイズも倍になるので、これはこれで困る。
+
+     そこで**わずかな不足だけ許す**。許容量は「5秒」と「1フレーズの半分」の
+     小さい方。これを超えて足りないときだけ1つ足す。
+       30秒指定・1フレーズ29秒 → 1秒足りないだけなので 29秒のまま
+       30秒指定・1フレーズ12秒 → 24秒では6秒足りないので 36秒にする
+     ※ 割合（5%など）にすると10分の曲で30秒も許すことになり、
+       長い曲ほど末尾の無音が目立ってしまう。だから秒数で頭打ちにする。
+     ------------------------------------------------------------ */
+  const lenTol = Math.min(5, per / 2);   // 許す不足の量（秒）
+  let need = Math.max(1, Math.floor(song.targetSec / per));
+  if(song.targetSec - need * per > lenTol) need += 1;
   // 役割名 → フレーズ番号
   const idxOf = {};
   song.phrases.forEach((ph, i) => { if(idxOf[ph.role] === undefined) idxOf[ph.role] = i; });
@@ -5618,6 +5643,20 @@ function autoArrange(song){
   }
   if(useEnds) arr.push(...tail);
   song.arrangement = arr.slice(0, Math.max(1, need));
+
+  /* 【修正⑳】仕上げ：本当に指定した長さに届いているか実測して足す。
+     need の計算は1フレーズぶんの秒数から出しているが、実際の曲の長さは
+     songSeconds()（ritardando の伸びを含む）で決まるので、両者は
+     完全には一致しない。ここで最終確認して、届いていなければ真ん中へ
+     足す（アウトロは末尾に残す）。
+     ※ 上限を付けておかないと、per が極端に小さい設定で回り続ける。 */
+  let guard = 0;
+  while(songSeconds(song) < song.targetSec - lenTol && guard++ < 128){
+    const at = (useEnds && tail.length) ? song.arrangement.length - tail.length
+                                        : song.arrangement.length;
+    song.arrangement.splice(Math.max(0, at), 0, at2(drift));
+    drift += zcArrangeDrift(arrSeed, dk++);
+  }
   return song.arrangement;
 }
 
