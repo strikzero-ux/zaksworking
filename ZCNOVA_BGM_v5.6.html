@@ -84,6 +84,10 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
   justify-content:center; background:var(--brass); color:#14100c; border:none; font-size:16px; cursor:pointer; }
 #playBtn:hover{ background:#dba84f; }
 #renderBtn{ border-color:rgba(216,90,48,0.5); color:var(--accent); }
+/* 【2026-08-23】上部の保存を目立たせる。気に入った曲を残す唯一の手段なので、
+   カード⑤を開かなくても押せるところに置いている。 */
+.io-btn.save{ border-color:rgba(214,168,79,0.65); color:var(--brass); font-weight:600; }
+.io-btn.save:hover{ background:rgba(214,168,79,0.14); }
 #renderBtn.working{ background:var(--accent); color:#fff; }
 .now{ flex:1; min-width:260px; font-size:12px; line-height:1.6; }
 .now b{ color:var(--brass); }
@@ -231,7 +235,13 @@ footer b{ color:var(--brass); }
     <button id="playBtn" title="再生／停止（スペースキー）">▶</button>
     <div class="now" id="nowPlaying">まだ曲がありません。下の「① 曲を作る」から曲調を選んでください。</div>
     <span class="badge" id="lenBadge">長さ —</span>
-    <span class="badge" id="seedBadge">曲番号 —</span>
+    <!-- 【2026-08-23】曲番号の札はここにあったが撤去した。
+         生成のしくみを直すと同じ番号でも別の曲になるため、番号で曲を
+         管理することはできない。代わりに、いつでも押せる保存を置く。 -->
+    <button class="io-btn save" id="topSaveBtn"
+            title="この曲をこの端末に保存します（下の「保存した曲」に並びます）">💾 この曲を保存</button>
+    <button class="io-btn" id="topExportBtn"
+            title="この曲を .json ファイルとして書き出します。端末を替えても、この道具を新しくしても、読み込めば必ず同じ曲が戻ります">⬇ ファイルに保存</button>
     <button class="io-btn" id="undoBtn" disabled>↩ やり直す</button>
     <!-- 【修正③】自動保存が本当に走っていることを見せる印。
          普段は透明で場所だけ確保し、保存された瞬間だけ1.4秒ふわっと出る。 -->
@@ -386,9 +396,8 @@ footer b{ color:var(--brass); }
       <button class="io-btn go" id="makeBtn">この設定で作る</button>
       <!-- 【修正⑬】旧「もう一度（別の曲）」は makeBtn と全く同じ処理で、
            名前だけ違うため「片方は同じ曲が出る」等と誤解されていた。
-           役割を分け、こちらは**設定を変えずに曲番号だけ振り直す**と明示する。 -->
-      <button class="io-btn" id="againBtn" title="曲調などの設定はそのまま、曲番号だけ新しくします">🎲 別の曲番号で作り直す</button>
-      <button class="io-btn" id="seedBtn">🔢 曲番号を指定</button>
+           役割を分け、こちらは**設定を変えずに中身だけ作り直す**と明示する。 -->
+      <button class="io-btn" id="againBtn" title="曲調などの設定はそのまま、中身だけ作り直します">🎲 もう1曲つくる</button>
     </div>
 
     <!-- 【2026-08-23 UI整理⑥】この説明はスマホで224px（カード①の6分の1）を
@@ -400,9 +409,11 @@ footer b{ color:var(--brass); }
     </div>
     <p class="hint" id="makeHelp" style="display:none;">
       曲調ごとに<b>テンポ・音階・コード進行・楽器・リズム</b>がまとめて決まります。同じ曲調でも押すたびに違う曲になります。<br>
-      上のバーに出る<b>曲番号</b>を控えておけば、あとで同じ曲をもう一度出せます。<br>
-      <b>この設定で作る</b>は曲番号を変えずに設定だけ反映します。
-      <b>🎲 別の曲番号で作り直す</b>は設定そのままで別の曲にします。<br>
+      気に入った曲は、上のバーの<b>💾 この曲を保存</b>（この端末に残す）か
+      <b>⬇ ファイルに保存</b>（.jsonファイルとして残す）で残してください。
+      <b>作り直すと同じ曲は戻ってきません。</b><br>
+      <b>この設定で作る</b>はいまの曲のまま設定だけ反映します。
+      <b>🎲 もう1曲つくる</b>は設定そのままで別の曲にします。<br>
       <b>メロディ</b>を変えると、同じコード進行でもまるで違う曲になります（いちばん効きます）。
       <b>くわしく決める</b>を開くと、形・リズム・ひびき・終わり方を自分で組み合わせられます。<br>
       <b>曲の組み立て方</b>はイントロ〜Aメロ〜Bメロ〜サビの並べ方です。どちらも「おまかせ」なら曲調に合うものが自動で選ばれます。<br>
@@ -530,7 +541,7 @@ footer b{ color:var(--brass); }
     <div class="fx-row">
       <span class="t-label">曲名</span>
       <input type="text" id="songName" placeholder="例：朝の支度／morning" style="width:200px;"
-             title="ここに入れた名前がそのままファイル名になります。空のままなら日時と曲番号から自動で付きます。">
+             title="ここに入れた名前がそのままファイル名になります。空のままなら日時から自動で付きます。">
       <button class="io-btn" id="saveBtn">この曲を保存</button>
       <button class="io-btn" id="exportJsonBtn">ファイルに書き出す（.json）</button>
       <button class="io-btn" id="importJsonBtn">ファイルを読み込む</button>
@@ -592,9 +603,9 @@ footer b{ color:var(--brass); }
       <span class="t-label">ゆらぎ</span>
       <input type="range" id="seWobble" min="0" max="100" value="50">
       <span class="fx-val" id="seWobbleVal">50%</span>
-      <span class="badge" id="seSeedBadge">SE番号 —</span>
-      <button class="io-btn" id="seRandomBtn">🎲 ゆらぎを変える</button>
-      <button class="io-btn" id="seSeedBtn">🔢 番号を指定</button>
+      <!-- 【2026-08-23】SE番号の札と「番号を指定」も曲番号と同じ理由で撤去。
+           気に入った音は、その場で書き出して残す。 -->
+      <button class="io-btn" id="seRandomBtn">🎲 ちがう音にする</button>
     </div>
 
     <div class="fx-row">
@@ -610,8 +621,8 @@ footer b{ color:var(--brass); }
       「長さ」はヒュン・スイープ系でよく効きます。<br>
       <b>ゆらぎ</b>は倍音・ノイズの色・掃引の幅など、スライダーに出ていない細かい部分の振れ幅です。
       0%なら基準どおり、100%ならかなり大胆に変わります。<br>
-      <b>🎲 ゆらぎを変える</b>を押すたびに同じ種類・高さ・長さのまま違う音色になって、その場で鳴ります。
-      気に入った音が出たら<b>SE番号</b>を控えておけば、あとで<b>🔢 番号を指定</b>から同じ音をもう一度出せます。<br>
+      <b>🎲 ちがう音にする</b>を押すたびに同じ種類・高さ・長さのまま違う音色になって、その場で鳴ります。
+      <b>気に入った音が出たら、その場で書き出してください。</b>押し直すと元の音には戻せません。<br>
       曲づくりと同じエンジンを流用しており、既存の音源は使っていないので、書き出したSEも基本的に自由に使えます。
     </p>
     <div class="status" id="seStatus"></div>
@@ -649,7 +660,7 @@ footer b{ color:var(--brass); }
       ただし、音階・コード進行・リズムなど、音楽に共通して使われる部品を組み合わせて作る以上、
       <b>偶然、既存の曲の一部と似た旋律ができる可能性は、理屈のうえではゼロではありません</b>。<br>
       できた曲が既存の曲に似ていると感じた場合は、その曲を使うのを控え、
-      <b>「🎲 別の曲番号で作り直す」</b>で別の曲を作り直してください。
+      <b>「🎲 もう1曲つくる」</b>で別の曲を作り直してください。
       曲調・メロディ・曲の組み立て方のいずれかを変えると、より大きく違う曲になります。<br>
       似ていると感じた曲をそのまま公開・配布したことで生じた問題について、開発者は責任を負いかねます。
       公開前にご自身でご確認のうえお使いください。</p>
@@ -982,42 +993,23 @@ function swingOffset(song, s){
 }
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 
-/* ---------- 曲番号（同じ曲を何度でも同じように組み立てる） ---------- */
+/* ---------- 曲のたね（同じ手順で同じ曲を組み立てるための数） ----------
+   【2026-08-23】ここには「曲番号」を画面から入力するための読み取り
+   （zcToHalfWidth / zcReadSeed）があったが、番号で曲を管理するしくみを
+   やめたので撤去した。
 
-/* 【2026-08-23 修正④】番号入力の読み取り。
-   ------------------------------------------------------------
-   旧実装は v.replace(/[^0-9]/g,'') で半角数字しか拾わなかった。
-   日本語入力がONのとき数字は**全角で入るのが既定**なので、
-   「２６５５７０」と打った人はまるごと弾かれて
-   「数字を入れてください」と言われていた。控えた番号を貼り付けた場合も同様。
-   曲番号を控えて同じ曲を出す、というこのアプリの目玉機能が、
-   日本語環境では入口で詰まっていた。
+   理由：生成のしくみに手を入れると、同じ番号からでも別の曲が出る。
+   実際この日だけで3回そうなっている（伴奏の変化／ベースの乱数の取り方／
+   進行の選び方のバグ修正）。番号は「作り方への入り口」なので、
+   作り方が変われば出てくる曲も変わる ── これは避けられない。
+   守れない約束を画面に出しておくほうが害が大きい。
 
-   ここで全角→半角に直してから読む。あわせて
-   ・小数点や符号を混ぜたときに黙って別の数になるのを防ぐ（-5→5, 12.9→129 だった）
-   ・桁数が違うときは、何桁だったかを添えて具体的に返す
-   ------------------------------------------------------------ */
-function zcToHalfWidth(v){
-  return String(v == null ? '' : v)
-    .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
-    .replace(/[\uFF0D\u2212\u30FC\u2010-\u2015]/g, '-')   // 全角ハイフン・長音の打ち間違い
-    .replace(/[\uFF0E\u3002]/g, '.')                        // 全角ピリオド・句点
-    .trim();
-}
-/* 戻り値: { n:番号 } / { err:'画面に出す文言' } */
-function zcReadSeed(raw){
-  const v = zcToHalfWidth(raw);
-  if(!v) return { err:'番号が空でした。6桁の数字を入れてください。' };
-  if(/[^0-9]/.test(v)){
-    return { err:`数字だけで入れてください（入力：「${raw}」）。` };
-  }
-  const n = parseInt(v, 10);
-  if(!(n >= 1)) return { err:'1以上の数字を入れてください。' };
-  if(v.length !== 6){
-    return { err:`6桁の数字で入れてください（入力は${v.length}桁でした）。` };
-  }
-  return { n };
-}
+   曲を残す手段は「保存」と「.json 書き出し」に一本化した。
+   .json には音符そのものが入っていて読み込みは作り直しをしないので、
+   版が変わっても必ず同じ曲が戻る（検査 tests/cases/06-oldfile.mjs）。
+
+   song.seed（下の newSeed）は生成の乱数源として今までどおり要る。
+   画面に出さなくなっただけで、内部の再現性は変わらない。 */
 let songRng = null;
 function makeRng(seed){
   let a = (seed >>> 0) || 1;
@@ -7797,7 +7789,6 @@ function renderNow(){
     `${song.bars}小節×${song.arrangement.length}　${pm.label}<br>` +
     `<span style="color:var(--text-dim)">旋律「${ms.label || '—'}」／展開「${at.label || '—'}」／伴奏${(CHORD_PATTERNS[song.cpat] || {}).label || '—'}</span>`);
   setText('lenBadge', '長さ ' + fmtTime(songSeconds(song)));
-  setText('seedBadge', '曲番号 ' + song.seed);
 }
 
 /* ---------- フレーズと並び ---------- */
@@ -8627,7 +8618,7 @@ function makeNewSong(seed){
   const mood = MOODS.find(m => m.key === song.moodKey);
   status('makeStatus',
     `「${mood.label}」で1曲できました（編成：${song.playModeLabel || ''}・${NOTE_NAMES[song.key] || NOTE_NAMES[0]}${(SCALES[song.scale] || SCALES.major).label}・${song.bpm}BPM・` +
-    `${fmtTime(songSeconds(song))}・曲番号${song.seed}）`, 'ok');
+    `${fmtTime(songSeconds(song))}）　気に入ったら上の「💾 この曲を保存」で残せます`, 'ok');
   if(wasPlaying) restartPlayback();
 }
 /* 【追加E】ゆらぎを押したら作り直す */
@@ -8726,19 +8717,11 @@ $('humanize').addEventListener('input', (e) => {
 /* 【2026-08-23 修正⑬】この2つは中身が全く同じ makeNewSong() で、
    名前だけ違うため「片方は同じ曲が出るのだろう」と誤解を招いていた。
    役割を実際に分ける：
-     この設定で作る … いまの曲番号のまま、選び直した設定を反映する
-     別の曲番号で作り直す … 設定はそのまま、曲番号だけ振り直す
-   （曲がまだ無いときは、どちらも新しい曲番号で1曲作る） */
+     この設定で作る … いまの曲のまま、選び直した設定を反映する
+     もう1曲つくる … 設定はそのまま、中身だけ作り直す
+   （曲がまだ無いときは、どちらも新しく1曲作る） */
 $('makeBtn').addEventListener('click', () => makeNewSong(song ? song.seed : undefined));
 $('againBtn').addEventListener('click', () => makeNewSong());
-$('seedBtn').addEventListener('click', () => {
-  const v = prompt('曲番号を入れてください（6桁の数字）', song ? String(song.seed) : '');
-  if(v === null) return;                       // 「キャンセル」は黙って戻る
-  const r = zcReadSeed(v);                     // 【修正④】全角数字もそのまま通す
-  if(r.err){ status('makeStatus', r.err, 'warn'); return; }
-  makeNewSong(r.n);
-});
-
 /* 【UI整理②】melTweak は song 直下の素のオブジェクトなので、
    zcPackSong / zcUnpackSong（配列だけを圧縮する）をそのまま素通りする。
    保存・読み込み・.json 書き出しのどれでも失われない。 */
@@ -9311,9 +9294,18 @@ $('songList').addEventListener('click', (e) => {
     storeSongs(list); renderSongList();
   }
 });
-$('saveBtn').addEventListener('click', () => {
-  const name = ($('songName').value || '').trim();
-  if(!name){ status('ioStatus', '曲名を入れてください', 'warn'); return; }
+/* 【2026-08-23】名前が空のときに自動で付ける名前。
+   上部の「💾 この曲を保存」は1押しで終わってほしいので、
+   ここで名前を作って欄にも入れておく（あとから直せる）。 */
+function zcAutoSongName(){
+  const mood = MOODS.find(m => m.key === (song && song.moodKey));
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `${(mood && mood.label) || '曲'} ${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+function zcSaveSongToList(){
+  if(!song){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
+  let name = ($('songName').value || '').trim();
+  if(!name){ name = zcAutoSongName(); $('songName').value = name; }
   song.name = name;
   const list = loadSongs();
   const at = list.findIndex(x => x.name === name);
@@ -9323,7 +9315,11 @@ $('saveBtn').addEventListener('click', () => {
   if(!storeSongs(list)){ status('ioStatus', '保存できませんでした（保存容量がいっぱいです）', 'warn'); return; }
   renderSongList();
   status('ioStatus', `「${name}」を保存しました（${list.length}曲）`, 'ok');
-});
+  /* 上部の保存から押されたときは⑤が閉じていて見えないので、上にも出す。 */
+  status('makeStatus', `「${name}」を保存しました（⑤「保存・書き出し」の一覧に並びます）`, 'ok');
+}
+$('saveBtn').addEventListener('click', zcSaveSongToList);
+$('topSaveBtn').addEventListener('click', zcSaveSongToList);
 /* ============================================================
    書き出したファイルを端末へ渡す
    ------------------------------------------------------------
@@ -9467,12 +9463,17 @@ function safeName(base, ext){
 /* 曲の書き出し名。名前が空のときは、あとから曲を特定できるよう
    日時に加えて**曲番号**も入れる（書き出し中に曲を作り替えてしまっても
    どのファイルがどの曲か追えるようにするため）。 */
+let zcFileNo = 0;
 function songFileName(ext){
   const n = fnClean($('songName').value, 48);
   if(n) return `${n}.${ext}`;
-  const id = (song && song.seed != null) ? `_s${song.seed}` : '';
-  return `bgm-${fnStamp()}${id}.${ext}`;
+  /* 【2026-08-23】以前はここに曲番号を入れていたが、番号で曲を管理する
+     しくみをやめたので日時だけにする。同じ秒に2つ書き出したときに
+     ぶつからないよう、通し番号を足す。 */
+  zcFileNo = (zcFileNo + 1) % 100;
+  return `bgm-${fnStamp()}-${String(zcFileNo).padStart(2, '0')}.${ext}`;
 }
+$('topExportBtn').addEventListener('click', () => $('exportJsonBtn').click());
 $('exportJsonBtn').addEventListener('click', () => {
   download(new Blob([JSON.stringify(song, null, 1)], { type:'application/json' }),
            songFileName('json'));
@@ -9573,7 +9574,7 @@ const ZC_LOCK_CARDS = ['card1', 'card2', 'card3'];
      ・効果音レーン  → 曲の効果音レーンが書き換わる（実測で中身が変化）
      ・動作を安定化  → 書き出しの最中に音声処理を作り直そうとする
    カードのロックと同じ理由で、ここも止める。 */
-const ZC_LOCK_CTRL = ['makeBtn','againBtn','seedBtn','addPhraseBtn','dupPhraseBtn','delPhraseBtn',
+const ZC_LOCK_CTRL = ['makeBtn','againBtn','addPhraseBtn','dupPhraseBtn','delPhraseBtn',
   'autoArrangeBtn','clearArrangeBtn','regenPhraseBtn','clearPhraseBtn',
   'undoBtn','cleanupBtn','seLoopOn','seLoopEvery','seLoopBeat','seLoopOff','seLoopVol'];
 let zcUndoWasDisabled = false;
@@ -9694,7 +9695,7 @@ async function playCurrentSE(){
     const dur = parseInt($('seDur').value, 10) / 100;
     const wobble = parseInt($('seWobble').value, 10);
     await previewSE(pickSE, midi, dur, seSeed, wobble);
-    status('seStatus', `「${SE_TYPES[pickSE].label}」を再生中…（SE番号 ${seSeed}）`, 'ok');
+    status('seStatus', `「${SE_TYPES[pickSE].label}」を再生中…`, 'ok');
   }catch(err){
     status('seStatus', '再生できませんでした：' + err.message, 'warn');
   }
@@ -9775,21 +9776,8 @@ $('seWobble').addEventListener('input', (e) => {
   setText('seWobbleVal', e.target.value + '%');
 });
 $('seWobble').addEventListener('change', () => playCurrentSE());
-setText('seSeedBadge', 'SE番号 ' + seSeed);
-
 $('seRandomBtn').addEventListener('click', () => {
   seSeed = newSeed();
-  setText('seSeedBadge', 'SE番号 ' + seSeed);
-  playCurrentSE();
-});
-$('seSeedBtn').addEventListener('click', () => {
-  const v = prompt('SE番号を入れてください（6桁の数字）', String(seSeed));
-  if(v === null) return;                       // 「キャンセル」は黙って戻る
-  const r = zcReadSeed(v);                     // 【修正④】全角数字もそのまま通す
-  if(r.err){ status('seStatus', r.err, 'warn'); return; }
-  seSeed = r.n;
-  setText('seSeedBadge', 'SE番号 ' + seSeed);
-  status('seStatus', `SE番号 ${seSeed} の音を出しました`, 'ok');
   playCurrentSE();
 });
 
@@ -9821,7 +9809,7 @@ async function doRenderSE(kind){
     download(blob, safeName(`se_${pickSE}_${seSeed}`, ext));
     const ms = Math.round(performance.now() - t0);
     status('seStatus',
-      `書き出しました：${zcLastSavedName}（${SE_TYPES[pickSE].label}／SE番号 ${seSeed}／${(blob.size/1024).toFixed(0)}KB／${(ms/1000).toFixed(1)}秒で完了` +
+      `書き出しました：${zcLastSavedName}（${SE_TYPES[pickSE].label}／${(blob.size/1024).toFixed(0)}KB／${(ms/1000).toFixed(1)}秒で完了` +
       (kind === 'mp3' && ext === 'wav' ? '／MP3の変換ができなかったのでWAVにしました' : '') + '）', 'ok');
   }catch(err){
     status('seStatus', '書き出せませんでした：' + err.message, 'warn');

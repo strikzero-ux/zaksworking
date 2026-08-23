@@ -72,7 +72,7 @@ export async function run({ page, root }){
     if(!x.伴奏の型がある) ng.push('伴奏の型が今の版に無い');
     if(!x.音階がある) ng.push('音階が今の版に無い');
     if(!x.曲調がある) ng.push('曲調が今の版に無い');
-    checks.push({ ok, label: `${x.版} の「${x.曲調}」（曲番号${x.曲番号}）がそのまま開ける`,
+    checks.push({ ok, label: `${x.版} の「${x.曲調}」がそのまま開ける`,
                   info: ng.join(' / ') });
   });
   return { checks };

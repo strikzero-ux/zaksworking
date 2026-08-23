@@ -119,6 +119,41 @@ export async function run({ page, errors, notes }){
   add(alive, '再生ボタンを6連打しても曲が残っている');
   await page.evaluate(() => { try{ Tone.Transport.stop(); }catch(e){} });
 
+  /* --- 8.5 保存が上部にあり、名前が空でも1押しで通ること ---
+     曲番号での管理をやめたので、曲を残す手段は保存だけになった。
+     カード⑤を開かなくても押せること、名前を入れ忘れても失敗しないことが
+     この機能の生命線なので、ここで毎回確かめる。 */
+  const save = await page.evaluate(async () => {
+    const KEY = 'zcnova-bgm-studio-songs-v1';
+    const top = document.getElementById('topSaveBtn');
+    const exp = document.getElementById('topExportBtn');
+    if(!top || !exp) return { ok:false, why:'上部に保存ボタンが無い' };
+    const bar = document.querySelector('.transport');
+    const 上部にある = bar.contains(top) && bar.contains(exp);
+    const 見えている = top.offsetParent !== null;
+    const name = document.getElementById('songName');
+    name.value = '';                                  // 名前を入れ忘れた状態
+    const before = (typeof loadSongs === 'function') ? loadSongs().length : -1;
+    top.click();
+    await new Promise(r => setTimeout(r, 300));
+    const after = (typeof loadSongs === 'function') ? loadSongs().length : -1;
+    return { ok: 上部にある && 見えている && after === before + 1 && !!name.value,
+             上部にある, 見えている, 増えた: after - before, 付いた名前: name.value };
+  });
+  add(save.ok, `名前が空でも上部の「💾 この曲を保存」1押しで保存できる（付いた名前:「${save.付いた名前 || '—'}」）`,
+      save.ok ? '' : JSON.stringify(save));
+
+  /* --- 8.6 曲番号の入力口が残っていないこと --- */
+  const noSeed = await page.evaluate(() => ({
+    曲番号ボタン: !!document.getElementById('seedBtn'),
+    曲番号の札:   !!document.getElementById('seedBadge'),
+    SE番号ボタン: !!document.getElementById('seSeedBtn'),
+    SE番号の札:   !!document.getElementById('seSeedBadge'),
+  }));
+  add(!Object.values(noSeed).some(Boolean),
+      '曲番号／SE番号の入力口が残っていない',
+      Object.entries(noSeed).filter(([, v]) => v).map(([k]) => k).join(' / '));
+
   /* --- 9. 開発用の記録が既定で出ていないこと ---
      ふつうに使う人のコンソールを埋めないようにするための確認。
      ?debug=1 か localStorage の zc-debug=1 のときだけ出る。 */
