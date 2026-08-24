@@ -75,5 +75,51 @@ export async function run({ page }){
       label: `もう一度かけても二重に下がらない（${r.二度がけで不変}）` },
     { ok: r.音域が引けない音色 === 0,
       label: '全部の音色で音域が引ける', info: r.音域が引けない音色 ? `${r.音域が引けない音色}種で引けない` : '' },
+    ...(await 高い音の使いすぎ(page)),
   ] };
+}
+
+/* 【刺さる楽器が高いところに居座らないか】
+   ------------------------------------------------------------
+   実物の音域をそのまま使うと、鉄琴（G5〜C7）やピッコロ（D5〜C7）は
+   下が高いぶん、常に耳の痛い所で鳴り続ける。ZC_RANGE_BGM で
+   「BGMとして使ってよい範囲」を別に決めてあるので、それが効いているかを
+   実際に曲を作って確かめる。
+
+   直す前（220曲の実測。G5より上を使っていた割合）:
+     鉄琴 85% / ピッコロ 76% / ハープ 67% / リード 50% / 木琴 47%
+   上限を下げただけでは鉄琴・ピッコロは 68% 止まりで、**下限も下げて**
+   初めて下がる。ここを戻すと、その状態に逆戻りする。 */
+async function 高い音の使いすぎ(page){
+  const r = await page.evaluate(() => {
+    const acc = {}; const 段 = {};
+    const PM = ['fam_random_all','random','band','fullband','fam_synth','piano','fam_orchestra','fam_concert'];
+    for(let i = 0; i < 160; i++){
+      const sg = makeSong(MOODS[i % MOODS.length].key, 2, PM[i % PM.length], 120, 6000 + i * 37);
+      ['mel1','mel2','sub','bass','wind1','wind2'].forEach(k => {
+        const t = sg.tracks[k]; if(!t || !t.on || !t.inst) return;
+        sg.phrases.forEach(ph => (ph[k] || []).forEach(n => {
+          if(!n) return; const m = noteToMidi(n); if(m === null) return;
+          const a = acc[t.inst] || (acc[t.inst] = { 全:0, 上84:0 });
+          a.全++; if(m > 84) a.上84++;
+          const b = 段[k] || (段[k] = { 全:0, 上79:0 });
+          b.全++; if(m > 79) b.上79++;
+        }));
+      });
+    }
+    const 割合 = {};
+    Object.keys(acc).forEach(k => { if(acc[k].全 >= 150) 割合[k] = +(acc[k].上84 / acc[k].全 * 100).toFixed(0); });
+    return { C6超: 割合, sub: 段.sub ? +(段.sub.上79 / 段.sub.全 * 100).toFixed(0) : 0 };
+  });
+  /* いちばん刺さるのは C6 より上。実測で 24% 以下に収まっている。 */
+  const 悪い = Object.entries(r.C6超).filter(([, v]) => v > 30).map(([k, v]) => `${k} ${v}%`);
+  return [
+    { ok: 悪い.length === 0,
+      label: `C6より上に居座る楽器がない（いちばん高いのは ${Math.max(0, ...Object.values(r.C6超))}%）`,
+      info: 悪い.length ? '30%を超えた: ' + 悪い.join(' / ')
+                        : '直す前は 鉄琴58% / ピッコロ47% / ハープ37% だった' },
+    { ok: r.sub <= 42,
+      label: `刻み・装飾（sub）が高いところに寄りすぎない（G5超 ${r.sub}%）`,
+      info: '直す前は 56% で全パート中いちばん高かった' },
+  ];
 }
