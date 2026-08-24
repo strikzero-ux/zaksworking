@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ZCnova BGM Studio</title>
 
-<!-- 【2026-08-24 修正】字体の読み込みを、画面の表示を止めない形に変える。
+<!-- 【修正】字体の読み込みを、画面の表示を止めない形に変える。
      ------------------------------------------------------------
      ここは <style> の中で @import していた。CSS の @import は
      **読み終わるまで画面を1ピクセルも描かせない**ので、
@@ -103,7 +103,7 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
   justify-content:center; background:var(--brass); color:#14100c; border:none; font-size:16px; cursor:pointer; }
 #playBtn:hover{ background:#dba84f; }
 #renderBtn{ border-color:rgba(216,90,48,0.5); color:var(--accent); }
-/* 【2026-08-23】上部の保存を目立たせる。気に入った曲を残す唯一の手段なので、
+/* 上部の保存を目立たせる。気に入った曲を残す唯一の手段なので、
    カード⑤を開かなくても押せるところに置いている。 */
 .io-btn.save{ border-color:rgba(214,168,79,0.65); color:var(--brass); font-weight:600; }
 .io-btn.save:hover{ background:rgba(214,168,79,0.14); }
@@ -113,7 +113,7 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
 
 /* ---- グリッド（ZCnova と同じマス） ---- */
 .trk{ border:1px solid var(--border); border-radius:10px; margin-bottom:10px; background:var(--bg-2); }
-/* 【2026-08-24】「鳴らさない」トラックはひと目で分かるように沈める。
+/* 「鳴らさない」トラックはひと目で分かるように沈める。
    これが無いと、音色を替えてもマスを押しても音が出ず、
    「調整できない」と受け取られる（実測：完全ランダムでは
    木管が78%・金管が75%の曲で鳴らさない設定になっている）。 */
@@ -137,7 +137,7 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
   background:#241d15; cursor:pointer; padding:0;
   touch-action:manipulation;          /* ダブルタップ拡大を止めて反応を速くする */
   -webkit-tap-highlight-color:transparent; }
-/* 【2026-08-23 修正⑪】指で押す端末ではマスを大きくする。
+/* 【修正】指で押す端末ではマスを大きくする。
    ------------------------------------------------------------
    実測(390x844)で1マスは 16.0 x 18.0px。指で押す目標の目安は 44x44px
    なので約1/7の面積しかなく、隣を誤爆する。横スクロールは既にあるので
@@ -156,7 +156,7 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
 .cell.on-mel2{ background:#a87fd0; border-color:#6b4a93; }
 .cell.on-sub{ background:#e8a0c8; border-color:#8f2a63; }
 .cell.on-bass{ background:#c8963e; border-color:#8a6b3a; }
-/* 【2026-08-24 修正】木管・金管のマスの色が**そもそも書かれていなかった**。
+/* 【修正】木管・金管のマスの色が**そもそも書かれていなかった**。
    トラックを後から足したときに色だけ入れ忘れたもので、押すと
    class（on-wind1 / on-wind2）は付くのに見た目が変わらず、
    「押しても点灯しない＝打ち込めない」と見えていた。
@@ -218,7 +218,7 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
 .song-item button.danger{ color:#e79576; }
 .song-empty{ font-size:12px; color:var(--text-dim); padding:4px 2px; }
 
-/* ---- 【修正④】書き出し中に触れなくする ---- */
+/* ---- 【修正】書き出し中に触れなくする ---- */
 .zc-locked{ position:relative; opacity:0.45; }
 .zc-locked *{ pointer-events:none !important; }
 .zc-locked::after{ content:'書き出し中は変更できません'; position:absolute; inset:0;
@@ -257,13 +257,13 @@ footer b{ color:var(--brass); }
     <button id="playBtn" title="再生／停止（スペースキー）">▶</button>
     <div class="now" id="nowPlaying">まだ曲がありません。下の「① 曲を作る」から曲調を選んでください。</div>
     <span class="badge" id="lenBadge">長さ —</span>
-    <!-- 【2026-08-23】曲番号の札はここにあったが撤去した。
+    <!-- 曲番号の札はここにあったが撤去した。
          生成のしくみを直すと同じ番号でも別の曲になるため、番号で曲を
          管理することはできない。代わりに、いつでも押せる保存を置く。 -->
     <button class="io-btn save" id="topSaveBtn"
             title="この曲をこの端末に保存します（下の「保存した曲」に並びます）">💾 この曲を保存</button>
     <button class="io-btn" id="undoBtn" disabled>↩ やり直す</button>
-    <!-- 【修正③】自動保存が本当に走っていることを見せる印。
+    <!-- 【修正】自動保存が本当に走っていることを見せる印。
          普段は透明で場所だけ確保し、保存された瞬間だけ1.4秒ふわっと出る。 -->
     <span id="saveMark" class="save-mark"></span>
       <button class="io-btn" id="cleanupBtn" title="ZCnova内部の音声処理を整理して再初期化します">🔧 動作を安定化</button>
@@ -363,7 +363,7 @@ footer b{ color:var(--brass); }
       <span class="hint" style="margin:0;">イントロ〜Aメロ〜サビの並べ方です</span>
     </div>
 
-    <!-- 【2026-08-23 追加E】曲のゆらぎ -->
+    <!-- 【追加】曲のゆらぎ -->
     <div class="fx-row">
       <span class="t-label">曲のゆらぎ</span>
       <div class="pat-btns" id="spreadPick"></div>
@@ -391,7 +391,7 @@ footer b{ color:var(--brass); }
       <button class="io-btn" id="againBtn" title="曲調などの設定はそのまま、中身だけ作り直します">🎲 もう1曲つくる</button>
     </div>
 
-    <!-- 【2026-08-24 追加】作ったらその場で聴ける場所に置く。
+    <!-- 【追加】作ったらその場で聴ける場所に置く。
          上部バーにも再生はあるが、作る操作をしている手の近くに無いと
          いちいち視線と手を戻すことになる。中身は上部バーと同じもの。 -->
     <div class="fx-row" style="margin-top:-4px;">
@@ -489,12 +489,12 @@ footer b{ color:var(--brass); }
     </div>
     <div class="fold-body">
 
-    <!-- 【2026-08-24 整理】つまみ1つずつに ▶ が付いていたが、どれにも処理が
+    <!-- 【整理】つまみ1つずつに ▶ が付いていたが、どれにも処理が
          書かれておらず**4つとも押しても何も起きなかった**。しかも止める側が
          どこにも無かった。ここで鳴らしたいのは「いまの曲を流しながらつまみを
          動かす」ことだけなので、再生／停止の1つにまとめる。
          つまみは動かした瞬間に音へ反映されるので、▶ は各行に要らない。 -->
-    <!-- 【2026-08-24 追加】どこを聴きながら調整するかを選べるようにする。
+    <!-- 【追加】どこを聴きながら調整するかを選べるようにする。
          3分の曲を頭から流して目的の場所を待つ、をしなくて済む。
          一覧は⑤の「部分だけ書き出す」と同じ区切り方（役割のまとまり）。 -->
     <div class="fx-row" style="margin-bottom:10px;">
@@ -504,7 +504,7 @@ footer b{ color:var(--brass); }
               title="選んだ範囲を流しながらつまみを動かせます。もう一度押すと止まります">▶ 聴きながら調整</button>
       <span class="hint" style="margin:0;">つまみは動かした瞬間に音へ反映されます</span>
     </div>
-    <!-- 【2026-08-24 追加】再生が重い端末向けの逃げ道。書き出しには影響しない。 -->
+    <!-- 【追加】再生が重い端末向けの逃げ道。書き出しには影響しない。 -->
     <div class="fx-row" style="margin-top:-6px;">
       <span class="t-label">再生の重さ</span>
       <div class="pat-btns" id="litePick">
@@ -603,7 +603,7 @@ footer b{ color:var(--brass); }
       </span>
     </div>
 
-    <!-- 【2026-08-24 追加】曲の一部分だけを切り出す。
+    <!-- 【追加】曲の一部分だけを切り出す。
          動画に使う人が欲しいのは「イントロだけ」「サビだけ」であって、
          パートごとの書き出し（DAW向け）ではない、という指摘への対応。 -->
     <div class="fx-row">
@@ -636,7 +636,7 @@ footer b{ color:var(--brass); }
     </div>
     <div class="fold-body">
 
-    <!-- 【2026-08-24 移設】上部バーにあった効果音レーンの設定をここへ。
+    <!-- 【移設】上部バーにあった効果音レーンの設定をここへ。
          起動直後にいちばん目立つ場所を占めていたが、ふだんは使わないため。
          機能はそのまま（曲データに焼き込まれるので書き出しにも入る）。 -->
     <div class="fx-row">
@@ -688,7 +688,7 @@ footer b{ color:var(--brass); }
       <span class="t-label">ゆらぎ</span>
       <input type="range" id="seWobble" min="0" max="100" value="50">
       <span class="fx-val" id="seWobbleVal">50%</span>
-      <!-- 【2026-08-23】SE番号の札と「番号を指定」も曲番号と同じ理由で撤去。
+      <!-- SE番号の札と「番号を指定」も曲番号と同じ理由で撤去。
            気に入った音は、その場で書き出して残す。 -->
       <button class="io-btn" id="seRandomBtn">🎲 ちがう音にする</button>
     </div>
@@ -724,7 +724,7 @@ footer b{ color:var(--brass); }
       <p style="margin-bottom:10px;"><b style="font-size:12.5px;">生成された音楽について</b><br>
       本アプリは、Web Audio APIおよびアプリ内に実装された音楽生成アルゴリズムを使用して音声を生成します。
       既存の楽曲、BGM素材、サンプル音源をそのまま使用して音楽を生成する方式ではありません。<br>
-      <!-- 【2026-08-23 修正】「録音された音楽」を削除。
+      <!-- 【修正】「録音された音楽」を削除。
            このアプリに録音機能は無い（MediaRecorder 等は不使用）。
            他の箇所に出てくる「録音」は「録音素材を使っていない」の意味なので、
            ここだけ機能があるかのように読めてしまっていた。 -->
@@ -734,7 +734,7 @@ footer b{ color:var(--brass); }
       なお、個々の生成楽曲について著作権が成立するかどうかは、作品の内容や制作過程等により個別に判断されます。
       本アプリは、個々の生成楽曲について著作権の成立または特定の者への帰属を保証するものではありません。</p>
 
-      <!-- 【2026-08-23 追加】既存曲に似てしまった場合の注意。
+      <!-- 【追加】既存曲に似てしまった場合の注意。
            既存曲を一切参照していないので特定の曲を再現することはないが、
            音階・コード進行・リズムといった音楽に共通する部品を組み合わせている以上、
            短い断片がたまたま似る可能性は理屈のうえではゼロにできない。
@@ -753,7 +753,7 @@ footer b{ color:var(--brass); }
       <p style="margin-bottom:10px;"><b style="font-size:12.5px;">使用ライブラリ</b><br>
       本アプリでは、以下のオープンソースソフトウェアを使用しています。<br>
       ・Tone.js 14.8.49 ／ MIT License ／ Copyright (c) Yotam Mann and contributors<br>
-      <!-- 【2026-08-23 追加】LAME の LICENSE は次の3点を求めている。
+      <!-- 【追加】LAME の LICENSE は次の3点を求めている。
              1. LAME は別ファイル（lame.min.js）として読み込むこと
              2. LAME を使っていることを明記し、lame.sourceforge.net へのリンクを張ること
              3. 改変したら LGPL で LAME プロジェクトへ還元すること
@@ -811,7 +811,7 @@ footer b{ color:var(--brass); }
      file:// でもオフラインでも動くようになり、CDN汚染の経路自体が無くなる。
      その場合 lamejs は LGPL のため、HTMLへ溶かし込まず
      lame.min.js のまま別ファイルで置くこと。 -->
-<!-- 【2026-08-23 SRI】配信物が差し替えられていたら読み込まない。
+<!-- 【SRI】配信物が差し替えられていたら読み込まない。
      integrity は cdnjs の配信物そのものから取った SHA-384。
      ★ここの値が1バイトでもずれるとブラウザが読み込みを拒否し、アプリは
        まったく動かなくなる。Tone.js のバージョンを上げるときは
@@ -824,7 +824,7 @@ footer b{ color:var(--brass); }
         onerror="window.__zcToneFailed=1"></script>
 <script>
 /* ============================================================
-   【2026-08-24 追加】再生の音の乱れ（ぶつ切れ・ノイズ）を減らす
+   【追加】再生の音の乱れ（ぶつ切れ・ノイズ）を減らす
    ------------------------------------------------------------
    Tone.js の既定は「弾いた瞬間に鳴る」ことを優先した設定
    （latencyHint:'interactive' / lookAhead 0.1秒）になっている。
@@ -885,7 +885,7 @@ zcWidenLookAhead();
 </script>
 <script>
 /* ============================================================
-   【2026-08-23 整理】開発用の記録を1つのスイッチにまとめる
+   【整理】開発用の記録を1つのスイッチにまとめる
    ------------------------------------------------------------
    各モジュールの「読み込み終わりました」という console.log が10箇所
    残っていて、ふつうに使う人のコンソールを埋めていた。
@@ -1010,7 +1010,7 @@ function bassPatterns(song){
 
 /* ------------------------------------------------------------
    ステップ→秒の変換。ここ1箇所に集約する。
-   【2026-08-22 整理】以前は同じ式が3箇所（scheduleSong / 死んでいた
+   【整理】以前は同じ式が3箇所（scheduleSong / 死んでいた
    renderSong / 有効な renderSong）に複製されていた。片方だけ直すと
    「再生と書き出しでリズムが違う曲」ができるため、先に括り出した。
 
@@ -1182,7 +1182,7 @@ function zcTranspose(name, semi){
   return (m == null) ? name : midiToName(Math.max(0, Math.min(127, m + semi)));
 }
 const zcLadderCache = {};
-/* 【2026-08-23 修正⑨-b】フレーズごとの転調（ph.keyShift）を受け取る。
+/* 【修正】フレーズごとの転調（ph.keyShift）を受け取る。
    ------------------------------------------------------------
    対旋律ルール（parallel3 / parallel6 など）は mel1 の音を「音階の段」で
    数えて下げる。ところがこのはしごは song.scale と song.key だけで作られ、
@@ -1688,7 +1688,7 @@ const MOODS = [
        そのまま使われる。既存曲調と違って上書きされない）。
      ========================================================== */
   { key:'waltz', label:'ワルツ', meter:'3/4', bpm:[100,150], scales:['major','major','minor'],
-    /* 【2026-08-23 修正】'classic' は PROGRESSIONS にも zcAddProgression にも
+    /* 【修正】'classic' は PROGRESSIONS にも zcAddProgression にも
        存在しないキーだった。genChords の `|| PROGRESSIONS[0]` に拾われて
        落ちはしないが、1/3の確率で黙って「王道」に化けており、ワルツの
        進行が実質2種類しかなかった。古典的なワルツに合う既存の
@@ -1913,7 +1913,7 @@ const PLAY_MODES = [
      クラシック寄りの響きが要るときは、楽器カテゴリの
      「吹奏楽 / 木管 / 金管 / 弦楽器 / オーケストラ」を使う。
      ------------------------------------------------------------ */
-  /* 【2026-08-24】ボタンとしては出さない（hidden）。
+  /* ボタンとしては出さない（hidden）。
      ------------------------------------------------------------
      画面には「フルバンド」が2つ並んでいた。ここ（まとめて）と、
      楽器カテゴリの 🎧 フルバンド（fam_full）。中身をそろえた結果、
@@ -1923,7 +1923,7 @@ const PLAY_MODES = [
      定義そのものは残すので、この key で保存した曲はこれまでどおり開ける。 */
   { key:'full',   label:'フルバンド', group:'まとめて', hidden:true,
     on:['mel1','mel2','sub','chord','bass','drum','wind1','wind2'],
-    /* 【2026-08-24】画面に出る「フルバンド」（楽器カテゴリの full）と
+    /* 画面に出る「フルバンド」（楽器カテゴリの full）と
        中身をそろえる。ジャズ寄り＝ピアノ・ギター・ウッドベース・ドラムに
        サックスとトランペットを必ず乗せる。 */
     pool:{ mel1: ['piano','sax','trumpet','guitar'],
@@ -1963,7 +1963,7 @@ const PLAY_MODES = [
    曲を作るたびにこの中から1つ引く。フルバンドを引く確率が高すぎないよう
    件数のバランスを取ってある（重複して書くほど当たりやすくなる＝重み）。 */
 /* ============================================================
-   【2026-08-23 整理】RANDOM_COMBOS（29件）を撤去した（28行）
+   【整理】RANDOM_COMBOS（29件）を撤去した（28行）
    ------------------------------------------------------------
    「ランダム編成★」の候補表だったが、後方のパッチが applyPlayMode を
    ラップして ZC_COMBOS 側から引くように差し替えており、**この表には
@@ -2241,7 +2241,7 @@ function ksBuffer(cache, ctx, kind, midi){
   const data = buf.getChannelData(0);
   const period = Math.max(2, Math.round(sr / freq));
   const ring = new Float32Array(period);
-  /* 【2026-08-23 修正⑲】弦をはじく元になる波形を、乱数から seed 由来に変える。
+  /* 【修正】弦をはじく元になる波形を、乱数から seed 由来に変える。
      ------------------------------------------------------------
      ここだけ Math.random() で、ピアノ（zcPianoHash）やアコースティック音源
      （固定波形）と食い違っていた。撥弦は mel1・chord・bass のどれにでも
@@ -2722,7 +2722,7 @@ function zcPianoCreateBuffer(
      波形末尾まで自然減衰を確保する。
   */
 
-  /* 【2026-08-23 修正⑰】波形の長さに上限を設ける。
+  /* 【修正】波形の長さに上限を設ける。
      ------------------------------------------------------------
      自然減衰をそのまま持たせると A0（midi 21）で 25.4秒＝4.27MB になり、
      作るのに 167ms かかる。ピアノは mel1/chord の既定音色なので、
@@ -3979,7 +3979,7 @@ class ZCnovaContrabass {
     disposables.push(envGain);
 
     /* --- 後片付け（鳴り終わってからノードを破棄） ---
-       【2026-08-23 修正③】書き出し中は setTimeout で片付けない。
+       【修正】書き出し中は setTimeout で片付けない。
        ------------------------------------------------------------
        Tone.now() は書き出し中も**再生側の時計**（ページを開いてからの秒数）
        を返すのに対し、stopAt は書き出し用の時間（0〜数秒）。
@@ -4112,7 +4112,7 @@ function buildEngine(cfg){
   const ksCache = new Map();
   const eng = { parts:{}, ks:ksCache };
 
-  /* 【2026-08-23 追加】このエンジンが作ったノードの台帳。
+  /* 【追加】このエンジンが作ったノードの台帳。
      ------------------------------------------------------------
      disposeLiveEngine は parts の synth/gain/pan しか捨てていなかったため、
      マスター段（master / highpass / bright / comp / makeup / preLimit /
@@ -4136,7 +4136,7 @@ function buildEngine(cfg){
   const master   = new Tone.Gain(cfg.masterVol === undefined ? 0.8 : cfg.masterVol);
   const highpass = new Tone.Filter({ type:'highpass', frequency:38, Q:0.6 });
   const bright   = new Tone.Filter({ type:'lowpass', frequency:cfg.bright || 12000, Q:0.4 });
-  /* 【2026-08-24 追加】耳が最も敏感な 3kHz あたりだけを軽く下げる。
+  /* 【追加】耳が最も敏感な 3kHz あたりだけを軽く下げる。
      実測で「幻想」は 1-2kHz に 49.4% / 2-4kHz に 22.0%、「クラシック(弦)」は
      1-2kHz に 32.5% / 2-4kHz に 28.6% のエネルギーが集まっており、
      しかも低域がほとんど無いぶん中高域がむき出しになっていた。
@@ -4276,7 +4276,7 @@ function buildEngine(cfg){
   eng.seGain = segain;
 
   eng.drums = D; eng.drumGain = dgain;
-  eng.isLive = !!cfg.live;      /* 【2026-08-24】再生用フェードの判定に使う */
+  eng.isLive = !!cfg.live;      /* 再生用フェードの判定に使う */
   eng.master = master; eng.fadeGain = fadeGain; eng.bright = bright;
   eng.revSend = revSend; eng.reverb = reverb;
   eng.cfg = cfg;
@@ -4287,7 +4287,7 @@ function buildEngine(cfg){
    高音ほど耳に刺さるので、C5より上を少しずつ弱くする。
    （ZCnova で「高い音が耳障り・音割れする」と指摘を受けて入れた処理） */
 /* ============================================================
-   【2026-08-24 追加】楽器が出せる高さの中に音を収める
+   【追加】楽器が出せる高さの中に音を収める
    ------------------------------------------------------------
    【なぜ要るか】実測でこうなっていた。
      ・音域が決まっている音 22,245個のうち **30.7% が音域の外**
@@ -4385,7 +4385,7 @@ function zcFitRangesToInstruments(song){
 function pitchTilt(note){
   const m = noteToMidi(note); if(m === null) return 1;
   const over = m - 72; if(over <= 0) return 1;
-  /* 【2026-08-24 変更】高い音の抑えが足りなかった。
+  /* 【変更】高い音の抑えが足りなかった。
      旧: 1 - over*0.035（下限0.55）→ C7(96)以上は 0.55 で頭打ち＝約-5dB しか
      下がらず、いちばん耳に刺さる帯域がそのまま出ていた。
      傾きを強め、下限も下げる。C6で0.62 / C7で0.32（約-10dB）。
@@ -4869,7 +4869,7 @@ function degreeName(deg, song){
 }
 
 /* ============================================================
-   【2026-08-23 追加E】曲のゆらぎ（同じグループの曲調から候補を借りる）
+   【追加】曲のゆらぎ（同じグループの曲調から候補を借りる）
    ------------------------------------------------------------
    【なぜ要るか】
    在庫は 進行18種・ベース7種・伴奏31種あるのに、1つの曲調が持っている
@@ -4948,7 +4948,7 @@ function zcBpmRange(mood, song){
 
 /* ---------- コード進行を置く ---------- */
 function genChords(ph, song, mood){
-  /* 【追加E】同じグループの曲調からも進行を借りる（ゆらぎの設定しだい） */
+  /* 【曲のゆらぎ】同じグループの曲調からも進行を借りる（ゆらぎの設定しだい） */
   const progKey = zcPickWide(mood, 'progs', song, ph, 0x11a7c3d5,
     k => PROGRESSIONS.some(p => p.key === k));
   const prog = PROGRESSIONS.find(p => p.key === progKey) || PROGRESSIONS[0];
@@ -5072,7 +5072,7 @@ function zcVaryBar(base, spb, sd, bar, opt){
 }
 
 /* ============================================================
-   【2026-08-23 追加E】副次パート（対旋律・サブ・管楽器）の小節ごとの出入り
+   【追加】副次パート（対旋律・サブ・管楽器）の小節ごとの出入り
    ------------------------------------------------------------
    【なぜ要るか】
    これまで sub / wind1 / wind2 は「フレーズ単位で鳴るか鳴らないか」しか
@@ -5166,7 +5166,7 @@ function zcPartInOut(ph, song, skip){
 
 function zcBuildChordHits(ph, song, mood){
   const CP  = chordPatterns(song);
-  /* 【2026-08-23 追加C】伴奏の型をフレーズごとに持ち替える。
+  /* 【追加】伴奏の型をフレーズごとに持ち替える。
      ------------------------------------------------------------
      ドラムとベースは genDrums / genBass の中で pick(mood.*) を
      フレーズごとに引き直しているのに、伴奏だけ song.cpat の1つを
@@ -5175,7 +5175,7 @@ function zcBuildChordHits(ph, song, mood){
      ・曲全体の顔は song.cpat のままにしたいので、6割はそのまま
      ・残りは同じ曲調の候補から選ぶ＝曲調の性格は崩れない
      ・seedNoise で決めるので rnd() は消費しない＝他パートは不変 */
-  /* 【追加E】フレーズごとの持ち替え先も、ゆらぎのぶんだけグループから借りる。 */
+  /* 【曲のゆらぎ】フレーズごとの持ち替え先も、ゆらぎのぶんだけグループから借りる。 */
   let cpSrc = (mood && Array.isArray(mood.cpat) ? mood.cpat : []);
   if(zcSpreadP(song) > 0 && mood){
     const wide = zcCatPool(mood, 'cpat');
@@ -5250,14 +5250,14 @@ function chordAt(ph, beat){
 /* ---------- ベース ---------- */
 function genBass(ph, song, mood){
   const BP = bassPatterns(song);
-  /* 【追加E】ベースの型も同じグループから借りる。
+  /* 【曲のゆらぎ】ベースの型も同じグループから借りる。
      拍子によって無い型があるので、在ることを確かめてから候補に入れる。 */
   const pat = BP[zcPickWide(mood, 'bass', song, ph, 0x22b3e7f1, k => !!BP[k])] || BP.root;
   const spb = stepsPerBar(song);
   const n = ph.bars * spb;
   ph.bass.fill(null);
   const st = (SCALES[song.scale] || SCALES.major).steps;
-  /* 【2026-08-23】小節ごとに位置を散らす。
+  /* 小節ごとに位置を散らす。
      実測でベースは稼働率100%なのに小節ごとの種類が1.8しかなく、
      曲じゅう同じ形を刻み続けていた。土台なので抜きは控えめ、
      小節の頭と拍の頭は必ず残す。 */
@@ -5281,7 +5281,7 @@ function genBass(ph, song, mood){
     const deg = chordAt(ph, beatIndexOf(song, s));
     if(deg === null) continue;
     /* 拍の頭は根音、それ以外は5度も混ぜて動きを出す。
-       【2026-08-23 修正】ここは chance(0.35) だった＝**鳴らす音の数だけ
+       【修正】ここは chance(0.35) だった＝**鳴らす音の数だけ
        乱数を消費する**ため、小節ごとに位置を散らすと消費数が変わり、
        このあとに作られる旋律（genMelodyInto）まで全部ずれてしまった。
        実測：伴奏の変化を入れた時点で 40曲中36曲の旋律が変わっていた。
@@ -5306,7 +5306,7 @@ function genDrums(ph, song, mood){
   const spb = stepsPerBar(song);
   const n = ph.bars * spb;
   DRUM_LANES.forEach(d => ph.drum[d.key].fill(false));
-  /* 【2026-08-23】小節ごとに位置を散らす。
+  /* 小節ごとに位置を散らす。
      実測（30曲平均の小節ごとの種類）:
        ハイハット1.9（稼働率92%）/ キック2.9（85%）/ スネア2.0（65%）
      骨格（キック・スネア）は抜きを控えめにし、刻み系は大きく動かす。
@@ -5385,7 +5385,7 @@ function genDrums(ph, song, mood){
       }
     }
   }
-  /* 【2026-08-23 追加B】フレーズの切れ目にフィルを入れる。
+  /* 【追加】フレーズの切れ目にフィルを入れる。
      ------------------------------------------------------------
      タム(1.1)・クラップ(1.5)・オープンハット(1.4) は在庫としてレーンが
      あるのに、ほぼ据え置きで使われていなかった（数字は30曲平均の
@@ -5432,7 +5432,7 @@ function genDrums(ph, song, mood){
   if(gh && ph.ghost){
     for(let i = 1; i < n; i += 2){
       if(ph.drum.snare[i] || ph.drum.kick[i] || ph.drum.clap[i]) continue;
-      /* 【2026-08-23 修正㉔】`% n` だとフレーズ末尾で先頭へ巻き戻り、
+      /* 【修正】`% n` だとフレーズ末尾で先頭へ巻き戻り、
          「次の打点」ではなく無関係な先頭の打点を見ていた。末尾では
          次が無いものとして扱う。 */
       if(ph.drum.snare[i - 1] || (i + 1 < n && ph.drum.snare[i + 1])) continue;   // 本打ちの直前直後は避ける
@@ -5497,7 +5497,7 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
   const hi = Math.max(lo + 1, Math.round(mood.dens[1] * st.dens * densMul * o.roleDens));
   const leap = Math.min(0.85, mood.leap * st.leap);
   const rest = Math.min(0.6, mood.rest * st.rest);
-  /* 【2026-08-23 追加】メロ型の新しいつまみ。
+  /* 【追加】メロ型の新しいつまみ。
      ------------------------------------------------------------
      span   … 音域の広さ（輪郭の振れ幅と跳躍の上限）。未指定なら従来の o.span。
      spread … 輪郭への忠実さ。1に近いほど狙った形どおりに動き（素直）、
@@ -5569,7 +5569,7 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
     }
     cell.forEach((k, idx) => {
       const sIdx = off + k;
-      /* 【2026-08-23 修正】k < 0 を弾く。
+      /* 【修正】k < 0 を弾く。
          この下の「のばす音」処理が cell[idx+1] = -1 を入れて次の音を消すのだが、
          その番兵をここで弾いていなかったため sIdx = off-1 となり、
          ①のばす音が一度も効かず ②前の小節の最後の16分に音が書き込まれていた
@@ -5716,7 +5716,7 @@ function genMelodyInto(arr, accArr, ph, song, mood, opt){
   // ペンタ型：音階の中でも使う音を絞って、素朴で外れにくい旋律にする
   if(st.penta){
     const keep = [0, 1, 2, 4, 5];
-    /* 【2026-08-23 修正⑪】1オクターブの段数を音階から取る。
+    /* 【修正】1オクターブの段数を音階から取る。
        ------------------------------------------------------------
        rows は SCALES[song.scale] から作るので、1オクターブの段数は
        音階によって変わる（7音音階なら7段、penta/pentaMin/yona/miyako は5段）。
@@ -5751,7 +5751,7 @@ function fillThinBars(ph, song){
         DRUM_LANES.forEach(d => { if(ph.drum[d.key][i]) c++; });
       }
       /* 和音も数に入れる（伸ばす伴奏でも1小節に何回か鳴る）
-         【2026-08-23 修正】ここも曲の型を見ていたが、実際に鳴るのは
+         【修正】ここも曲の型を見ていたが、実際に鳴るのは
          フレーズの型（ph.cpat）。実測では見積りが 51%の小節でずれていた
          （判定そのものがひっくり返る小節は 0/1110 だったので鳴り方は
          変わらないが、しきい値を変えたときに効いてくる）。 */
@@ -5796,7 +5796,7 @@ function zcArticFamily(song, trackKey){
 }
 
 /* ============================================================
-   【2026-08-23 追加】スラー（弓を返さずに次の音へ移る）の判定
+   【追加】スラー（弓を返さずに次の音へ移る）の判定
    ------------------------------------------------------------
    【なぜ要るか】
    これまでは音符ごとに必ず弓を当て直していた。実際の奏者は、近い音へ
@@ -6117,7 +6117,7 @@ function generatePhrase(song, bars, opts){
      opts で thin を直接指定されたときは従来の3段階で動かす（互換）。 */
   const thin = o.thin !== undefined ? o.thin : role.thin;
   const layers = (o.thin === undefined) ? ROLE_LAYERS[role.key] : null;
-  /* 【追加E】役割が意図して消すパートの控え。
+  /* 【曲のゆらぎ】役割が意図して消すパートの控え。
      このあとの zcPartInOut が、消したはずのパートに合いの手を入れて
      役割の作り分けを台無しにしないようにするため。 */
   const roleMuted = layers ? layers.mute.slice()
@@ -6145,7 +6145,7 @@ function generatePhrase(song, bars, opts){
   ph.rescuedTrack = zcEnsureAudibleNotes(ph, song, mood,
     { center, style, roleDens: role.dens, thin });
 
-  /* 【追加E】副次パートを小節単位で出入りさせる。
+  /* 【曲のゆらぎ】副次パートを小節単位で出入りさせる。
      保険（zcEnsureAudibleNotes）のあとに置くこと。 */
   zcPartInOut(ph, song, roleMuted);
 
@@ -6181,7 +6181,7 @@ function applyPlayMode(song, modeKey){
   song.playMode = pm.key;
   const all = TRACKS.map(t => t.key);
   if(pm.random){
-    /* 【2026-08-23 整理】ここにあった RANDOM_COMBOS から引く処理は撤去した。
+    /* 【整理】ここにあった RANDOM_COMBOS から引く処理は撤去した。
        後方のパッチが applyPlayMode をラップし、ランダム編成は必ず
        ZC_COMBOS 側で処理されるため、この分岐には到達しない（実測確認済み）。
        万一ラップが外れた場合に無音の曲ができないよう、
@@ -6240,7 +6240,7 @@ function makeSong(moodKey, bars, playModeKey, targetSec, seed, opt){
       seed:s, moodKey:mood.key, bars,
       key: pick(mood.keys),
       scale: pick(mood.scales),
-      /* 【追加E】ゆらぎ。曲へ焼き込むので、保存・読み込みでも同じ曲になる。
+      /* 【曲のゆらぎ】ゆらぎ。曲へ焼き込むので、保存・読み込みでも同じ曲になる。
          ここより上で使うので、先に取り出しておく（下の zcBpmRange / zcPickWide が見る）。 */
       bpm: irand(...zcBpmRange(mood, { spread: o.spread || ZC_SPREAD_DEFAULT })),
       cpat: zcPickWide(mood, 'cpat', { seed:s, spread: o.spread || ZC_SPREAD_DEFAULT }, null, 0x33c5a9b7,
@@ -6337,7 +6337,7 @@ function songSeconds(song){
 function autoArrange(song){
   const at = ARRANGE_TYPES.find(a => a.key === song.arrange) || ARRANGE_TYPES[0];
   const per = song.bars * stepsPerBar(song) * stepDur(song);      // 1フレーズの秒数
-  /* 【2026-08-23 修正⑳】Math.round だったため、指定した長さより**短い曲**が
+  /* 【修正】Math.round だったため、指定した長さより**短い曲**が
      普通にできていた。
      ------------------------------------------------------------
      targetSec/per が 2.4 なら need=2 になり、17%短い曲になる。
@@ -6368,7 +6368,7 @@ function autoArrange(song){
 
   const head = at.head.map(toIdx), tail = at.tail.map(toIdx), core = at.core.map(toIdx);
   const arr = [];
-  /* 【2026-08-23 修正】頭・終わりを付けるかどうかを1つの変数で持つ。
+  /* 【修正】頭・終わりを付けるかどうかを1つの変数で持つ。
      以前は while の条件が `arr.length >= head.length` を「headを積んだか」の
      代用にしていたため、head を積んでいない短い曲でも arr.length が
      head.length に達した時点で真になり、**積むつもりのない tail のぶんまで
@@ -6398,7 +6398,7 @@ function autoArrange(song){
   if(useEnds) arr.push(...tail);
   song.arrangement = arr.slice(0, Math.max(1, need));
 
-  /* 【修正⑳】仕上げ：本当に指定した長さに届いているか実測して足す。
+  /* 【修正】仕上げ：本当に指定した長さに届いているか実測して足す。
      need の計算は1フレーズぶんの秒数から出しているが、実際の曲の長さは
      songSeconds()（ritardando の伸びを含む）で決まるので、両者は
      完全には一致しない。ここで最終確認して、届いていなければ真ん中へ
@@ -6417,7 +6417,7 @@ function autoArrange(song){
 /* ---------- 1ステップ鳴らす ---------- */
 // eng（音のかたまり）と ph（フレーズ）を受け取り、その時刻に音を出す。
 // 再生でも書き出しでも同じものを呼ぶ。
-/* 【2026-08-23 修正⑱】曲ごとの味付け（zcEnsureSongVariation）は
+/* 【修正】曲ごとの味付け（zcEnsureSongVariation）は
    playStep の中で毎ステップ呼ばれていた。中では withSeed（＝makeRng を新規に
    作る）が走り、幻想／透明の追加処理まで毎回重なる。3分の曲を1周すると
    1万回以上になるが、やっているのは「この曲にまだ味付けが無ければ付ける」
@@ -6428,7 +6428,7 @@ function autoArrange(song){
      ・renderAll（曲の作成・読み込み・undo の後）
    よってここからは外す。 */
 /* ============================================================
-   【2026-08-24 追加】再生が間に合っているかを見て、自動で軽くする
+   【追加】再生が間に合っているかを見て、自動で軽くする
    ------------------------------------------------------------
    【なぜ要るか】
    「音が乱れる／崩れて鳴らなくなる」は、音源側で音を落としているのでは
@@ -6591,7 +6591,7 @@ function playStep(eng, song, ph, s, time){
   // 和音
   if(audible('chord')){
     const CP = chordPatterns(song);
-    /* 【追加C】フレーズが自分の型を持っていればそれを使う。
+    /* 【追加】フレーズが自分の型を持っていればそれを使う。
        持っていない過去の保存データは曲の型（song.cpat）のまま。 */
     const pat = CP[ph.cpat || song.cpat] || CP.quarter;
     if(pat.style === 'none') return;
@@ -6608,7 +6608,7 @@ function playStep(eng, song, ph, s, time){
        それを回すと意図が崩れる。この2曲調だけは基本形のまま鳴らす。
        ph.inv が無い過去の保存データも従来どおり（＝転回しない）。
 
-       【2026-08-23 修正】判定を song.zcFantasyTransparentVersion で
+       【修正】判定を song.zcFantasyTransparentVersion で
        やっていたが、このフラグは zcApplyProfile が「mood.space を持つ曲調」
        すべてに押すため、静か・クラシック・切ない・ジャズ・ロック……と
        **31曲調中17曲調で転回形が丸ごと無効**になっていた。
@@ -6619,7 +6619,7 @@ function playStep(eng, song, ph, s, time){
       notes = zcInvertNotes(notes, ph.inv[beat] || 0);
     }
     const acc = ph.acc.chord[beat];
-    /* 【2026-08-23】小節ごとに鳴らす位置を変える。
+    /* 小節ごとに鳴らす位置を変える。
        genChords が ph.chordHits へ焼き込んでいればそれに従い、
        持っていない過去の保存データは従来どおり pat.hits をそのまま使う
        （＝保存済みの曲の音は1音も変わらない）。 */
@@ -6666,12 +6666,12 @@ function playStep(eng, song, ph, s, time){
 
 /* ---------- 曲全体を予約する ---------- */
 // transport は「いま鳴らす用」でも「書き出し用」でも受け取れる。
-/* 【2026-08-24】再生だけを一部分に絞るための指定。
+/* 再生だけを一部分に絞るための指定。
    ------------------------------------------------------------
    ④「音を整える」で「サビだけ流しながらつまみを動かす」ができるように
    するためのもの。**曲データ（song.arrangement）は一切触らない**ので、
    書き出し・保存・自動保存には影響しない。null なら曲ぜんぶ。 */
-/* 【2026-08-24】鳴らす順番。並びの何枠目を、どの順で鳴らすか。
+/* 鳴らす順番。並びの何枠目を、どの順で鳴らすか。
    null なら曲ぜんぶ（今までどおり）。
    ・④の「聴く範囲」   … 連続した一部分
    ・頭を聴く／終わりを聴く … 端の数枠だけ
@@ -6732,7 +6732,7 @@ function scheduleSong(eng, song, transport, onStep){
     off += n;
     offSec += slowing ? ritSlotDur(song, n) : n * stepDur(song);
   });
-  /* 【2026-08-24】再生にもフェードを掛ける。
+  /* 再生にもフェードを掛ける。
      ------------------------------------------------------------
      フェードは元は書き出しにしか掛からず、確かめるには「書き出しと同じ
      計算を待ってから端を鳴らす」しかなかった。出口の fadeGain は
@@ -6783,7 +6783,7 @@ function engineConfig(song, live){
     se: song.se ? JSON.parse(JSON.stringify(song.se)) : null,
   };
 }
-/* 【2026-08-23 修正】エンジンを丸ごと捨てる。
+/* 【修正】エンジンを丸ごと捨てる。
    ------------------------------------------------------------
    以前は parts の synth/gain/pan だけを捨てていたため、マスター段と
    打楽器8レーンの実体が destination に繋がったまま生き残っていた。
@@ -6873,7 +6873,7 @@ async function startPlayback(song, onStep){
   ZC_START_LOCK = true;
   try{
     if(!started){ await Tone.start(); started = true; }
-    /* 【2026-08-24】Tone.start() のあとに掛け直す。音の予約に余裕を持たせて、
+    /* Tone.start() のあとに掛け直す。音の予約に余裕を持たせて、
        長い音が重なるところでのぶつ切れ・雑音を減らす。 */
     zcWidenLookAhead();
     const eng = ensureLiveEngine(song);
@@ -6904,7 +6904,7 @@ function stopPlayback(){
 /* ============================================================
    書き出し（鳴らさずに計算だけで作る）
    ------------------------------------------------------------
-   【2026-08-22 整理】ここにあった async function renderSong(...) は
+   【整理】ここにあった async function renderSong(...) は
    完全な死にコードだったので削除した（96行）。
    幻想／透明チューニングのパッチが後方で
    `renderSong = async function(targetSong, onProgress){...}` と
@@ -6930,7 +6930,7 @@ function loadLame(){
   lamePromise = new Promise((res) => {
     const s = document.createElement('script');
     s.src = LAME_URL;
-    /* 【2026-08-23 SRI】lamejs も配信物を検証する。
+    /* 【SRI】lamejs も配信物を検証する。
        こちらは失敗しても onerror で false を返し、MP3の代わりに
        WAVで書き出す道が既にあるので、致命傷にはならない。
        crossOrigin は integrity を効かせるために必須。 */
@@ -7508,7 +7508,7 @@ async function previewSE(type, midi, dur, seed, wobble){
   const t0 = Tone.now() + 0.02;
   const v = seVariation(type, seed, wobble);
   const nodes = buildSEVoice(type, seFreq(midi), dur, master, t0, v);
-  /* 【2026-08-23 修正⑫】片付けの対象を、この呼び出しで作った分だけに固定する。
+  /* 【修正】片付けの対象を、この呼び出しで作った分だけに固定する。
      ------------------------------------------------------------
      以前はタイマーの中で**そのとき**の sePreviewNodes を捨てていたため、
        A を鳴らす → 1秒後に B を鳴らす → 2.95秒後に A のタイマーが起きる
@@ -7560,7 +7560,7 @@ async function renderSE(type, midi, dur, seed, wobble){
    いま音が出ているパート（on:true のもの）だけを対象に、
    そのパート単体だけを鳴らした状態で renderSong を繰り返し呼ぶ。
    曲のトラック設定は最後に必ずもとへ戻す。 */
-/* 【2026-08-23 修正】全パートに「同じ1つのゲイン」を掛ける。
+/* 【修正】全パートに「同じ1つのゲイン」を掛ける。
    ------------------------------------------------------------
    以前はパートごとに renderSong を呼び、そのたびに独立して
    ピーク0.89へ正規化していた。結果、ステムを足し戻しても元のミックスに
@@ -7660,7 +7660,7 @@ function status(id, msg, kind){
   const e = $(id); if(!e) return;
   e.textContent = msg || '';
   e.className = 'status' + (kind ? ' ' + kind : '');
-  /* 【2026-08-23 修正⑯】古いメッセージが残り続けないよう、時間で消す。
+  /* 【修正】古いメッセージが残り続けないよう、時間で消す。
      旧実装は一度出すと消えないので、①の操作をしたのに⑤には
      「「曲5」を保存しました」が出たまま、といった食い違いが起きていた。
      ユーザーは別の操作の結果を今の結果だと誤読する。
@@ -7672,7 +7672,7 @@ function status(id, msg, kind){
   }
 }
 
-/* 【2026-08-23 修正⑰】音数の目盛り表示。
+/* 【修正】音数の目盛り表示。
    旧実装は「すきまし」という誤字があり、しかも4段階しかないため
    50→60、80→100 と動かしてもラベルが変わらず「効いていない」ように見えた。
    6段階に分け、%も併記して動きが必ず目に見えるようにする。 */
@@ -7709,7 +7709,7 @@ function startRenderTicker(btnId, baseLabel, statusId){
   };
 }
 function fmtTime(sec){
-  /* 【2026-08-23 修正⑩】旧実装は Math.round(sec % 60) だったため、
+  /* 【修正】旧実装は Math.round(sec % 60) だったため、
      59.5秒以上で「0分60秒」「2分60秒」と表示されていた（実測：599.9→9分60秒）。
      先に秒へ丸めてから分と秒に分ける。 */
   const t = Math.max(0, Math.round(sec));
@@ -7723,7 +7723,7 @@ function pushUndo(){
     $('undoBtn').disabled = false;
   }catch(e){}
 }
-/* 【2026-08-23 修正⑪】打ち込み（マス編集）を「やり直す」で戻せるようにする。
+/* 【修正】打ち込み（マス編集）を「やり直す」で戻せるようにする。
    ------------------------------------------------------------
    旧実装では onGridEdit() が pushUndo() を呼んでおらず、
    **アプリの主作業である打ち込みにだけ取り消しが無かった**。
@@ -8029,7 +8029,7 @@ function buildOneStemPick(){
   if(keep && [...w.options].some(o => o.value === keep)) w.value = keep;
 }
 
-/* 【2026-08-24 追加】書き出す「部分」の一覧。
+/* 【追加】書き出す「部分」の一覧。
    ------------------------------------------------------------
    並びの1枠ずつ出すと 40枠を超えて選べないので、
    **同じ役割が続いているところをひとまとまり**にして出す。
@@ -8180,7 +8180,7 @@ function syncSFXPick(){
   document.querySelectorAll('#sePick button').forEach(b =>
     b.classList.toggle('active', b.dataset.se === pickSE));
 }
-/* 【追加E】ゆらぎのボタン */
+/* 【曲のゆらぎ】ゆらぎのボタン */
 function buildSpreadButtons(){
   const w = $('spreadPick'); if(!w) return;
   w.innerHTML = '';
@@ -8223,7 +8223,7 @@ function markPicked(){
     b.classList.toggle('active', parseInt(b.dataset.sec, 10) === song.targetSec));
   document.querySelectorAll('#loopPick button').forEach(b =>
     b.classList.toggle('active', (b.dataset.loop === '1') === !!song.loop));
-  /* 【追加E】ゆらぎ。読み込んだ曲の設定を画面へ戻す
+  /* 【曲のゆらぎ】ゆらぎ。読み込んだ曲の設定を画面へ戻す
      （設定を持たない古い曲は「いつもどおり」として見せる）。 */
   pickSpread = ZC_SPREAD[song.spread] ? song.spread : 'off';
   document.querySelectorAll('#spreadPick button').forEach(b =>
@@ -8264,7 +8264,7 @@ function markPicked(){
 }
 
 /* ---------- 上部の表示 ---------- */
-/* 【2026-08-22 修正】CHORD_PATTERNS[song.cpat] を素で参照していたため、
+/* 【修正】CHORD_PATTERNS[song.cpat] を素で参照していたため、
    boot() の復元パスで確実に落ちるバグがあった（v2.0からの既存不具合）。
    CHORD_PATTERNS の拡張（arpFast / eighthLong / pulse / accent など22型）は
    boot() より後ろの Object.assign で足されるので、前回の曲がそれらの伴奏型を
@@ -8276,7 +8276,7 @@ function markPicked(){
 function renderNow(){
   if(!song){ return; }
   const mood = MOODS.find(m => m.key === song.moodKey) || MOODS[0];
-  /* 【2026-08-23 修正⑤】音階と調の名前も、他と同じように必ず控えを用意する。
+  /* 【修正】音階と調の名前も、他と同じように必ず控えを用意する。
      CHORD_PATTERNS だけ `|| {}` で守られていたが、SCALES と NOTE_NAMES は
      素通しだった。読み込みの検証は「phrases と tracks があるか」しか
      見ていないので、scale:"foo" のJSONが通ってしまう。song は既に
@@ -8287,7 +8287,7 @@ function renderNow(){
   const pm = PLAY_MODES.find(p => p.key === song.playMode) || PLAY_MODES[0];
   const ms = MELODY_STYLES.find(m => m.key === song.melStyle) || {};
   const at = ARRANGE_TYPES.find(a => a.key === song.arrange) || {};
-  /* 【2026-08-23 修正】伴奏の型はフレーズごとに持ち替えるようになったのに、
+  /* 【修正】伴奏の型はフレーズごとに持ち替えるようになったのに、
      ここは曲の型（song.cpat）1つだけを出していた。
      さらに song.cpat は曲を作ったあとに曲調別の表で選び直されるため、
      実測で **67%のフレーズが表示と食い違っていた**（鳴っている型と違う名前が
@@ -8322,7 +8322,7 @@ function renderPhrases(){
     b.className = 'phrase' + (i === curPhrase ? ' active' : '');
     b.dataset.ph = i;
     const cnt = ['mel1','mel2','sub','bass','wind1','wind2'].reduce((a,k) => a + ph[k].filter(v=>v).length, 0);
-    /* 【2026-08-23 修正⑥】フレーズ名も innerHTML に入れない。
+    /* 【修正】フレーズ名も innerHTML に入れない。
        曲名（renderSongList）は先に直したが、フレーズ名は保存データの
        phrases[].name がそのまま入るので、同じ経路が残っていた。
        名前だけ textContent で入れ、飾りは要素を組み立てて足す。 */
@@ -8342,7 +8342,7 @@ function renderTimeline(){
     const e = document.createElement('span');
     e.className = 'tl-empty'; e.textContent = '空です。「選んだ長さに合わせて組み直す」を押してください。';
     w.appendChild(e);
-    /* 【2026-08-23 修正⑧】ここで return する前に説明文も更新する。
+    /* 【修正】ここで return する前に説明文も更新する。
        旧実装は更新せず抜けていたので、並びを空にした直後も
        「42個並んでいます（3分02秒）」という古い表示が残り、
        すぐ上の「空です」と真っ向から食い違っていた。 */
@@ -8356,7 +8356,7 @@ function renderTimeline(){
     d.className = 'tl-item' + (pi === curPhrase ? ' cur' : '');
     d.dataset.ai = ai;
     const ph = song.phrases[pi];
-    /* 【2026-08-23 修正⑥】並びの札もフレーズ名を直に入れていたので同じ扱いにする。 */
+    /* 【修正】並びの札もフレーズ名を直に入れていたので同じ扱いにする。 */
     d.appendChild(document.createTextNode(ph ? (ph.name || String(pi+1)) : '?'));
     const x = document.createElement('span');
     x.className = 'x'; x.dataset.del = ai; x.textContent = '×';
@@ -8376,10 +8376,10 @@ function renderTimeline(){
 
 /* ---------- 編集グリッド ---------- */
 function melodyRows(trackKey, ph){
-  /* 【2026-08-23 修正⑤】想定外のキーで t が undefined になると t.oct で落ちる。 */
+  /* 【修正】想定外のキーで t が undefined になると t.oct で落ちる。 */
   const t = TRACKS.find(x => x.key === trackKey);
   if(!t) return [];
-  /* 【2026-08-23 修正⑨】はしごの高さを、音を作る側と完全に同じ式で出す。
+  /* 【修正】はしごの高さを、音を作る側と完全に同じ式で出す。
      ------------------------------------------------------------
      genMelodyInto は
        scaleNotes(song.scale, 基準oct + zcOct(song,k), rows)
@@ -8403,7 +8403,7 @@ function melodyRows(trackKey, ph){
 
   const rows = build(oct, t.rows);
 
-  /* 【2026-08-23 修正⑨-c】はしごの窓を、実際に置かれている音まで広げる。
+  /* 【修正】はしごの窓を、実際に置かれている音まで広げる。
      ------------------------------------------------------------
      高さを合わせても、窓の**幅**が足りないと同じ害が残る。生成側は
      窓の外にも音を置くため（ベースのオクターブ跳躍、対旋律の導出など）、
@@ -8445,7 +8445,7 @@ function melodyRows(trackKey, ph){
     out = rows.slice();
   }
 
-  /* 【2026-08-23 修正⑨-d】音階に乗らない音も必ず行にする。
+  /* 【修正】音階に乗らない音も必ず行にする。
      ------------------------------------------------------------
      はしごを広げるだけでは足りない。窓の外ではなく「そもそも音階に無い」音が
      残るためで、実測では幻想／透明の曲で mel1 に C8 が現れ、
@@ -8504,7 +8504,7 @@ async function zcStartTrackPreview(trackKey){
     const step = st;
     ids.push(Tone.Transport.schedule((time) => {
       playStep(eng, song, ph, step, time);
-      /* 【2026-08-23 修正④】ここにあった `stepHighlight = step;` を削除。
+      /* 【修正】ここにあった `stepHighlight = step;` を削除。
          stepHighlight は「今光っているマスのDOM要素の配列」で、
          clearHighlight() が forEach で回す。そこへステップ番号（数値）を
          入れてしまうと、以後 clearHighlight() が必ず
@@ -8537,7 +8537,7 @@ async function zcStartTrackPreview(trackKey){
         : `「${lb}」にはこのフレーズで音が入っていません`, has ? 'ok' : 'warn');
 }
 
-/* 【2026-08-23 追加】ステップ番号 → その列のセル一覧。
+/* 【追加】ステップ番号 → その列のセル一覧。
    ------------------------------------------------------------
    再生中のハイライトは毎ステップ
      document.querySelectorAll('#trackArea .cell[data-step="..."]')
@@ -8547,7 +8547,7 @@ async function zcStartTrackPreview(trackKey){
    グリッドを組むときに列ごとの配列を作っておけば、再生中は配列を引くだけで済む。
    グリッドを組み直すたびに作り直すので、古い要素が残ることはない。 */
 let zcStepCells = [];
-/* 【2026-08-23 修正⑬】同じ列（同じステップ）に並ぶマスを、トラックごとに覚えておく。
+/* 【修正】同じ列（同じステップ）に並ぶマスを、トラックごとに覚えておく。
    旋律トラックは「1ステップ1音」で、押すと ph[t.key][s] = note と**上書き**される。
    ところがクリックの処理は押したマスの見た目しか直していなかったので、
    同じ列の別の高さを押すと、データ上は音が移動しているのに
@@ -8609,7 +8609,7 @@ function buildTrackArea(){
     onBtn.textContent = cfg.on ? '鳴らす' : '鳴らさない';
     if(!cfg.on) onBtn.style.opacity = '0.55';
     ctrl.appendChild(onBtn);
-    /* 【2026-08-23】このパートだけを聴くボタン。
+    /* このパートだけを聴くボタン。
        「音を整える」のソロは曲全体が対象で、しかもカードを開き直す必要があった。
        編集しているフレーズをその場で繰り返し鳴らせるほうが手が早い。 */
     const prev = document.createElement('button');
@@ -8744,7 +8744,7 @@ function buildTrackArea(){
     });
     ctrl.appendChild(vol);
 
-    /* 【2026-08-24】ほかのパートと同じ言い方・同じ見た目にそろえる。
+    /* ほかのパートと同じ言い方・同じ見た目にそろえる。
        ここだけ「消音」「全消し」で、しかも押した状態が反転していたため、
        同じことをしているのに操作を覚え直す必要があった。 */
     const mute = document.createElement('button');
@@ -8781,7 +8781,7 @@ function buildTrackArea(){
     tri.className = 'tri'; tri.textContent = openTracks.se ? '▲' : '▼';
     ctrl.appendChild(tri);
     head.appendChild(ctrl);
-    /* 【2026-08-23 修正】ここに付けていた開閉リスナーを撤去した。
+    /* 【修正】ここに付けていた開閉リスナーを撤去した。
        ------------------------------------------------------------
        #trackArea 側にも .trk-head の開閉を受ける委譲リスナーがあり、
        効果音レーンだけ**両方が発火して2回トグル**していた。
@@ -8846,7 +8846,7 @@ function makeRow(label, n, isOn, onClass, toggle, isAcc, trackKey){
     /* 修正⑬：このマスを「トラック＋列」の控えに登録する。 */
     const reg = (zcCellReg[trackKey] || (zcCellReg[trackKey] = {}));
     (reg[s] || (reg[s] = [])).push({ el:c, isOn, isAcc, onClass });
-    /* 【2026-08-23 修正⑪】長押しでもアクセントが付くようにする。
+    /* 【修正】長押しでもアクセントが付くようにする。
        説明文は「Shift＋クリックで強く鳴らす印」だったが、スマホ・タブレットに
        Shiftキーは無く、代替の操作も用意されていなかった。iOS共有シートまで
        作り込んである＝スマホが主要ターゲットなのに、編集機能の半分が
@@ -8865,7 +8865,7 @@ function makeRow(label, n, isOn, onClass, toggle, isAcc, trackKey){
         if(!isOn(s)) toggle(s, false);
         if(isAcc && isOn(s)) toggle(s, true);
         repaintCol();
-        zcEnsureTrackOn(trackKey);   /* 【2026-08-24】長押しで置いたときも同じ */
+        zcEnsureTrackOn(trackKey);   /* 長押しで置いたときも同じ */
         onGridEdit();
         if(navigator.vibrate) try{ navigator.vibrate(12); }catch(e){}
       }, 450);
@@ -8898,10 +8898,10 @@ function makeRow(label, n, isOn, onClass, toggle, isAcc, trackKey){
 
     c.addEventListener('click', (ev) => {
       if(lpFired){ lpFired = false; return; }   // 長押しで処理済み
-      zcPushGridUndo();                          /* 【修正⑪】打ち込みも戻せるように */
+      zcPushGridUndo();                          /* 【修正】打ち込みも戻せるように */
       toggle(s, ev.shiftKey);
       repaintCol();   /* 修正⑬：同じ列のマスもまとめて塗り直す */
-      zcEnsureTrackOn(trackKey);   /* 【2026-08-24】打ち込んだのに鳴らない、を防ぐ */
+      zcEnsureTrackOn(trackKey);   /* 打ち込んだのに鳴らない、を防ぐ */
       onGridEdit();
     });
     cells.appendChild(c);
@@ -8910,7 +8910,7 @@ function makeRow(label, n, isOn, onClass, toggle, isAcc, trackKey){
   return row;
 }
 let gridEditTimer = null;
-/* 【2026-08-24】打ち込んだのに鳴らない、を防ぐ。
+/* 打ち込んだのに鳴らない、を防ぐ。
    マスを押したトラックが「鳴らさない」なら、その場で鳴らす側にする。 */
 function zcEnsureTrackOn(k){
   /* 効果音レーンなど song.tracks に無い行から呼ばれても落ちないこと。
@@ -8935,8 +8935,8 @@ function zcEnsureTrackOn(k){
 }
 
 function onGridEdit(){
-  zcForgetMixGain();   /* 【2026-08-24】曲が変わったら音量の基準を測り直す */
-  /* 【2026-08-23 修正③】保存はここで即座に予約する（旧実装は 500ms 待ってから
+  zcForgetMixGain();   /* 曲が変わったら音量の基準を測り直す */
+  /* 【修正】保存はここで即座に予約する（旧実装は 500ms 待ってから
      scheduleAutosave を呼んでいて、そこから更に 700ms 待つ二段構えになっていた）。
      重い renderPhrases（音数の数え直し）だけを間引く。 */
   scheduleAutosave();
@@ -8978,7 +8978,7 @@ function renderAll(){
   buildTrackArea(); buildMixer(); syncControls();
 }
 /* ②以降の折りたたみ。開閉はブラウザに覚えさせる。 */
-/* 【2026-08-23 修正】折りたたみは必ず「全部閉じた状態」から始める。
+/* 【修正】折りたたみは必ず「全部閉じた状態」から始める。
    ------------------------------------------------------------
    以前は開閉を zbs-fold-* に覚えさせて次回も開いていた。
    ところが一度でも全部開くとその状態が残り続け、次に開いたときに
@@ -9013,7 +9013,7 @@ function syncControls(){
   $('fadeOut').value = song.fadeOut; setText('fadeOutVal', song.fadeOut ? song.fadeOut + '秒' : 'なし');
   $('songName').value = song.name || '';
   $('density').value = song.density;
-  setText('densityVal', zcDensityLabel(song.density));   /* 【修正⑰】 */
+  setText('densityVal', zcDensityLabel(song.density));   /* 【修正】 */
   $('humanize').value = song.humanize;
   setText('humanizeVal', song.humanize === 0 ? '機械的' : song.humanize + '%');
   try{ zcSyncMixPlayBtn(); }catch(e){}
@@ -9042,7 +9042,7 @@ async function restartPlayback(){
   await startPlayback(song, onStepPlayed);
 }
 let ZC_PLAY_LOCK = false; // Tone.start()中などの非同期区間で2回目が入るのを防ぐ
-/* 【2026-08-23 修正⑦】再生できない理由を、再生ボタンのすぐ横に出す。
+/* 【修正】再生できない理由を、再生ボタンのすぐ横に出す。
    ------------------------------------------------------------
    旧実装は理由をカード①下端の makeStatus に出していた。実測すると
    iPhone相当(390x844)では画面上端から 1904px 下＝2画面ぶんスクロールした先で、
@@ -9062,7 +9062,7 @@ function zcPlayHint(msg){
 }
 async function togglePlay(){
   if(ZC_PLAY_LOCK) return;
-  /* 【2026-08-23 追記】書き出し中は鳴らさない。
+  /* 【追記】書き出し中は鳴らさない。
      画面では「書き出し中は再生を止めます（同時に動かすと不安定になるため）」と
      案内しているのに、実際は押せば鳴り始めた（実装が説明に追いついていなかった）。
      書き出し自体は別のコンテキストで走るので壊れはしないが、
@@ -9083,7 +9083,7 @@ async function togglePlay(){
     }
     zcPlayHint('');
     if(zcTrackPreview !== null){ zcStopTrackPreview(); return; }
-    /* 【2026-08-24】書き出しの最中は「止める」だけ効かせ、「始める」は断る。
+    /* 書き出しの最中は「止める」だけ効かせ、「始める」は断る。
        ------------------------------------------------------------
        書き出しは始まるときに再生を止めるが、そのあと再生ボタンを押せば
        また鳴り出せてしまい、30〜60秒の計算とCPUを取り合ったまま
@@ -9107,7 +9107,7 @@ async function togglePlay(){
    ============================================================ */
 
 /* ---------- ① 曲を作る ---------- */
-/* 【2026-08-24】起動時に出す曲調。いちばん仕上がりが良いものを最初に見せる。
+/* 起動時に出す曲調。いちばん仕上がりが良いものを最初に見せる。
    MOODS の並び順に引きずられないよう、キーで指定して、
    その曲調が消えたときだけ先頭へ落とす。 */
 const ZC_START_MOOD = 'battle';
@@ -9116,7 +9116,7 @@ let pickBars = 2, pickPM = 'random', pickSec = 180;
 let pickSE = 'impact';
 let seSeed = newSeed();
 let pickMel = 'auto', pickArr = 'auto', pickDensity = 60, pickHumanize = 35;
-/* 【追加E】曲のゆらぎ。曲へ焼き込むので、画面の値はここで持つ。 */
+/* 【曲のゆらぎ】曲のゆらぎ。曲へ焼き込むので、画面の値はここで持つ。 */
 let pickSpread = ZC_SPREAD_DEFAULT;
 
 $('moodPick').addEventListener('click', (e) => {
@@ -9164,7 +9164,7 @@ $('playModePick').addEventListener('click', (e) => {
   }
 });
 
-/* 【2026-08-23 修正㉓】フレーズ名を A,B,C… で付けるとき、27個目から
+/* 【修正】フレーズ名を A,B,C… で付けるとき、27個目から
    String.fromCharCode(65 + 26) が '[' になり、以降 \ ] ^ _ と記号が続いていた。
    Z まで来たら AA, AB… と桁を増やす（表計算の列名と同じ数え方）。 */
 function zcPhraseLabel(i){
@@ -9177,7 +9177,7 @@ function makeNewSong(seed){
   const wasPlaying = playing;
   if(playing) stopPlayback();
   disposeLiveEngine();
-  /* 【2026-08-23 修正】つまみに触っていないうちは density / humanize を
+  /* 【修正】つまみに触っていないうちは density / humanize を
      渡さない。
      makeSong 側には v4.2 で「つまみで明示されたときだけ尊重し、それ以外は
      曲番号から 52〜70 / 26〜46 で振る」という処理（song.perf）が入ったが、
@@ -9196,7 +9196,7 @@ function makeNewSong(seed){
     /* 【UI整理②】「くわしく決める」のつまみ。曲に焼き込むので、
        再生・書き出し・保存・読み込みのどれでも同じ結果になる。 */
     melTweak: melKnobOverride(),
-    /* 【追加E】曲のゆらぎ */
+    /* 【曲のゆらぎ】曲のゆらぎ */
     spread: pickSpread,
   });
   curPhrase = 0;
@@ -9208,7 +9208,7 @@ function makeNewSong(seed){
     `${fmtTime(songSeconds(song))}）　気に入ったら上の「💾 この曲を保存」で残せます`, 'ok');
   if(wasPlaying) restartPlayback();
 }
-/* 【追加E】ゆらぎを押したら作り直す */
+/* 【曲のゆらぎ】ゆらぎを押したら作り直す */
 $('spreadPick').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if(!b || !b.dataset.spread) return;
   pickSpread = b.dataset.spread;
@@ -9292,7 +9292,7 @@ let zcDensityTouched = false, zcHumanizeTouched = false;
 $('density').addEventListener('input', (e) => {
   zcDensityTouched = true;
   pickDensity = parseInt(e.target.value, 10);
-  setText('densityVal', zcDensityLabel(pickDensity));    /* 【修正⑰】 */
+  setText('densityVal', zcDensityLabel(pickDensity));    /* 【修正】 */
   regenSoon();
 });
 $('humanize').addEventListener('input', (e) => {
@@ -9301,7 +9301,7 @@ $('humanize').addEventListener('input', (e) => {
   setText('humanizeVal', pickHumanize === 0 ? '機械的' : pickHumanize + '%');
   regenSoon();
 });
-/* 【2026-08-23 修正⑬】この2つは中身が全く同じ makeNewSong() で、
+/* 【修正】この2つは中身が全く同じ makeNewSong() で、
    名前だけ違うため「片方は同じ曲が出るのだろう」と誤解を招いていた。
    役割を実際に分ける：
      この設定で作る … いまの曲のまま、選び直した設定を反映する
@@ -9346,7 +9346,7 @@ $('addPhraseBtn').addEventListener('click', () => {
   status('arrangeStatus', `「${ph.name}」を足しました（${fmtTime(songSeconds(song))}）`, 'ok');
 });
 $('dupPhraseBtn').addEventListener('click', () => {
-  /* 【2026-08-23 修正⑫】隣の「フレーズを足す」は並びにも入れて曲が伸びるのに、
+  /* 【修正】隣の「フレーズを足す」は並びにも入れて曲が伸びるのに、
      こちらは入れていなかったため、押しても曲の長さも音も一切変わらず
      「壊れている」ように見えていた（実測：3分06秒のまま、メッセージも無し）。
      並びの中で**元のフレーズのすぐ後ろ**に差し込む。複製した意図に一番近く、
@@ -9430,13 +9430,13 @@ $('trackArea').addEventListener('click', (e) => {
     song.tracks[k].on = !song.tracks[k].on;
     on.textContent = song.tracks[k].on ? '鳴らす' : '鳴らさない';
     on.style.opacity = song.tracks[k].on ? '1' : '0.55';
-    /* 【2026-08-24】レーンの見た目（沈める／戻す）も合わせる */
+    /* レーンの見た目（沈める／戻す）も合わせる */
     const zcBox = on.closest('.trk');
     if(zcBox) zcBox.classList.toggle('trk-off', !song.tracks[k].on);
     refreshLiveEngine(song); scheduleAutosave();
     return;
   }
-  /* 【2026-08-24 修正】試聴の判定を、見出し（.trk-head）の判定より**前**に置く。
+  /* 【修正】試聴の判定を、見出し（.trk-head）の判定より**前**に置く。
      ------------------------------------------------------------
      試聴ボタンは見出しの中にあるので、先に見出しの判定に入ってしまい、
      レーンが開閉するだけで試聴は一度も動いていなかった。
@@ -9455,7 +9455,7 @@ $('trackArea').addEventListener('click', (e) => {
     const box = head.parentElement;
     const k = box.dataset.trk;
     openTracks[k] = !openTracks[k];
-    /* 【2026-08-23 遅延生成】開くときに、まだ作っていなければここで中身を作る。
+    /* 【遅延生成】開くときに、まだ作っていなければここで中身を作る。
        閉じたままのトラックはDOMを持たないので、8小節で 14,464→2,944 マスに減る。 */
     if(openTracks[k] && typeof box._zcFill === 'function') box._zcFill();
     box.classList.toggle('open', openTracks[k]);
@@ -9464,7 +9464,7 @@ $('trackArea').addEventListener('click', (e) => {
   }
   const cc = e.target.closest('[data-chord-beat]');
   if(cc){
-    zcPushGridUndo();                       /* 【修正⑪】コードの変更も戻せるように */
+    zcPushGridUndo();                       /* 【修正】コードの変更も戻せるように */
     const b = parseInt(cc.dataset.chordBeat, 10);
     const ph = song.phrases[curPhrase];
     const st = (SCALES[song.scale] || SCALES.major).steps;
@@ -9480,11 +9480,11 @@ $('trackArea').addEventListener('change', (e) => {
   const sel = e.target.closest('[data-inst-for]'); if(!sel) return;
   const k = sel.dataset.instFor;
   song.tracks[k].inst = sel.value;
-  /* 【2026-08-24】鳴らさない設定のまま音色だけ替えても何も起きないので、
+  /* 鳴らさない設定のまま音色だけ替えても何も起きないので、
      替えた時点で鳴らす側にする。「音色を選んだ＝使いたい」が自然な読み。 */
   let zcTurnedOn = false;
   if(song.tracks[k] && !song.tracks[k].on){ song.tracks[k].on = true; zcTurnedOn = true; }
-  /* 【2026-08-24】音色を替えたら、その楽器が出せる高さに合わせ直す。
+  /* 音色を替えたら、その楽器が出せる高さに合わせ直す。
      チューバに替えたのに旋律が高いまま、という状態を作らない。
      ------------------------------------------------------------
      ⚠️ ここで無条件に renderAll() を呼ぶと、レーンも音色の選択欄も
@@ -9578,7 +9578,7 @@ document.querySelectorAll('.adj-play').forEach(b => {
   b.addEventListener('click', () => ensurePlaying());
 });
 
-/* 【2026-08-24】④の再生／停止。
+/* ④の再生／停止。
    ------------------------------------------------------------
    以前はつまみ1行ごとに ▶ が並び、しかも押すと「止まっていたら始める」
    だけで**止める手段がどこにも無かった**。1つにまとめて、押すたびに
@@ -9618,7 +9618,7 @@ $('mixPlayBtn').addEventListener('click', async () => {
   zcSyncMixPlayBtn();
 });
 
-/* 【2026-08-24】①「曲を作る」のそばの再生／停止。中身は上部バーと同じ。
+/* ①「曲を作る」のそばの再生／停止。中身は上部バーと同じ。
    作ってすぐ聴く、が同じ場所で完結するようにする。 */
 function zcSyncMakePlayBtn(){
   const b = $('makePlayBtn'); if(!b) return;
@@ -9822,7 +9822,7 @@ function zcUnpackSong(sg){
 
 let autosaveTimer = null;
 let zcAutosaveWarned = false;
-/* 【2026-08-23 修正③】自動保存が「打ち込み中はいつまでも走らない」状態だった。
+/* 【修正】自動保存が「打ち込み中はいつまでも走らない」状態だった。
    ------------------------------------------------------------
    旧実装は 700ms のデバウンスのみ。しかも onGridEdit() が更に 500ms 待って
    から呼ぶ二段構えで、合計 1.2 秒。両方とも clearTimeout で毎回リセットされる
@@ -9851,7 +9851,7 @@ function zcWriteAutosave(quiet){
     if(!quiet) zcFlashSaved();
     return true;
   }catch(e){
-    /* 【2026-08-23 修正】失敗を握りつぶさない。
+    /* 【修正】失敗を握りつぶさない。
        容量オーバーで自動保存が止まっていても画面に何も出ないため、
        次に開いたとき「続きから再開」できずに驚くことになっていた。 */
     if(!zcAutosaveWarned){
@@ -9874,7 +9874,7 @@ function zcFlashSaved(){
   zcSavedFlashTimer = setTimeout(() => { el.style.opacity = '0'; }, 1400);
 }
 function scheduleAutosave(){
-  /* 【2026-08-24】曲に何か変更があった＝音量の基準を測り直す。
+  /* 曲に何か変更があった＝音量の基準を測り直す。
      ここは編集のほぼ全部が通る場所なので、取りこぼしが少ない。 */
   zcForgetMixGain();
   if(!zcSaveDirtySince) zcSaveDirtySince = Date.now();
@@ -9934,7 +9934,7 @@ function renderSongList(){
     const d = document.createElement('div');
     d.className = 'song-item';
     const dt = new Date(it.savedAt);
-    /* 【2026-08-23 修正】曲名は innerHTML に入れない。
+    /* 【修正】曲名は innerHTML に入れない。
        保存データの song.name がそのまま曲名欄へ入り、保存し直すと
        ここを通るので、細工したファイルを開かせるとスクリプトが走った。
        名前だけ textContent で入れ、残りの飾りは今までどおり組み立てる。 */
@@ -9976,7 +9976,7 @@ $('songList').addEventListener('click', (e) => {
     storeSongs(list); renderSongList();
   }
 });
-/* 【2026-08-23】名前が空のときに自動で付ける名前。
+/* 名前が空のときに自動で付ける名前。
    上部の「💾 この曲を保存」は1押しで終わってほしいので、
    ここで名前を作って欄にも入れておく（あとから直せる）。 */
 function zcAutoSongName(){
@@ -10097,7 +10097,7 @@ function zcShowSaveButton(blob, filename){
 
 let zcLastSavedName = '';
 function download(blob, filename){
-  zcLastSavedName = filename;   /* 【修正⑤】どの名前で保存したかを画面に出せるように控える */
+  zcLastSavedName = filename;   /* 【修正】どの名前で保存したかを画面に出せるように控える */
   /* PC・Android は従来方式で問題なく保存できるので、挙動を変えない。
      （ここで共有シートに切り替えると、今まで直接保存できていた人に
        余計な一手間が増えてしまう） */
@@ -10105,7 +10105,7 @@ function download(blob, filename){
   /* iOS は <a download> が効かないので、押し直してもらう形にする。 */
   zcShowSaveButton(blob, filename);
 }
-/* 【2026-08-23 修正①⑤】ファイル名の作り方を入れ替えた。
+/* 【修正】ファイル名の作り方を入れ替えた。
    ------------------------------------------------------------
    旧実装は「日本語が入るとブラウザが名前ごと捨てるので、半角英数以外は
    日付名に逃がす」というものだった。しかし実測すると、名前を捨てるのは
@@ -10152,7 +10152,7 @@ let zcFileNo = 0;
 function songFileName(ext){
   const n = fnClean($('songName').value, 48);
   if(n) return `${n}.${ext}`;
-  /* 【2026-08-23】以前はここに曲番号を入れていたが、番号で曲を管理する
+  /* 以前はここに曲番号を入れていたが、番号で曲を管理する
      しくみをやめたので日時だけにする。同じ秒に2つ書き出したときに
      ぶつからないよう、通し番号を足す。 */
   zcFileNo = (zcFileNo + 1) % 100;
@@ -10175,7 +10175,7 @@ function onRenderStopped(){
   clearHighlight();
   $('playBtn').textContent = '▶';
 }
-/* 【2026-08-23 修正④】書き出し中は「曲を作り替える操作」を止める。
+/* 【修正】書き出し中は「曲を作り替える操作」を止める。
    ------------------------------------------------------------
    旧実装の rendering フラグは書き出しボタン同士しかガードしておらず、
    曲調・メロディの作り方・曲の展開・フレーズ操作は素通りだった。
@@ -10186,7 +10186,7 @@ function onRenderStopped(){
    書き出しには実測20〜44秒かかるので「待っている間に次の曲を探す」のは
    ごく自然な行動。押せてしまうUIのほうが悪い。ここで丸ごと止める。 */
 const ZC_LOCK_CARDS = ['card1', 'card2', 'card3'];
-/* 【2026-08-23 追記】カードの外にある操作も止める。
+/* 【追記】カードの外にある操作も止める。
    ------------------------------------------------------------
    最初はカード①②③だけを止めていたが、上のトランスポート帯にある
    「↩ やり直す」「🔧 動作を安定化」「効果音レーン」はカードの外なので
@@ -10300,7 +10300,7 @@ $('oneStemBtn').addEventListener('click', () =>
     return tr;
   }));
 
-/* 【2026-08-24 追加】曲の一部分だけを書き出す。 */
+/* 【追加】曲の一部分だけを書き出す。 */
 $('sectionBtn').addEventListener('click', () =>
   zcRunExport('sectionBtn', '● この部分だけ', async (tick, sec, 秒) => {
     const res = await renderSection(song, sec.from, sec.to, (m) => tick.tell(m));
@@ -10352,7 +10352,7 @@ $('sePick').addEventListener('click', (e) => {
 function zcSyncSELaneUI(){
   if(!song || !song.se) return;
   const c = song.se;
-  /* 【2026-08-24】この一群は⑥のカードへ移した。カードを畳んでいても要素は
+  /* この一群は⑥のカードへ移した。カードを畳んでいても要素は
      あるが、将来まるごと外しても落ちないよう存在を確かめてから触る。
      ここで落ちると markPicked → renderAll が止まり、画面全体が更新されない。 */
   const set = (id, fn) => { const e = $(id); if(e) fn(e); };
@@ -10367,7 +10367,7 @@ function zcApplySELane(rebuild){
   if(!song.se) song.se = { type:'coin', pitch:72, dur:0.35, wobble:50, seed:1,
                            skipRoles:['intro','outro'] };
   const c = song.se;
-  /* 【2026-08-24】要素が無くてもいまの値を保つ（⑥へ移設したため） */
+  /* 要素が無くてもいまの値を保つ（⑥へ移設したため） */
   const get = (id, d) => { const e = $(id); return e ? e : null; };
   const on = get('seLoopOn'), ev = get('seLoopEvery'), bt = get('seLoopBeat'),
         of = get('seLoopOff'), vo = get('seLoopVol');
@@ -10443,10 +10443,10 @@ async function doRenderSE(kind){
     } else {
       blob = encodeWav(res); ext = 'wav';
     }
-    /* 【修正①】種類名は日本語ラベルではなく**ローマ字キー**（impact / swish …）を使う。
+    /* 【修正】種類名は日本語ラベルではなく**ローマ字キー**（impact / swish …）を使う。
        ラベルを使っていたせいで safeName の判定に必ず落ち、効果音が何個でも
        同じ `bgm-日時` になっていた。キーなら種類も番号も名前に残り衝突しない。 */
-    /* 【2026-08-23 修正】ここに SE番号 を入れていたが、番号で音を管理する
+    /* 【修正】ここに SE番号 を入れていたが、番号で音を管理する
        しくみをやめたので日時にする。番号を残しても入力する場所がもう無く、
        意味の分からない数字になるため。 */
     download(blob, safeName(`se_${pickSE}_${fnStamp()}`, ext));
@@ -10496,13 +10496,13 @@ function boot(){
   buildPlayModeButtons();
   buildMelStyleButtons();
   buildArrangeButtons();
-  buildSpreadButtons(); updateSpreadNote();   /* 【追加E】曲のゆらぎ */
+  buildSpreadButtons(); updateSpreadNote();   /* 【曲のゆらぎ】曲のゆらぎ */
   buildSEButtons();
   setupFolds();
   let restored = null;
   /* 圧縮して保存してあるので戻す。古い（圧縮前の）データはそのまま通る。 */
   try{ restored = zcUnpackSong(JSON.parse(localStorage.getItem(AUTOSAVE_KEY) || 'null')); }catch(e){}
-  /* 【2026-08-23 修正】自動保存の中身をちゃんと検査する。
+  /* 【修正】自動保存の中身をちゃんと検査する。
      ------------------------------------------------------------
      旧実装は `restored.phrases && restored.tracks` だけを見ていたが、
      **空配列 [] は truthy** なので `{"phrases":[],"tracks":{}}` が通ってしまい、
@@ -10883,7 +10883,7 @@ boot();
         const soloMode=
           (PLAY_MODES.find(p=>p.key===song.playMode)||{}).solo;
 
-        /* 【2026-08-23】楽器カテゴリ（ピアノ・ギター・弦楽器など）も同じ。
+        /* 楽器カテゴリ（ピアノ・ギター・弦楽器など）も同じ。
            applyInstrumentFamily がそのカテゴリの音色を chord に入れているのに
            ここで曲調の音色へ上書きしていたため、「ピアノ」を選んでいるのに
            伴奏がグロッケンで鳴っていた。カテゴリが chord の音色まで決めた場合
@@ -11223,7 +11223,7 @@ boot();
 
   /* 初期画面はすでに一度描画済みなので、ここで追加項目を表示 */
   buildMoodButtons();
-  /* 【2026-08-23 修正㉒】組み直すと選択の印が消える。
+  /* 【修正】組み直すと選択の印が消える。
      boot() は renderAll() 経由で markPicked() を呼んでいるが、この行は
      その後に走るのでボタンが作り直され、起動直後はどの曲調にも印が
      付いていない状態になっていた。作り直したら必ず付け直す。 */
@@ -12004,7 +12004,7 @@ boot();
   }
   function zcRestoreCoherentChordInstrument(song){
     if(!song || !song.tracks || !song.tracks.chord || !song.tracks.mel1) return;
-    /* 【2026-08-23】楽器カテゴリ（ピアノ・ギター・打楽器・弦楽器…）が
+    /* 楽器カテゴリ（ピアノ・ギター・打楽器・弦楽器…）が
        伴奏の音色まで決めている場合は触らない。
        ここを通していたせいで、幻想・透明の2曲調だけ
        「ピアノを選んだのに伴奏がハープ／グラス」になっていた。
@@ -12124,7 +12124,7 @@ boot();
   };
 
   /* ---------- 長い残響を切らないオフライン書き出し ---------- */
-  /* 【2026-08-23 修正】第3引数 opt.fixedGain を受け取れるようにした。
+  /* 【修正】第3引数 opt.fixedGain を受け取れるようにした。
      パート別書き出し（renderStems）はパートごとにこの関数を呼ぶが、毎回
      TARGET_PEAK へ独立に正規化していたため、ステムを DAW で足し戻しても
      元のミックスにならなかった（実測: メロディ×2.28 / 伴奏×4.79 /
@@ -12140,7 +12140,7 @@ boot();
       if(typeof onRenderStopped === 'function') onRenderStopped();
     }
 
-    /* 【2026-08-23 修正②-b】再生側のTransportにも曲の速さを入れておく。
+    /* 【修正】再生側のTransportにも曲の速さを入れておく。
        ------------------------------------------------------------
        音価（'8n' など）を秒に直すとき、どのTransportを見るかが2通りある。
 
@@ -12180,11 +12180,11 @@ boot();
     })();
     const uniq = [...new Set(targetSong.arrangement)].filter(i => targetSong.phrases[i]);
 
-    /* 【2026-08-23】進み具合を細かく出す。
+    /* 進み具合を細かく出す。
        フレーズ1種類あたり数秒〜十数秒かかるので、始めに1回だけ知らせる形だと
        「止まっているのか計算中なのか分からない」状態が続いていた。
        1種類終わるたびに更新し、目盛りで残りが見えるようにする。 */
-    /* 【2026-08-23 修正⑳】目盛りの総数を、実際に進める回数と合わせる。
+    /* 【修正】目盛りの総数を、実際に進める回数と合わせる。
        zcDone が増えるのは「フレーズごと」「減速ぶん」「つなぎ合わせ」の
        計 uniq+rit+1 回なのに、総数だけ +2 で数えていたため
        進捗が必ず N-1/N で終わり、最後の1目盛りが埋まらないまま消えていた。 */
@@ -12200,7 +12200,7 @@ boot();
     const zcTell = async (msg) => {
       if(onProgress){
         const sec = Math.round((performance.now() - zcT0) / 1000);
-        /* 【2026-08-23 修正⑨】ここで経過秒を足すのをやめた。
+        /* 【修正】ここで経過秒を足すのをやめた。
            呼び出し側の startRenderTicker が同じものを足すので二重になり、
            しかも別タイマーなので「［経過 3秒］　［経過 7秒］」と数字がずれて
            表示されていた。経過秒は共通ティッカー側に一本化する。 */
@@ -12217,7 +12217,7 @@ boot();
       const ph = targetSong.phrases[pi];
       const n = ph.bars * stepsPerBar(targetSong);
       parts[pi] = await Tone.Offline(async ({transport}) => {
-        /* 【2026-08-23 修正②】書き出し用のTransportにも曲の速さを入れる。
+        /* 【修正】書き出し用のTransportにも曲の速さを入れる。
            音の長さは '8n' のような音価で渡しているので、秒に直すときに
            Transportの速さを見る。ここを既定の120のまま計算していたため、
            遅い曲ほど書き出しの音だけ短くなっていた（58BPMの曲で実測0.501秒／
@@ -12225,7 +12225,7 @@ boot();
            これで再生と書き出しが揃う。 */
         transport.bpm.value = targetSong.bpm;
         const eng = buildEngine(engineConfig(targetSong));
-        /* 【2026-08-23 修正①】残響は畳み込みの元になる音を非同期で作るので、
+        /* 【修正】残響は畳み込みの元になる音を非同期で作るので、
            出来上がるのを待たずに計算を始めると残響の成分がまるごと0になる
            （実測：待たないとwet側のピークが0.000000、待つと0.145676）。
            残響はセンドなので無音にはならず、「書き出しだけ残響が無い」
@@ -12450,7 +12450,7 @@ boot();
   /* ---------- makeVoiceを最終的にラップ ---------- */
   const originalMakeVoice = makeVoice;
   makeVoice = function(key, ksCache, live){
-    /* 【2026-08-22 整理】元は violin / cello もここで拾っていたが、この層より
+    /* 【整理】元は violin / cello もここで拾っていたが、この層より
        後方の2つのラップ（擦弦専用モデル層／アコースティック音源層）が必ず先に
        violin・cello を横取りするため、この分岐には一度も到達していなかった。
        到達しない条件を残すと「どの層が鳴っているか」の追跡が無駄に難しくなるので外した。
@@ -12508,7 +12508,7 @@ boot();
     });
   });
 
-  /* 【2026-08-23 整理】ここにあった randomAdditions（7件）は撤去した。
+  /* 【整理】ここにあった randomAdditions（7件）は撤去した。
      読まれない RANDOM_COMBOS に候補を足しているだけで効果が無かった。
      同じ編成は下の comboDefs 経由で ZC_COMBOS 側に入っており、
      そちらは実際に使われている（バイオリン弾き語り等はランダム編成に出る）。 */
@@ -12600,7 +12600,7 @@ boot();
      2. 「楽器1つ」の項目を PLAY_MODES に足す／書き換える
      3. 楽器の種類ごとの段（sub）に振り分ける
 
-   【2026-08-24 統合】ここは以前5つの <script> に分かれていた
+   【統合】ここは以前5つの <script> に分かれていた
    （バイオリン/サックス/トランペット・チェロ/コントラバス/
      アコーディオン・クラリネット・トランペット追加・表示整合）。
    どのブロックも当初は専用の物理モデルを持っていたが、音源が
@@ -13266,7 +13266,7 @@ boot();
     return curve;
   }
 
-  /* 【2026-08-24】再生中の「全楽器あわせた」同時発音数。
+  /* 再生中の「全楽器あわせた」同時発音数。
      ------------------------------------------------------------
      これまで数を見ていたのは this.active ＝ **楽器1つぶん**だけだった。
      ところが音が崩れる原因は端末ぜんたいの計算量なので、楽器が増えるほど
@@ -13365,7 +13365,7 @@ boot();
        ここで乱数を持たない理由は setSlide と同じ（再生と書き出しで音源の
        寿命が違うため、履歴を持つと結果がずれる）。呼び出し側が毎回渡す。 */
     setHit(pos){ this._hit = pos || 0; return this; }
-    /* 【2026-08-23 追加】スラー（弓を返さずに次の音へ移る）。
+    /* 【追加】スラー（弓を返さずに次の音へ移る）。
        ------------------------------------------------------------
        これまでは音符ごとに必ず新しく弓を当てていたので、なめらかに続く
        はずの所でも毎回「ザッ」という当たりの音が入り、打ち込み臭さの
@@ -13391,7 +13391,7 @@ boot();
       if(midi === null) return;
 
       /* 再生中は同時発音数を抑える（書き出しのときは制限しない） */
-      /* 【2026-08-24 変更】12 → 20。
+      /* 【変更】12 → 20。
          ここに引っかかった音は**まるごと鳴らない**。長い音（伸ばす伴奏・
          パッド・弦）では1音が数秒残るので重なりが増えやすく、
          旋律の音が丸ごと消える＝いちばん耳につく乱れになっていた。
@@ -13467,7 +13467,7 @@ boot();
       /* 和音や、音が重なっているところは簡易版で鳴らす。
          1音あたりの部品が11個から4個に減る。
          旋律のように重ならないところは、そのまま本来の音で鳴る。 */
-      /* 【2026-08-24 三度目】簡易版へ落とす基準を「音の長さ」で分ける。
+      /* 【三度目】簡易版へ落とす基準を「音の長さ」で分ける。
          ------------------------------------------------------------
          【経緯】
           ・元は busy>=3 / active>=5 の一律。
@@ -13485,11 +13485,11 @@ boot();
          長い音は本当に混んだときだけ落とす。CPUを食うのは数の多い
          短い音のほうなので、守りは効いたまま、伸びる音の音色は安定する。 */
       var longNote = sec >= 0.45;
-      /* 【2026-08-24】再生が間に合っていないと分かったら、迷わず軽くする。
+      /* 再生が間に合っていないと分かったら、迷わず軽くする。
          音色の違いより、音が途切れないことのほうが大事。 */
       var lite = false;
       try{ lite = this.live && typeof zcLiteOn === 'function' && zcLiteOn(); }catch(e){}
-      /* 【2026-08-24】楽器をまたいだ同時発音数でも落とす。
+      /* 楽器をまたいだ同時発音数でも落とす。
          実測（4小節・戦闘・160回サンプリング）:
            オーケストラ 中央8 / 上位10%12 / 最大15
            フルバンド   中央5 / 上位10%15 / 最大20
@@ -13656,7 +13656,7 @@ boot();
       var delayMs = this.live
         ? Math.max(50, (stopAt - Tone.now()) * 1000 + 80)
         : Math.max(50, (stopAt - t) * 1000 + 120);
-      /* 【2026-08-23 修正】この音を作った文脈を覚えてから片付ける。
+      /* 【修正】この音を作った文脈を覚えてから片付ける。
          ------------------------------------------------------------
          setTimeout は実時間で動くが、書き出しは実時間よりずっと速く終わる。
          音の長さから出したこの遅延（1〜2秒）は、書き出しでは必ず
@@ -13705,7 +13705,7 @@ boot();
 
   window.ZCnovaAcoustic = ZCnovaAcoustic;
   window.ZCNOVA_ACOUSTIC_SPECS = S;
-  /* 【2026-08-24】音色キー → 音源スペックの対応表。
+  /* 音色キー → 音源スペックの対応表。
      zcInstRange（楽器の音域）が外から引けるようにする。 */
   window.ZCNOVA_ACOUSTIC_MAP = MAP;
 
@@ -13822,7 +13822,7 @@ boot();
       on:['mel1','chord','drum'],
       // 大太鼓・小太鼓・シンバルはここには入れない（旋律を弾かせると曲にならないため）。
       // それらは下の『この楽器だけ』から選ぶ。
-      /* 【2026-08-23】オルゴール(glocken)・ベル(bell) を外した。
+      /* オルゴール(glocken)・ベル(bell) を外した。
          この2つは INSTRUMENTS 側の分類が「きらきら」で打楽器ではないため、
          「打楽器」を選んだのにオルゴールが鳴る＝UIと中身が食い違っていた。
          木琴・鉄琴・ティンパニ（fam:'打楽器'）だけにする。
@@ -13831,7 +13831,7 @@ boot();
              chord:['xylophone','glockenspiel'] }
     },
 
-    /* 【2026-08-23】ハープは弦楽器カテゴリへ収納した。
+    /* ハープは弦楽器カテゴリへ収納した。
        この定義は消していない。過去に「ハープ」を選んで保存した曲を開いたときに
        fam_harp が行き先を失わないようにするため。表示順（FAMILY_ORDER）から
        外してあるのでボタンとしては出てこない。 */
@@ -13890,7 +13890,7 @@ boot();
              wind2:['trumpet','horn','trombone','brass','tuba'] }
     },
 
-    /* 【2026-08-23 追加】「バンド」
+    /* 【追加】「バンド」
        ------------------------------------------------------------
        フルバンドは管楽器（サックス／トランペット）まで入る厚い編成なので、
        ギター・ベース・ドラム・シンセだけの、いわゆるバンド編成が選べなかった。
@@ -14277,7 +14277,7 @@ boot();
     try{
       try{ pickPM = 'fam_random_all'; }catch(e){}
       /* 同じ曲番号で作り直して、編成もシード内で決まるようにする（再現性を保つ）
-         【2026-08-23 修正㉕】makeNewSong は先頭で pushUndo() を呼ぶので、
+         【修正】makeNewSong は先頭で pushUndo() を呼ぶので、
          これを起動時に通すと「まだ何もしていないのに『↩ やり直す』が押せる」
          状態で始まっていた（押すと起動前の空の状態に戻ってしまう）。
          ここは初期値を整えているだけなので、この1回ぶんは記録しない。 */
@@ -14375,7 +14375,7 @@ boot();
                'melodyBassDrum','band','band','full'],
     folk:     ['harp','harp','melodyChord','melodyChord','counterChord',
                'melodyBass','band'],
-    /* 【2026-08-23 修正】拍子つき4曲調が登録漏れで、ランダム編成のとき
+    /* 【修正】拍子つき4曲調が登録漏れで、ランダム編成のとき
        一律 ZC_COMBOS.bright（明るい）の候補が使われていた。
        ワルツ＝室内楽寄り、舟歌＝旋律と伴奏中心、5拍子＝ジャズ寄り、
        変拍子＝バンド寄り、と性格に合わせて並べる。 */
@@ -14438,7 +14438,7 @@ boot();
 
 <script>
 /* ============================================================
-   【2026-08-24】いちばん最後に置くもの — 楽器の音域に合わせる
+   いちばん最後に置くもの — 楽器の音域に合わせる
    ------------------------------------------------------------
    makeSong は後方のパッチが何段も包み直していて、**曲を作り終えたあとに
    音色を選び直す**段がある（ZC_CPAT の伴奏型や、楽器カテゴリの音色決め）。
