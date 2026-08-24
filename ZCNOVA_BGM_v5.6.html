@@ -579,7 +579,7 @@ footer b{ color:var(--brass); }
            右の「● このパートだけ」で1本ずつ書き出せる。 -->
       <span style="display:inline-flex;gap:5px;align-items:center;">
         <select id="oneStemPick" title="書き出すパートを選びます" style="background:#1d1710;border:1px solid #4a3d2a;color:var(--text);border-radius:6px;padding:5px 6px;font-size:11px;font-family:inherit;"></select>
-        <button class="io-btn" id="oneStemBtn" title="選んだパートだけをWAVで書き出します（ZIPを作らないぶん速く、通信も不要）">● このパートだけ</button>
+        <button class="io-btn" id="oneStemBtn" title="選んだパートだけをWAVで書き出します（そのパート単体の音。動画編集で重ねたいとき用）">● このパートだけ</button>
       </span>
     </div>
 
@@ -610,7 +610,7 @@ footer b{ color:var(--brass); }
   </div>
 
   <!-- ===== ⑥ 効果音（SE）を作る ===== -->
-  <div class="card fold" id="card7">
+  <div class="card fold" id="card6">
     <div class="card-head fold-head">
       <div class="card-title"><span class="stage-no">6</span>効果音（SE）を作る<small>1発だけ鳴らして書き出します</small></div>
     </div>
@@ -695,7 +695,7 @@ footer b{ color:var(--brass); }
   </div>
 
   <!-- ===== ライセンス・利用について ===== -->
-  <div class="card fold" id="card6">
+  <div class="card fold" id="card7">
     <div class="card-head fold-head">
       <div class="card-title"><span class="stage-no">i</span>ライセンス・利用について<small>配布・商用利用の条件</small></div>
     </div>
@@ -9954,7 +9954,7 @@ function zcAutoSongName(){
   const d = new Date(), p = n => String(n).padStart(2, '0');
   return `${(mood && mood.label) || '曲'} ${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
-function zcSaveSongToList(){
+function zcSaveSongToList(fromTop){
   if(!song){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
   let name = ($('songName').value || '').trim();
   if(!name){ name = zcAutoSongName(); $('songName').value = name; }
@@ -9967,11 +9967,14 @@ function zcSaveSongToList(){
   if(!storeSongs(list)){ status('ioStatus', '保存できませんでした（保存容量がいっぱいです）', 'warn'); return; }
   renderSongList();
   status('ioStatus', `「${name}」を保存しました（${list.length}曲）`, 'ok');
-  /* 上部の保存から押されたときは⑤が閉じていて見えないので、上にも出す。 */
-  status('makeStatus', `「${name}」を保存しました（⑤「保存・書き出し」の一覧に並びます）`, 'ok');
+  /* 上部の💾から押したときは⑤が閉じていて上の案内が見えないので、そのときだけ
+     上にも出す。⑤の中から押したときは目の前に出ているので重ねない
+     （同じことを2箇所に出すと、どちらを読めばいいのか分からなくなる）。 */
+  if(fromTop) status('makeStatus',
+    `「${name}」を保存しました（⑤「保存・書き出し」の一覧に並びます）`, 'ok');
 }
-$('saveBtn').addEventListener('click', zcSaveSongToList);
-$('topSaveBtn').addEventListener('click', zcSaveSongToList);
+$('saveBtn').addEventListener('click', () => zcSaveSongToList(false));
+$('topSaveBtn').addEventListener('click', () => zcSaveSongToList(true));
 /* ============================================================
    書き出したファイルを端末へ渡す
    ------------------------------------------------------------
@@ -10193,142 +10196,109 @@ function zcRenderBusy(){
   status('ioStatus', 'いま書き出しを計算中です。終わってからもう一度押してください。', 'warn');
   return true;
 }
-$('renderBtn').addEventListener('click', async () => {
+/* ============================================================
+   書き出しボタン4つの共通の囲み
+   ------------------------------------------------------------
+   MP3・WAV・このパートだけ・この部分だけの4つは、囲みの部分
+   （二重起動の防止／曲の有無／編集のロック／ボタンの文字替え／
+     経過の表示／後片付け）がまったく同じで、違うのは
+   「何を計算して、何という名前で保存して、何と伝えるか」だけだった。
+   4箇所に同じ20行が並んでいると、片方だけ直して食い違う。
+     check … 押せる状態かを見て、計算に要るものを返す（駄目なら null）
+     job   … 計算して保存し、出したい案内文を返す
+   ============================================================ */
+async function zcRunExport(btnId, doneLabel, job, check){
   if(zcRenderBusy()) return;
   if(!song || !songSteps(song)){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
+  const arg = check ? check() : {};
+  if(!arg) return;                    /* check 側が理由を出して止めた */
   rendering = true;
-  zcSetEditLock(true);                       /* 【修正④】曲を作り替える操作を止める */
-  const btn = $('renderBtn');
+  zcSetEditLock(true);                /* 書き出し中は曲を作り替える操作を止める */
+  const btn = $(btnId);
   btn.classList.add('working'); btn.textContent = '● 書き出し中…';
   const t0 = performance.now();
-  const tick = startRenderTicker('renderBtn', '● 書き出し中…', 'ioStatus');
+  const tick = startRenderTicker(btnId, '● 書き出し中…', 'ioStatus');
+  const 秒 = () => ((performance.now() - t0) / 1000).toFixed(1);
   try{
+    status('ioStatus', await job(tick, arg, 秒), 'ok');
+  }catch(err){
+    status('ioStatus', '書き出せませんでした：' + err.message, 'warn');
+  }finally{
+    tick.stop();
+    btn.classList.remove('working'); btn.textContent = doneLabel;
+    zcSetEditLock(false);
+    rendering = false;
+  }
+}
+const MB = b => (b.size / 1024 / 1024).toFixed(1) + 'MB';
+
+$('renderBtn').addEventListener('click', () =>
+  zcRunExport('renderBtn', '● MP3で書き出す', async (tick, _a, 秒) => {
     const res = await renderSong(song, (m) => tick.tell(m));
     tick.tell('MP3に変換しています…');
     await new Promise(r => setTimeout(r, 0));   // 画面を1回描き直させる
     let blob = await encodeMp3(res, 192), ext = 'mp3';
     if(!blob){ blob = encodeWav(res); ext = 'wav'; }
     download(blob, songFileName(ext));
-    const ms = Math.round(performance.now() - t0);
-    status('ioStatus',
-      `書き出しました：${zcLastSavedName}（${fmtTime(res.seconds)}の曲／${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒で完了` +
-      (ext === 'wav' ? '／MP3の変換ができなかったのでWAVにしました' : '') + '）', 'ok');
-  }catch(err){
-    status('ioStatus', '書き出せませんでした：' + err.message, 'warn');
-  }finally{
-    tick.stop();
-  }
-  btn.classList.remove('working'); btn.textContent = '● MP3で書き出す';
-  zcSetEditLock(false);                      /* 【修正④】 */
-  rendering = false;
-});
-$('renderWavBtn').addEventListener('click', async () => {
-  if(zcRenderBusy()) return;
-  if(!song || !songSteps(song)){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
-  rendering = true;
-  zcSetEditLock(true);                       /* 【修正④】曲を作り替える操作を止める */
-  const btn = $('renderWavBtn');
-  btn.classList.add('working'); btn.textContent = '● 書き出し中…';
-  const t0 = performance.now();
-  const tick = startRenderTicker('renderWavBtn', '● 書き出し中…', 'ioStatus');
-  try{
+    return `書き出しました：${zcLastSavedName}（${fmtTime(res.seconds)}の曲／${MB(blob)}／${秒()}秒で完了`
+         + (ext === 'wav' ? '／MP3の変換ができなかったのでWAVにしました' : '') + '）';
+  }));
+
+$('renderWavBtn').addEventListener('click', () =>
+  zcRunExport('renderWavBtn', '● WAVで書き出す', async (tick, _a, 秒) => {
     const res = await renderSong(song, (m) => tick.tell(m));
     tick.tell('WAVに変換しています…');
     await new Promise(r => setTimeout(r, 0));
     const blob = encodeWav(res);
     download(blob, songFileName('wav'));
-    const ms = Math.round(performance.now() - t0);
-    status('ioStatus',
-      `書き出しました：${zcLastSavedName}（${fmtTime(res.seconds)}の曲／${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒で完了）`, 'ok');
-  }catch(err){
-    status('ioStatus', '書き出せませんでした：' + err.message, 'warn');
-  }finally{
-    tick.stop();
-  }
-  btn.classList.remove('working'); btn.textContent = '● WAVで書き出す';
-  zcSetEditLock(false);                      /* 【修正④】 */
-  rendering = false;
-});
-$('oneStemBtn').addEventListener('click', async () => {
-  if(zcRenderBusy()) return;
-  if(!song || !songSteps(song)){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
-  const key = $('oneStemPick').value;
-  const tr = TRACKS.find(t => t.key === key);
-  if(!tr || !song.tracks[key] || !song.tracks[key].on){
-    status('ioStatus', 'そのパートは鳴っていません', 'warn'); return;
-  }
-  rendering = true;
-  zcSetEditLock(true);                       /* 【修正④】曲を作り替える操作を止める */
-  const btn = $('oneStemBtn');
-  btn.classList.add('working'); btn.textContent = '● 書き出し中…';
-  const t0 = performance.now();
-  const tick = startRenderTicker('oneStemBtn', '● 書き出し中…', 'ioStatus');
-  try{
-    const res = await renderOneStem(song, key, (m) => tick.tell(m));
+    return `書き出しました：${zcLastSavedName}（${fmtTime(res.seconds)}の曲／${MB(blob)}／${秒()}秒で完了）`;
+  }));
+
+$('oneStemBtn').addEventListener('click', () =>
+  zcRunExport('oneStemBtn', '● このパートだけ', async (tick, tr, 秒) => {
+    const res = await renderOneStem(song, tr.key, (m) => tick.tell(m));
     tick.tell('WAVにしています…');
     const blob = encodeWav(res);
-    const base = songFileName('').replace(/\.$/, '');
-    download(blob, `${base}_${tr.label}.wav`);
-    const ms = Math.round(performance.now() - t0);
-    status('ioStatus',
-      `「${tr.label}」を書き出しました：${zcLastSavedName}（${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒）`, 'ok');
-  }catch(err){
-    status('ioStatus', '書き出せませんでした：' + err.message, 'warn');
-  }finally{
-    tick.stop();
-  }
-  btn.classList.remove('working'); btn.textContent = '● このパートだけ';
-  zcSetEditLock(false);                      /* 【修正④】 */
-  rendering = false;
-});
+    download(blob, `${songFileName('').replace(/\.$/, '')}_${tr.label}.wav`);
+    return `「${tr.label}」を書き出しました：${zcLastSavedName}（${MB(blob)}／${秒()}秒）`;
+  }, () => {
+    const key = $('oneStemPick').value;
+    const tr = TRACKS.find(t => t.key === key);
+    if(!tr || !song.tracks[key] || !song.tracks[key].on){
+      status('ioStatus', 'そのパートは鳴っていません', 'warn'); return null;
+    }
+    return tr;
+  }));
 
 /* 【2026-08-24 追加】曲の一部分だけを書き出す。 */
-$('sectionBtn').addEventListener('click', async () => {
-  if(zcRenderBusy()) return;
-  if(!song || !songSteps(song)){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
-  const v = ($('sectionPick').value || '').split('-');
-  const from = parseInt(v[0], 10), to = parseInt(v[1], 10);
-  if(!(from >= 0) || !(to >= from) || to >= song.arrangement.length){
-    status('ioStatus', '書き出す部分を選んでください', 'warn'); return;
-  }
-  const label = ($('sectionPick').selectedOptions[0] || {}).textContent || '';
-  const name = label.replace(/^\d+\.\s*/, '').replace(/（.*$/, '').trim() || '部分';
-  rendering = true;
-  zcSetEditLock(true);
-  const btn = $('sectionBtn');
-  btn.classList.add('working'); btn.textContent = '● 書き出し中…';
-  const t0 = performance.now();
-  const tick = startRenderTicker('sectionBtn', '● 書き出し中…', 'ioStatus');
-  try{
-    const res = await renderSection(song, from, to, (m) => tick.tell(m));
+$('sectionBtn').addEventListener('click', () =>
+  zcRunExport('sectionBtn', '● この部分だけ', async (tick, sec, 秒) => {
+    const res = await renderSection(song, sec.from, sec.to, (m) => tick.tell(m));
     tick.tell('WAVにしています…');
     const blob = encodeWav(res);
-    const base = songFileName('').replace(/\.$/, '');
-    download(blob, `${base}_${fnClean(name, 20) || 'part'}.wav`);
-    const ms = Math.round(performance.now() - t0);
-    status('ioStatus',
-      `「${name}」を書き出しました：${zcLastSavedName}（${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒）`, 'ok');
-  }catch(err){
-    status('ioStatus', '書き出せませんでした：' + err.message, 'warn');
-  }finally{
-    tick.stop();
-  }
-  btn.classList.remove('working'); btn.textContent = '● この部分だけ';
-  zcSetEditLock(false);
-  rendering = false;
-});
+    download(blob, `${songFileName('').replace(/\.$/, '')}_${fnClean(sec.name, 20) || 'part'}.wav`);
+    return `「${sec.name}」を書き出しました：${zcLastSavedName}（${MB(blob)}／${秒()}秒）`;
+  }, () => {
+    const v = ($('sectionPick').value || '').split('-');
+    const from = parseInt(v[0], 10), to = parseInt(v[1], 10);
+    if(!(from >= 0) || !(to >= from) || to >= song.arrangement.length){
+      status('ioStatus', '書き出す部分を選んでください', 'warn'); return null;
+    }
+    const label = ($('sectionPick').selectedOptions[0] || {}).textContent || '';
+    return { from, to, name: label.replace(/^\d+\.\s*/, '').replace(/（.*$/, '').trim() || '部分' };
+  }));
 
 /* パート別ZIPのボタン処理は撤去済み（ボタンごと無くなったため）。
    1パートずつの書き出しは上の oneStemBtn が担当する。 */
 
 /* ---------- ⑥ 効果音（SE） ---------- */
-async function playCurrentSE(){
+async function playCurrentSE(note){
   try{
     const midi = parseInt($('sePitch').value, 10);
     const dur = parseInt($('seDur').value, 10) / 100;
     const wobble = parseInt($('seWobble').value, 10);
     await previewSE(pickSE, midi, dur, seSeed, wobble);
-    status('seStatus', `「${SE_TYPES[pickSE].label}」を再生中…`, 'ok');
+    status('seStatus', `「${SE_TYPES[pickSE].label}」${note || 'を鳴らしました'}`, 'ok');
   }catch(err){
     status('seStatus', '再生できませんでした：' + err.message, 'warn');
   }
@@ -10419,7 +10389,9 @@ $('seWobble').addEventListener('input', (e) => {
 $('seWobble').addEventListener('change', () => playCurrentSE());
 $('seRandomBtn').addEventListener('click', () => {
   seSeed = newSeed();
-  playCurrentSE();
+  /* 種類は変えず、同じ種類の中で別の音を作る。押しても案内が
+     1文字も変わらないと効いたか分からないので、文を分けてある。 */
+  playCurrentSE('で、ちがう音を作りました');
 });
 
 $('sePreviewBtn').addEventListener('click', () => playCurrentSE());
