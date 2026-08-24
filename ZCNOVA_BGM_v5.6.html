@@ -254,7 +254,7 @@ footer b{ color:var(--brass); }
          試聴と効果音単体の書き出しは「効果音」カードに残っている。 -->
   </div>
 
-  <!-- 【修正⑦】再生できない理由は、押した指のすぐ近くに出す -->
+  <!-- 再生できない理由は、押した指のすぐ近くに出す -->
   <p class="status warn" id="playHint" style="display:none; margin:-10px 0 12px;"></p>
 
   <p class="hint" style="margin:-8px 0 14px;">
@@ -366,9 +366,9 @@ footer b{ color:var(--brass); }
     <div class="fx-row">
       <span class="t-label"></span>
       <button class="io-btn go" id="makeBtn">この設定で作る</button>
-      <!-- 【修正⑬】旧「もう一度（別の曲）」は makeBtn と全く同じ処理で、
-           名前だけ違うため「片方は同じ曲が出る」等と誤解されていた。
-           役割を分け、こちらは**設定を変えずに中身だけ作り直す**と明示する。 -->
+      <!-- makeBtn と役割を分けてある。こちらは**設定を変えずに中身だけ作り直す**。
+           （旧「もう一度（別の曲）」は makeBtn と全く同じ処理で、名前だけ違ったため
+             「片方は同じ曲が出る」と誤解されていた。） -->
       <button class="io-btn" id="againBtn" title="曲調などの設定はそのまま、中身だけ作り直します">🎲 もう1曲つくる</button>
     </div>
 
@@ -622,8 +622,7 @@ footer b{ color:var(--brass); }
     <div class="fx-row">
       <span class="t-label">レーン</span>
     <span class="sfx-loop" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-      <!-- 【修正⑲】この一群が何の設定なのか画面のどこにも書いていなかった。
-           起動直後に目に入る位置なのに「自動で置く」「裏」だけでは伝わらない。 -->
+      <!-- この一群が何の設定なのか、見出しが無いと「自動で置く」「裏」だけでは伝わらない。 -->
       <span class="badge" style="border-color:var(--border);color:var(--brass);">🔊 効果音レーン</span>
       <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);cursor:pointer;">
         <input type="checkbox" id="seLoopOn" title="拍に合わせて自動で置きます。切っても手で置いた効果音は残ります"> 自動で置く
@@ -12589,54 +12588,6 @@ boot();
 
 
 
-<script>
-/* ============================================================
-   ZCNOVA BOWED STRINGS — FINAL REPAIR / REAL INTEGRATION
-   ------------------------------------------------------------
-   バイオリン / チェロを既存 buildEngine の配線へ接続する。
-   既存の Master / Reverb / Track Gain / Pan / Offline 経路は
-   変更しない。専用音源は Tone の現在の Context を使用する。
-   ============================================================ */
-(function(){
-  'use strict';
-
-  /* ============================================================
-     【2026-08-22 整理】ZCnovaViolinFinal / ZCnovaCelloFinal を撤去した（151行）
-     ------------------------------------------------------------
-     ・既定（ZCNOVA_ACOUSTIC が ON）では、後方のアコースティック音源層が
-       必ず violin / cello を先に横取りするため、この2クラスには到達しなかった。
-     ・ZCNOVA_ACOUSTIC.off() にすると到達したが、そのとき **書き出しが完全に無音**
-       だった（実測: 14秒のバイオリンだけを書き出してピーク 0）。
-       コンストラクタで掴んだ AudioContext と Tone.Offline のコンテキストが
-       食い違う、いわゆる「再生では鳴るのに書き出しだけ無音」の罠。
-     ・つまり「到達しないか、到達すると壊れているか」のどちらかしかない状態だった。
-     ・撤去後、ZCNOVA_ACOUSTIC.off() のときは INSTRUMENTS.violin / cello に
-       元からある通常定義（AMSynth）が使われる。音は簡素になるが無音ではなくなる。
-     この下の PLAY_MODES 登録・トランペットの solo 修正・MAX_VOICES は
-     生きているので残してある。
-     ============================================================ */
-
-  /* 「だけ」は必ず実在する INSTRUMENTS key を指す。 */
-  if(!PLAY_MODES.some(x=>x.key==='violin')) PLAY_MODES.push({key:'violin',label:'バイオリンだけ',group:'楽器1つ',solo:'violin'});
-  if(!PLAY_MODES.some(x=>x.key==='cello')) PLAY_MODES.push({key:'cello',label:'チェロだけ',group:'楽器1つ',solo:'cello'});
-
-  /* 追加した楽器1つの項目を画面へ反映 */
-  if (typeof buildPlayModeButtons === 'function') {
-    buildPlayModeButtons();
-  }
-
-  const trumpetMode=PLAY_MODES.find(x=>x.key==='trumpetSolo');
-  if(trumpetMode) trumpetMode.solo='trumpet';
-
-  INSTRUMENTS.violin = INSTRUMENTS.violin || {label:'バイオリン',fam:'弦（擦る）'};
-  INSTRUMENTS.cello = INSTRUMENTS.cello || {label:'チェロ',fam:'弦（擦る）'};
-  MAX_VOICES.violin=8;MAX_VOICES.cello=6;
-
-
-  try{ if(typeof renderAll==='function' && typeof song!=='undefined' && song) renderAll(); }catch(e){console.warn(e);}
-  zcLog('ZCNOVA: bowed strings repaired and connected to existing engine');
-})();
-</script>
 
 <script>
 /* ============================================================
@@ -12686,12 +12637,14 @@ boot();
     [K.accordion]     : { label:'アコーディオン（単体演奏）',          fam:'リード' }
   };
 
-  /* アンサンブルで使う通常音色。無ければ最低限の定義を置いておく。 */
+  /* アンサンブルで使う通常音色。無ければ最低限の定義を置いておく。
+     （ZCNOVA_ACOUSTIC.off() にしたときは、この通常定義のほうが使われる） */
   INSTRUMENTS.violin   = INSTRUMENTS.violin   || { label:'バイオリン',   fam:'弦（擦る）' };
+  INSTRUMENTS.cello    = INSTRUMENTS.cello    || { label:'チェロ',       fam:'弦（擦る）' };
   INSTRUMENTS.sax      = INSTRUMENTS.sax      || { label:'サックス',     fam:'木管' };
   INSTRUMENTS.trumpet  = INSTRUMENTS.trumpet  || { label:'トランペット', fam:'金管' };
   INSTRUMENTS.clarinet = INSTRUMENTS.clarinet || { label:'クラリネット', fam:'木管' };
-  Object.assign(MAX_VOICES, { violin:8, sax:6, trumpet:6, clarinet:6 });
+  Object.assign(MAX_VOICES, { violin:8, cello:6, sax:6, trumpet:6, clarinet:6 });
 
   Object.keys(SOLO_VOICES).forEach(k => {
     if(!INSTRUMENTS[k]) INSTRUMENTS[k] = Object.assign({ soloOnly:true }, SOLO_VOICES[k]);
