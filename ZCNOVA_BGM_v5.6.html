@@ -391,8 +391,8 @@ footer b{ color:var(--brass); }
     </div>
     <p class="hint" id="makeHelp" style="display:none;">
       曲調ごとに<b>テンポ・音階・コード進行・楽器・リズム</b>がまとめて決まります。同じ曲調でも押すたびに違う曲になります。<br>
-      気に入った曲は、上のバーの<b>💾 この曲を保存</b>（この端末に残す）か
-      <b>⬇ ファイルに保存</b>（.jsonファイルとして残す）で残してください。
+      気に入った曲は、上のバーの<b>💾 この曲を保存</b>（この端末に残す）で残してください。
+      音のファイルとして残したいときは<b>⑤ 保存・書き出し</b>から MP3／WAV で書き出せます。
       <b>作り直すと同じ曲は戻ってきません。</b><br>
       <b>この設定で作る</b>はいまの曲のまま設定だけ反映します。
       <b>🎲 もう1曲つくる</b>は設定そのままで別の曲にします。<br>
@@ -558,9 +558,9 @@ footer b{ color:var(--brass); }
       <span class="t-label">保存した曲</span>
       <div class="song-list" id="songList" style="flex:1;"></div>
     </div>
-    <!-- 【2026-08-24】保存の行き先がどこなのか、画面のどこにも書いていなかった。
-         .json の書き出し／読み込みを外して保存を一本化したので、なおさら
-         「どこに残るのか／どうすると消えるのか」を先に見せておく。 -->
+    <!-- 保存はこの一本だけなので、「どこに残るのか／どうすると消えるのか」を
+         先に見せておく。ここが書いていないと、ブラウザのデータを消して
+         曲を丸ごと失う人が出る。 -->
     <p class="hint" style="margin-top:-6px;">
       保存先は<b>この端末のブラウザの中</b>です。ページを更新しても、タブを閉じても、
       パソコンを再起動しても残ります。<br>
@@ -1075,22 +1075,19 @@ function swingOffset(song, s){
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 
 /* ---------- 曲のたね（同じ手順で同じ曲を組み立てるための数） ----------
-   【2026-08-23】ここには「曲番号」を画面から入力するための読み取り
-   （zcToHalfWidth / zcReadSeed）があったが、番号で曲を管理するしくみを
-   やめたので撤去した。
+   ⚠️ この数（song.seed）を画面に出さないこと。
+   生成のしくみに手を入れると、同じ数からでも別の曲が出る。実際に
+   1日で3回そうなっている（伴奏の変化／ベースの乱数の取り方／進行の
+   選び方のバグ修正）。数は「作り方への入り口」なので、作り方が変われば
+   出てくる曲も変わる ── これは避けられない。守れない約束を画面に
+   出しておくほうが害が大きい、という判断で「曲番号」の入力欄は外した。
 
-   理由：生成のしくみに手を入れると、同じ番号からでも別の曲が出る。
-   実際この日だけで3回そうなっている（伴奏の変化／ベースの乱数の取り方／
-   進行の選び方のバグ修正）。番号は「作り方への入り口」なので、
-   作り方が変われば出てくる曲も変わる ── これは避けられない。
-   守れない約束を画面に出しておくほうが害が大きい。
-
-   曲を残す手段は「保存」と「.json 書き出し」に一本化した。
-   .json には音符そのものが入っていて読み込みは作り直しをしないので、
+   曲を残す手段は「💾 この曲を保存」（この端末に残す）に一本化してある。
+   保存には音符そのものが入っていて、開くときに作り直しをしないので、
    版が変わっても必ず同じ曲が戻る（検査 tests/cases/06-oldfile.mjs）。
 
-   song.seed（下の newSeed）は生成の乱数源として今までどおり要る。
-   画面に出さなくなっただけで、内部の再現性は変わらない。 */
+   たねそのものは生成の乱数源として今までどおり要る。画面に出さなく
+   なっただけで、内部の再現性は変わらない。 */
 let songRng = null;
 function makeRng(seed){
   let a = (seed >>> 0) || 1;
@@ -2340,11 +2337,6 @@ const MAX_VOICES = {
   glocken:8, bell:6, harp:8, pad:5, fat:5, strings:6,
   piano:12, ep:10, soft:10, lead:8, synth:8, retro:8,
 };
-/* 【整理】ここにあった makeVoice の最初の定義は削除した。
-   同じスクリプト内に同名の関数宣言が3つあり、巻き上げによって
-   最後の1つ（コントラバス対応版）だけが有効だったため、
-   この定義と次の「⑨ OVERRIDE」版は一度も呼ばれていなかった。 */
-
 /* ============================================================
    ZCnova Physical Piano — FINAL INTEGRATION CODE
    ------------------------------------------------------------
@@ -3771,11 +3763,6 @@ INSTRUMENTS.piano = {
 };
 
 
-/* 【整理】ここにあった「⑨ makeVoice OVERRIDE」は削除した。
-   同名の関数宣言が後方（⑩）にもう1つあり、巻き上げでそちらが
-   常に優先されるため、この定義は一度も実行されていなかった。
-   ピアノ分岐の内容は⑩の makeVoice にそのまま含まれている。 */
-
 /* ============================================================
    ⑩ コントラバス（アルコ／ピチカート）追加
    ------------------------------------------------------------
@@ -4000,7 +3987,16 @@ Object.assign(INSTRUMENTS, {
   contrabassPizz: { label:'コントラバス（ピチカート）', fam:'ベース', cls:'ZCnovaContrabass', poly:false, bassOnly:true }
 });
 
-/* ---------- makeVoice に コントラバスの分岐を追加（他は元のまま） ---------- */
+/* ---------- 音色キーから音源を作る（この1本だけ） ----------
+   ここが唯一の function 宣言で、このあと2回だけ**包み直される**。
+     ① 楽器の追加ぶん（アコーディオン／クラリネット／サックス）
+     ② アコースティック音源（管楽器・弦楽器・打楽器）
+   包む側は前の makeVoice を変数に取っておき、自分の担当キーでなければ
+   そちらへ渡す。だから「どの層が鳴らしているか」は上から順に追える。
+
+   ⚠️ 音色を足すときも必ず「包む」形にすること。同名の function 宣言を
+      増やすと巻き上げで**最後の1つだけ**が効き、前のものは一度も
+      呼ばれないまま残る。実際そうなっていた宣言が2つあった。 */
 function makeVoice(key, ksCache, live){
   if(key === 'contrabassArco') return new ZCnovaContrabass('arco');
   if(key === 'contrabassPizz') return new ZCnovaContrabass('pizz');
@@ -7524,9 +7520,8 @@ async function renderSE(type, midi, dur, seed, wobble){
   return { channels:out, sampleRate:sr, seconds:out[0].length / sr };
 }
 
-/* JSZip（パート別ZIP用）の読み込みは 2026-08-23 に撤去。
-   外部から読む部品が1つ減り、ライセンス表記もCDN差し替えの経路も減る。
-   いま外部から読むのは Tone.js（MIT）と lamejs（LGPL・MP3変換時のみ）だけ。 */
+/* 外部から読むのは Tone.js（MIT）と lamejs（LGPL・MP3変換のときだけ）の2つ。
+   足すとライセンス表記もCDN差し替えの経路も増えるので、増やさないこと。 */
 /* ---------- パートごとに1本ずつ書き出す ----------
    いま音が出ているパート（on:true のもの）だけを対象に、
    そのパート単体だけを鳴らした状態で renderSong を繰り返し呼ぶ。
@@ -8098,7 +8093,7 @@ function buildSectionPick(){
    つないでも段差にならない（1パート書き出しと同じ考え方）。 */
 /* 曲全体の音量の基準。部分を何回も書き出すたびに曲まるごと計算し直すと
    3分の曲で毎回40秒かかる（実測）。曲に変更があるまで覚えておく。
-   ・WeakMap なので保存する .json には入らない
+   ・WeakMap なので保存データには入らない
    ・scheduleAutosave（＝何か変えたとき）で捨てる */
 const ZC_MIX_GAIN = new WeakMap();
 function zcForgetMixGain(){ try{ if(typeof song !== 'undefined' && song) ZC_MIX_GAIN.delete(song); }catch(e){} }
@@ -8170,7 +8165,7 @@ function updateSpreadNote(){
 function markPicked(){
   if(!song) return;
   /* 【UI整理③】曲が別カテゴリの曲調に変わったときだけ、そのカテゴリを開く。
-     （保存した曲を開いた・.jsonを読んだ・やり直した等）
+     （保存した曲を開いた・やり直した等）
      ここで毎回開き直すと、カテゴリを見に行こうとして押した操作を
      その場で押し戻してしまい、他のカテゴリを開けなくなる。
      いま開いているカテゴリの中に選択中の曲調が居るなら、何もしない。 */
@@ -8203,7 +8198,7 @@ function markPicked(){
   try{ buildMixRangePick(); }catch(e){}
   try{ zcSyncLiteBtns(); }catch(e){}
   /* 【UI整理②】曲に焼き込まれているつまみを画面へ戻す。
-     保存した曲や .json を開いたとき、画面と曲の中身がずれないようにする。 */
+     保存した曲を開いたとき、画面と曲の中身がずれないようにする。 */
   if(song){
     const tw = song.melTweak || {};
     Object.keys(MEL_KNOBS).forEach(g => {
@@ -8291,7 +8286,7 @@ function renderPhrases(){
     b.dataset.ph = i;
     const cnt = ['mel1','mel2','sub','bass','wind1','wind2'].reduce((a,k) => a + ph[k].filter(v=>v).length, 0);
     /* 【2026-08-23 修正⑥】フレーズ名も innerHTML に入れない。
-       曲名（renderSongList）は先に直したが、フレーズ名は読み込んだ .json の
+       曲名（renderSongList）は先に直したが、フレーズ名は保存データの
        phrases[].name がそのまま入るので、同じ経路が残っていた。
        名前だけ textContent で入れ、飾りは要素を組み立てて足す。 */
     b.appendChild(document.createTextNode(ph.name || ('P' + (i+1))));
@@ -9279,7 +9274,7 @@ $('makeBtn').addEventListener('click', () => makeNewSong(song ? song.seed : unde
 $('againBtn').addEventListener('click', () => makeNewSong());
 /* 【UI整理②】melTweak は song 直下の素のオブジェクトなので、
    zcPackSong / zcUnpackSong（配列だけを圧縮する）をそのまま素通りする。
-   保存・読み込み・.json 書き出しのどれでも失われない。 */
+   保存しても開き直しても失われない。 */
 
 /* ---------- ② 流れ ---------- */
 $('phraseList').addEventListener('click', (e) => {
@@ -9686,10 +9681,9 @@ async function zcPlayPart(id){
   }
 }
 
-/* 【2026-08-24 撤去】previewFadeEdge / zcStopEdgePreview
-   曲を丸ごと計算してから端を切り出して鳴らしていた仕組み。
-   フェードを再生にも掛けられるようにしたので不要になった
-   （いまは zcPlayPart が、ふつうの再生と同じ仕組みでその場で鳴らす）。 */
+/* 頭／終わり／繋ぎ目は zcPlayPart が「ふつうの再生と同じ仕組み」でその場で鳴らす。
+   曲を丸ごと計算してから端を切り出す作りだったころは、3分の曲で十数秒待たされ、
+   しかも途中で止められなかった。 */
 $('fadeInPreviewBtn').addEventListener('click',  () => zcPlayPart('fadeInPreviewBtn'));
 $('fadeOutPreviewBtn').addEventListener('click', () => zcPlayPart('fadeOutPreviewBtn'));
 
@@ -9714,10 +9708,9 @@ const LIB_KEY = 'zcnova-bgm-studio-songs-v1';
    ② ドラム・アクセント・ゴーストは true/false の配列。
       "false," は6文字だが、"0" なら1文字で済む。
 
-   ⚠️ 圧縮するのは **localStorage に入れるときだけ**。
-   「ファイルに書き出す（.json）」は今までどおり生の形で出す
-   （他の版で開けなくなると困るため）。読み込み側は
-   どちらの形でも受け取れるので、古い保存データもそのまま開ける。
+   ⚠️ 圧縮するのは **localStorage に入れるときだけ**。読み出し側は
+   たたんだ形と生の形の両方を受け取れるので、古い保存データもそのまま開ける
+   （検査 tests/cases/06-oldfile.mjs が昔の版で保存した曲で見張っている）。
    ============================================================ */
 function zcPackArr(a){
   // すべて true/false の配列だけを "0101…" にたたむ（空配列は触らない）
@@ -9828,8 +9821,8 @@ function zcWriteAutosave(quiet){
       zcAutosaveWarned = true;
       status('ioStatus',
         '自動保存できませんでした（ブラウザの保存容量がいっぱいです）。' +
-        '下の「保存した曲」から要らないものを削除するか、' +
-        '「ファイルに書き出す（.json）」で手元に残してください。', 'warn');
+        '⑤「保存・書き出し」の「保存した曲」から要らないものを削除するか、' +
+        'MP3／WAVで書き出して手元に残してください。', 'warn');
     }
     return false;
   }
@@ -9905,7 +9898,7 @@ function renderSongList(){
     d.className = 'song-item';
     const dt = new Date(it.savedAt);
     /* 【2026-08-23 修正】曲名は innerHTML に入れない。
-       読み込んだ .json の song.name がそのまま曲名欄へ入り、保存すると
+       保存データの song.name がそのまま曲名欄へ入り、保存し直すと
        ここを通るので、細工したファイルを開かせるとスクリプトが走った。
        名前だけ textContent で入れ、残りの飾りは今までどおり組み立てる。 */
     const nm = document.createElement('span');
@@ -10129,14 +10122,14 @@ function songFileName(ext){
   return `bgm-${fnStamp()}-${String(zcFileNo).padStart(2, '0')}.${ext}`;
 }
 /* ============================================================
-   【2026-08-24 撤去】ファイルの読み込み
+   【設計上の決めごと】ファイルを読み込む入口は置かない
    ------------------------------------------------------------
    この道具は「既存の曲を一切参照せず、その場で計算して作る」という
-   作りが売りなので、外からファイルを取り込む入口を画面に置かない。
-   （読めたのはこの道具が書いた .json だけで、音源や他人の曲を
-     取り込む機能ではなかったが、**入口があること自体が設計の方向と
-     食い違う**という判断で外した。）
-   曲を残す手段は「💾 この曲を保存」（この端末に残す）に一本化した。
+   作りが売りなので、外からファイルを取り込むボタンを画面に置かない。
+   （以前あったものが読めたのはこの道具が書いた .json だけで、音源や
+     他人の曲を取り込む機能ではなかったが、**入口があること自体が
+     設計の方向と食い違う**という判断で外した。）
+   曲を残す手段は「💾 この曲を保存」（この端末に残す）に一本化してある。
    ============================================================ */
 
 /* ---------- 書き出し ---------- */
@@ -10288,9 +10281,6 @@ $('sectionBtn').addEventListener('click', () =>
     return { from, to, name: label.replace(/^\d+\.\s*/, '').replace(/（.*$/, '').trim() || '部分' };
   }));
 
-/* パート別ZIPのボタン処理は撤去済み（ボタンごと無くなったため）。
-   1パートずつの書き出しは上の oneStemBtn が担当する。 */
-
 /* ---------- ⑥ 効果音（SE） ---------- */
 async function playCurrentSE(note){
   try{
@@ -10307,11 +10297,10 @@ $('sePick').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if(!b) return;
   pickSE = b.dataset.se;
   document.querySelectorAll('#sePick button').forEach(x => x.classList.toggle('active', x === b));
-  syncSFXPick();   // トランスポート帯のクイック選択にも反映
+  syncSFXPick();
   playCurrentSE();
 });
-/* トランスポート帯のクイック選択と「効果音を重ねる」は撤去済み。
-   効果音の種類は
+/* 効果音の種類は
      ・試聴／単体書き出し … 「効果音」カードの種類ボタン（pickSE）
      ・曲に置く          … トラック編集の効果音レーン（song.se.type）
    の2か所で持つ。用途が別なので、同じ値を共有させない。 */
@@ -10370,7 +10359,6 @@ function zcApplySELane(rebuild){
 });
 $('seLoopVol').addEventListener('input', () => zcApplySELane(false));
 /* 効果音の種類を変えたら、レーンの中身も差し替える */
-/* （クイック選択は撤去済み。効果音の種類はトラック編集の効果音レーンで選ぶ） */
 $('sePitch').addEventListener('input', (e) => {
   const midi = parseInt(e.target.value, 10);
   setText('sePitchVal', midiToName(midi));
@@ -10481,7 +10469,7 @@ function boot(){
      **空配列 [] は truthy** なので `{"phrases":[],"tracks":{}}` が通ってしまい、
      直後の renderAll() が落ちて**アプリが白紙のまま起動しなくなる**。
      しかも壊れた値は localStorage に残るので、開き直しても直らず詰む。
-     読み込み(.json)側には検査を入れていたのに、ここが抜けていた。
+     保存データを開く側には検査を入れていたのに、ここが抜けていた。
 
      ・中身を検査してから使う
      ・それでも描画に失敗したら、壊れた自動保存を**捨てて**新しい曲で起動する
