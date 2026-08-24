@@ -607,7 +607,8 @@ footer b{ color:var(--brass); }
     </div>
     <p class="hint">
       書き出しは<b>鳴らさずに計算で作る</b>ので、再生するより速く終わります。
-      それでも<b>3分の曲でおよそ30〜60秒</b>かかります（機種と音数によって前後します）。
+      それでも計算にはしばらくかかります（曲の長さ・音の数・お使いの端末で
+      大きく変わります）。<b>ボタンが「● 書き出し中…」の間は終わっていません。</b>
       画面を閉じずにお待ちください。
       音量は動画で扱いやすい大きさに自動でそろえます。書き出し中は再生を止めます（同時に動かすと不安定になるため）。<br>
       「このパートだけ」は、選んだパート（メロディ・伴奏・ドラムなど）だけをWAVで書き出します。
@@ -10455,11 +10456,9 @@ async function zcRunExport(btnId, doneLabel, job, check){
   zcSetEditLock(true);                /* 書き出し中は曲を作り替える操作を止める */
   const btn = $(btnId);
   btn.classList.add('working'); btn.textContent = '● 書き出し中…';
-  const t0 = performance.now();
   const tick = startRenderTicker(btnId, '● 書き出し中…', 'ioStatus');
-  const 秒 = () => ((performance.now() - t0) / 1000).toFixed(1);
   try{
-    status('ioStatus', await job(tick, arg, 秒), 'ok');
+    status('ioStatus', await job(tick, arg), 'ok');
   }catch(err){
     status('ioStatus', '書き出せませんでした：' + err.message, 'warn');
   }finally{
@@ -10472,34 +10471,34 @@ async function zcRunExport(btnId, doneLabel, job, check){
 const MB = b => (b.size / 1024 / 1024).toFixed(1) + 'MB';
 
 $('renderBtn').addEventListener('click', () =>
-  zcRunExport('renderBtn', '● MP3で書き出す', async (tick, _a, 秒) => {
+  zcRunExport('renderBtn', '● MP3で書き出す', async (tick, _a) => {
     const res = await renderSong(song, (m) => tick.tell(m));
     tick.tell('MP3に変換しています…');
     await new Promise(r => setTimeout(r, 0));   // 画面を1回描き直させる
     let blob = await encodeMp3(res, 192), ext = 'mp3';
     if(!blob){ blob = encodeWav(res); ext = 'wav'; }
     download(blob, songFileName(ext));
-    return `書き出しました：${zcLastSavedName}（${fmtTime(res.seconds)}の曲／${MB(blob)}／${秒()}秒で完了`
+    return `書き出しました：${zcLastSavedName}（${fmtTime(res.seconds)}の曲／${MB(blob)}`
          + (ext === 'wav' ? '／MP3の変換ができなかったのでWAVにしました' : '') + '）';
   }));
 
 $('renderWavBtn').addEventListener('click', () =>
-  zcRunExport('renderWavBtn', '● WAVで書き出す', async (tick, _a, 秒) => {
+  zcRunExport('renderWavBtn', '● WAVで書き出す', async (tick, _a) => {
     const res = await renderSong(song, (m) => tick.tell(m));
     tick.tell('WAVに変換しています…');
     await new Promise(r => setTimeout(r, 0));
     const blob = encodeWav(res);
     download(blob, songFileName('wav'));
-    return `書き出しました：${zcLastSavedName}（${fmtTime(res.seconds)}の曲／${MB(blob)}／${秒()}秒で完了）`;
+    return `書き出しました：${zcLastSavedName}（${fmtTime(res.seconds)}の曲／${MB(blob)}）`;
   }));
 
 $('oneStemBtn').addEventListener('click', () =>
-  zcRunExport('oneStemBtn', '● このパートだけ', async (tick, tr, 秒) => {
+  zcRunExport('oneStemBtn', '● このパートだけ', async (tick, tr) => {
     const res = await renderOneStem(song, tr.key, (m) => tick.tell(m));
     tick.tell('WAVにしています…');
     const blob = encodeWav(res);
     download(blob, `${songFileName('').replace(/\.$/, '')}_${tr.label}.wav`);
-    return `「${tr.label}」を書き出しました：${zcLastSavedName}（${MB(blob)}／${秒()}秒）`;
+    return `「${tr.label}」を書き出しました：${zcLastSavedName}（${MB(blob)}）`;
   }, () => {
     const key = $('oneStemPick').value;
     const tr = TRACKS.find(t => t.key === key);
@@ -10511,12 +10510,12 @@ $('oneStemBtn').addEventListener('click', () =>
 
 /* 【追加】曲の一部分だけを書き出す。 */
 $('sectionBtn').addEventListener('click', () =>
-  zcRunExport('sectionBtn', '● この部分だけ', async (tick, sec, 秒) => {
+  zcRunExport('sectionBtn', '● この部分だけ', async (tick, sec) => {
     const res = await renderSection(song, sec.from, sec.to, (m) => tick.tell(m));
     tick.tell('WAVにしています…');
     const blob = encodeWav(res);
     download(blob, `${songFileName('').replace(/\.$/, '')}_${fnClean(sec.name, 20) || 'part'}.wav`);
-    return `「${sec.name}」を書き出しました：${zcLastSavedName}（${MB(blob)}／${秒()}秒）`;
+    return `「${sec.name}」を書き出しました：${zcLastSavedName}（${MB(blob)}）`;
   }, () => {
     const v = ($('sectionPick').value || '').split('-');
     const from = parseInt(v[0], 10), to = parseInt(v[1], 10);
@@ -10640,7 +10639,6 @@ async function doRenderSE(kind){
   const btn = $(kind === 'mp3' ? 'seRenderMp3Btn' : 'seRenderWavBtn');
   const label = btn.textContent;
   btn.classList.add('working'); btn.textContent = '● 書き出し中…';
-  const t0 = performance.now();
   try{
     const { midi, dur, wobble } = seKnobs();
     const res = await renderSE(pickSE, midi, dur, seSeed, wobble);
@@ -10659,9 +10657,8 @@ async function doRenderSE(kind){
        しくみをやめたので日時にする。番号を残しても入力する場所がもう無く、
        意味の分からない数字になるため。 */
     download(blob, safeName(`se_${pickSE}_${fnStamp()}`, ext));
-    const ms = Math.round(performance.now() - t0);
     status('seStatus',
-      `書き出しました：${zcLastSavedName}（${SE_TYPES[pickSE].label}／${(blob.size/1024).toFixed(0)}KB／${(ms/1000).toFixed(1)}秒で完了` +
+      `書き出しました：${zcLastSavedName}（${SE_TYPES[pickSE].label}／${(blob.size/1024).toFixed(0)}KB` +
       (kind === 'mp3' && ext === 'wav' ? '／MP3の変換ができなかったのでWAVにしました' : '') + '）', 'ok');
   }catch(err){
     status('seStatus', '書き出せませんでした：' + err.message, 'warn');
