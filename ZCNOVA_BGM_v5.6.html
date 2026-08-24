@@ -469,30 +469,38 @@ footer b{ color:var(--brass); }
     </div>
     <div class="fold-body">
 
+    <!-- 【2026-08-24 整理】つまみ1つずつに ▶ が付いていたが、どれにも処理が
+         書かれておらず**4つとも押しても何も起きなかった**。しかも止める側が
+         どこにも無かった。ここで鳴らしたいのは「いまの曲を流しながらつまみを
+         動かす」ことだけなので、再生／停止の1つにまとめる。
+         つまみは動かした瞬間に音へ反映されるので、▶ は各行に要らない。 -->
+    <div class="fx-row" style="margin-bottom:10px;">
+      <span class="t-label"></span>
+      <button class="io-btn save" id="mixPlayBtn"
+              title="曲を流しながらつまみを動かせます。もう一度押すと止まります">▶ 聴きながら調整</button>
+      <span class="hint" style="margin:0;">つまみは動かした瞬間に音へ反映されます</span>
+    </div>
+
     <div class="mixer" id="mixer"></div>
 
     <div class="split" style="margin-top:16px;">
       <div>
         <div class="fx-row"><span class="t-label">全体の音量</span>
-          <input type="range" id="masterVol" min="0" max="100" value="80"><span class="fx-val" id="masterVolVal">80%</span>
-          <button class="io-btn adj-play" data-adj-play title="再生中でなければ再生を始めます（再生中ならそのまま。動かすとすぐ音に反映されます）">▶</button></div>
+          <input type="range" id="masterVol" min="0" max="100" value="80"><span class="fx-val" id="masterVolVal">80%</span></div>
         <div class="fx-row"><span class="t-label">テンポ</span>
-          <input type="range" id="bpm" min="50" max="180" value="100"><span class="fx-val" id="bpmVal">100 BPM</span>
-          <button class="io-btn adj-play" data-adj-play title="再生中でなければ再生を始めます">▶</button></div>
+          <input type="range" id="bpm" min="50" max="180" value="100"><span class="fx-val" id="bpmVal">100 BPM</span></div>
         <div class="fx-row"><span class="t-label">音の明るさ</span>
-          <input type="range" id="vkBright" min="600" max="12000" step="100" value="12000"><span class="fx-val" id="vkBrightVal">そのまま</span>
-          <button class="io-btn adj-play" data-adj-play title="再生中でなければ再生を始めます">▶</button></div>
+          <input type="range" id="vkBright" min="600" max="12000" step="100" value="12000"><span class="fx-val" id="vkBrightVal">そのまま</span></div>
         <div class="fx-row"><span class="t-label">ひびき（残響）</span>
-          <input type="range" id="fxReverb" min="0" max="100" value="30"><span class="fx-val" id="fxReverbVal">30%</span>
-          <button class="io-btn adj-play" data-adj-play title="再生中でなければ再生を始めます">▶</button></div>
+          <input type="range" id="fxReverb" min="0" max="100" value="30"><span class="fx-val" id="fxReverbVal">30%</span></div>
       </div>
       <div>
         <div class="fx-row"><span class="t-label">フェードイン</span>
           <input type="range" id="fadeIn" min="0" max="8" step="0.5" value="0"><span class="fx-val" id="fadeInVal">なし</span>
-          <button class="io-btn" id="fadeInPreviewBtn" title="この設定で書き出したときの、頭の数秒だけを試聴します">▶ 頭を聴く</button></div>
+          <button class="io-btn" id="fadeInPreviewBtn" title="この設定で書き出したときの、頭の数秒だけを鳴らします。もう一度押すと止まります">▶ 頭を聴く</button></div>
         <div class="fx-row"><span class="t-label">フェードアウト</span>
           <input type="range" id="fadeOut" min="0" max="8" step="0.5" value="0"><span class="fx-val" id="fadeOutVal">なし</span>
-          <button class="io-btn" id="fadeOutPreviewBtn" title="この設定で書き出したときの、終わりの数秒だけを試聴します">▶ 終わりを聴く</button></div>
+          <button class="io-btn" id="fadeOutPreviewBtn" title="この設定で書き出したときの、終わりの数秒だけを鳴らします。もう一度押すと止まります">▶ 終わりを聴く</button></div>
         <div class="fx-row"><span class="t-label">ループ</span>
           <div class="pat-btns" id="loopPick">
             <button class="pat-btn active" data-loop="1">つなげて繰り返す</button>
@@ -500,8 +508,8 @@ footer b{ color:var(--brass); }
           </div>
         </div>
         <div class="fx-row"><span class="t-label"></span>
-          <button class="io-btn" id="loopCheckBtn">繋ぎ目を聴いてみる</button>
-          <span class="hint" style="margin:0;">終わり4秒＋頭4秒を続けて鳴らします</span>
+          <button class="io-btn" id="loopCheckBtn">▶ 繋ぎ目を聴く</button>
+          <span class="hint" style="margin:0;">終わり4秒＋頭4秒を続けて鳴らします（もう一度押すと止まります）</span>
         </div>
       </div>
     </div>
@@ -7175,20 +7183,88 @@ function sePageTurn(freq, dur, dest, t0, v){
   n.start(t0); n.stop(t0 + dur + 0.05);
   return [n, bp, g];
 }
+/* 【2026-08-24 作り直し】電撃・ビリビリ
+   ------------------------------------------------------------
+   【前の作り】短いFM音を8個、等間隔に並べていた。等間隔に「ピッ・ピッ」と
+   鳴るので、電撃というより短い電子音の連打に聞こえていた。
+   【実際の電撃の音】放電は音程のある音ではなく**帯域の広い雑音**で、
+   それが不規則に切れる（ジジッ）ことと、低いうなり（ブーン）が
+   重なることで「ビリビリ」に聞こえる。そこを作る。
+     ・広帯域の雑音を band-pass に通し、高いところから下へ落とす（放電）
+     ・その音量を**不規則にガタガタと切る**（これが「ビリビリ」の正体）
+     ・同じ切り方で低い矩形波も切る（うなり）
+     ・頭にごく短い高域のスパークを足す（バチッ）
+   【決まりごと】Math.random は使わない。切り方は steps（曲ごとに決まる
+   ゆらぎの値）から作るので、試聴と書き出しで必ず同じ音になる。
+   部品の数も 16個 → 7個 に減っている。 */
 function seZap(freq, dur, dest, t0, v){
   v = v || {};
   const steps = v.steps === undefined ? 8 : v.steps;
   const nodes = [];
-  for(let i = 0; i < steps; i++){
-    const s = new Tone.FMSynth({ harmonicity:1 + (i % 3), modulationIndex:15,
-      envelope:{ attack:0.001, decay:0.03, sustain:0, release:0.01 } });
-    const g = new Tone.Gain(0.35);
-    s.chain(g, dest);
-    const tt = t0 + (i / steps) * dur;
-    const f = freq * (1 + (i % 2 ? -0.3 : 0.5));
-    s.triggerAttackRelease(f, 0.02, tt, 1);
-    nodes.push(s, g);
+  /* ⚠️ Tone.Noise は鳴らすたびに違う雑音を作るので、試聴と書き出しで
+     音が変わってしまう（このアプリの決まりに反する）。雑音も種から作る。 */
+  const nseed = ((steps * 2654435761) + (Math.round(dur * 1000) * 40503) + 12345) >>> 0;
+  const rawCtx = (dest.context && dest.context.rawContext) || dest.context;
+  const noiseBuf = (seconds, sd) => {
+    const n = Math.max(1, Math.floor(rawCtx.sampleRate * seconds));
+    const buf = rawCtx.createBuffer(1, n, rawCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    let a = (sd >>> 0) || 1;
+    for(let i = 0; i < n; i++){
+      a ^= a << 13; a >>>= 0; a ^= a >>> 17; a ^= a << 5; a >>>= 0;
+      d[i] = (a / 4294967296) * 2 - 1;
+    }
+    return buf;
+  };
+  /* 種から作るギザギザ（同じ steps なら毎回まったく同じ並び） */
+  const jag = (i) => {
+    let h = Math.imul((i + 1) * 374761393 + steps * 668265263, 2246822519) >>> 0;
+    h ^= h >>> 13; h = Math.imul(h, 3266489917) >>> 0;
+    return ((h >>> 9) & 0xffff) / 0xffff;
+  };
+  /* 切る速さ。steps 4〜16 → 約64〜136回/秒。ここが遅いと「ブツブツ」、
+     速すぎると滑らかな雑音になって、どちらもビリビリに聞こえない。 */
+  const rate = 40 + steps * 6;
+  const N = Math.max(8, Math.min(400, Math.round(dur * rate)));
+
+  // --- 放電の雑音 ---
+  const nz = new Tone.ToneBufferSource({ url:noiseBuf(dur + 0.1, nseed), context:dest.context });
+  const bp = new Tone.Filter({ type:'bandpass', frequency:Math.max(800, freq * 6), Q:1.7 });
+  const ng = new Tone.Gain(0);
+  nz.chain(bp, ng, dest);
+  bp.frequency.setValueAtTime(Math.max(800, freq * 6), t0);
+  bp.frequency.exponentialRampToValueAtTime(Math.max(260, freq * 1.1), t0 + dur);
+
+  // --- 低いうなり（同じ切り方で切る＝1本の放電に聞こえる） ---
+  const os = new Tone.Oscillator({ frequency:Math.max(45, freq * 0.5), type:'square' });
+  const og = new Tone.Gain(0);
+  os.chain(og, dest);
+
+  for(let i = 0; i < N; i++){
+    const tt = t0 + (i / N) * dur;
+    const env = 1 - i / N;                 // 全体としては減衰していく
+    const on = jag(i) < 0.62;              // 6割強だけ鳴らし、残りは切る
+    /* 切るときはしっかり切る。ここに音を残すと「サーッ」という
+       ただの雑音になり、ビリビリに聞こえない（実測で確認）。 */
+    const lv = on ? (0.34 + jag(i + 500) * 0.40) : 0.004;
+    ng.gain.setValueAtTime(lv * env * env, tt);
+    og.gain.setValueAtTime((on ? 0.18 : 0.0) * env, tt);
   }
+  ng.gain.setValueAtTime(0, t0 + dur);
+  og.gain.setValueAtTime(0, t0 + dur);
+  nz.start(t0); nz.stop(t0 + dur + 0.05);
+  os.start(t0); os.stop(t0 + dur + 0.05);
+  nodes.push(nz, bp, ng, os, og);
+
+  // --- 頭のスパーク（バチッ） ---
+  const sp = new Tone.ToneBufferSource({ url:noiseBuf(0.1, nseed ^ 0x5bf03635), context:dest.context });
+  const sg = new Tone.Gain(0);
+  const hp = new Tone.Filter({ type:'highpass', frequency:2600, Q:0.7 });
+  sp.chain(hp, sg, dest);
+  sg.gain.setValueAtTime(0.9, t0);
+  sg.gain.exponentialRampToValueAtTime(0.0001, t0 + Math.min(0.06, dur * 0.35));
+  sp.start(t0); sp.stop(t0 + Math.min(0.08, dur));
+  nodes.push(sp, hp, sg);
   return nodes;
 }
 
@@ -8851,6 +8927,7 @@ function syncControls(){
   setText('densityVal', zcDensityLabel(song.density));   /* 【修正⑰】 */
   $('humanize').value = song.humanize;
   setText('humanizeVal', song.humanize === 0 ? '機械的' : song.humanize + '%');
+  try{ zcSyncMixPlayBtn(); }catch(e){}
 }
 
 /* ---------- 再生 ---------- */
@@ -8924,12 +9001,13 @@ async function togglePlay(){
        止め方が分からない状態になっていた（実測：押すと started に戻り、
        書き出しが終わってもそのまま鳴り続ける）。
        止める操作はいつでも通す（鳴りっぱなしのほうが困るため）。 */
-    if(playing){ stopPlayback(); clearHighlight(); $('playBtn').textContent = '▶'; }
+    if(playing){ stopPlayback(); clearHighlight(); $('playBtn').textContent = '▶'; try{ zcSyncMixPlayBtn(); }catch(e){} }
     else if(rendering || zcOfflineBusy){
       zcPlayHint('書き出しの計算中は再生できません。終わるまでお待ちください（書き出したファイルには影響しません）。');
       $('playBtn').textContent = '▶';
     }
     else { await restartPlayback(); $('playBtn').textContent = '⏸'; }
+    try{ zcSyncMixPlayBtn(); }catch(e){}
   }finally{
     // 再生中でもロックは解除する。次のクリックはplaying状態を見て停止／再生を判断する。
     ZC_PLAY_LOCK = false;
@@ -9429,6 +9507,21 @@ document.querySelectorAll('.adj-play').forEach(b => {
   b.addEventListener('click', () => ensurePlaying());
 });
 
+/* 【2026-08-24】④の再生／停止。
+   ------------------------------------------------------------
+   以前はつまみ1行ごとに ▶ が並び、しかも押すと「止まっていたら始める」
+   だけで**止める手段がどこにも無かった**。1つにまとめて、押すたびに
+   始める／止めるが入れ替わる形にする。 */
+function zcSyncMixPlayBtn(){
+  const b = $('mixPlayBtn'); if(!b) return;
+  b.textContent = playing ? '■ 止める' : '▶ 聴きながら調整';
+  b.style.opacity = '1';
+}
+$('mixPlayBtn').addEventListener('click', async () => {
+  try{ await togglePlay(); }catch(e){}
+  zcSyncMixPlayBtn();
+});
+
 /* 【2026-08-23 ⑯ 見送り・理由あり】
    ------------------------------------------------------------
    「端の4秒しか聴かないのに全長を計算している」のは事実で、10分の曲では
@@ -9453,17 +9546,57 @@ document.querySelectorAll('.adj-play').forEach(b => {
 /* フェードイン／フェードアウトの試聴。ライブ再生にはフェードの仕組みが
    無い（フェードは書き出し時にだけ効く）ので、実際に render して
    その一部だけを切り出して鳴らす。loopCheckBtn と同じ発想・同じ手段。 */
+/* 【2026-08-24】試聴を止められるようにする。
+   鳴っている途中でもう一度押せば止まる（止め方が無いのがいちばん困る）。 */
+let zcEdgeSrc = null;
+function zcStopEdgePreview(){
+  if(zcEdgeSrc){ try{ zcEdgeSrc.stop(); }catch(e){} try{ zcEdgeSrc.disconnect(); }catch(e){} }
+  zcEdgeSrc = null;
+  const a = $('fadeInPreviewBtn'), b = $('fadeOutPreviewBtn');
+  if(a) a.textContent = '▶ 頭を聴く';
+  if(b) b.textContent = '▶ 終わりを聴く';
+}
 async function previewFadeEdge(which){
   if(!song || !songSteps(song)) return;
+  if(zcEdgeSrc){ zcStopEdgePreview(); status('mixStatus', '止めました'); return; }
   if(!zcOfflineLock('mixStatus')) return;
   const label = which === 'in' ? '頭' : '終わり';
+  const btn = $(which === 'in' ? 'fadeInPreviewBtn' : 'fadeOutPreviewBtn');
+  if(btn) btn.textContent = '… 計算中';
   status('mixStatus', `${label}を計算しています…`);
+  const origArr = song.arrangement.slice();
   try{
-    const res = await renderSong(song);
-    const sr = res.sampleRate, len = res.channels[0].length;
     const sec = which === 'in'
       ? Math.max(1, (song.fadeIn || 0) + 2)
       : Math.max(1, (song.fadeOut || 0) + 2);
+    /* 【2026-08-23 ⑯で見送った短縮を、ここで有効にする】
+       見送った理由は「並びを切り詰めると音量の倍率が変わり、全長版と
+       最大0.4986ずれる。本来の倍率を得るには先に全長を計算する必要があり
+       堂々巡り」だった。いまは全体の倍率を一度測って覚える仕組み
+       （zcMixGainOf / ZC_MIX_GAIN）があるので、それを渡せば堂々巡りに
+       ならない。まだ測っていないときだけ全長を1回計算する（以後は使い回し）。
+       これで2回目以降は端だけの計算＝数秒で鳴る。 */
+    const gain = await zcMixGainOf(song, (m) => status('mixStatus', m));
+    const secOfSlot = (pi) => {
+      const ph = song.phrases[pi];
+      return ph ? ph.bars * beatsPerBar(song) * 60 / (song.bpm || 100) : 0;
+    };
+    const need = sec + 2;
+    let sub;
+    if(which === 'in'){
+      let k = 0, acc = 0;
+      while(k < origArr.length && acc < need){ acc += secOfSlot(origArr[k]); k++; }
+      sub = origArr.slice(0, Math.max(1, k));
+    } else {
+      let j = origArr.length, acc = 0;
+      while(j > 0 && acc < need){ j--; acc += secOfSlot(origArr[j]); }
+      sub = origArr.slice(Math.min(j, origArr.length - 1));
+    }
+    song.arrangement = sub;
+    const res = await renderSong(song, null, { fixedGain: gain });
+    song.arrangement = origArr;
+
+    const sr = res.sampleRate, len = res.channels[0].length;
     const n = Math.min(Math.floor(sr * sec), len);
     const ctx = Tone.getContext().rawContext;
     const buf = ctx.createBuffer(res.channels.length, n, sr);
@@ -9474,9 +9607,17 @@ async function previewFadeEdge(which){
     }
     if(!started){ await Tone.start(); started = true; }
     const src = ctx.createBufferSource();
-    src.buffer = buf; src.connect(ctx.destination); src.start();
-    status('mixStatus', `${label}（${sec.toFixed(1)}秒）を鳴らしています`, 'ok');
-  }catch(err){ status('mixStatus', '試聴できませんでした：' + err.message, 'warn'); }
+    src.buffer = buf; src.connect(ctx.destination);
+    src.onended = () => { if(zcEdgeSrc === src) zcStopEdgePreview(); };
+    src.start();
+    zcEdgeSrc = src;
+    if(btn) btn.textContent = '■ 止める';
+    status('mixStatus', `${label}（${sec.toFixed(1)}秒）を鳴らしています。もう一度押すと止まります`, 'ok');
+  }catch(err){
+    song.arrangement = origArr;
+    zcStopEdgePreview();
+    status('mixStatus', '試聴できませんでした：' + err.message, 'warn');
+  }
   finally{ zcOfflineUnlock(); }
 }
 $('fadeInPreviewBtn').addEventListener('click', () => previewFadeEdge('in'));
