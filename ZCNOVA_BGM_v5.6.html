@@ -162,16 +162,6 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
 .chord-cell.bar-start{ border-left:2px solid rgba(200,150,62,0.45); }
 .chord-cell.playing{ outline:2px solid #fff; outline-offset:-1px; }
 
-/* ---- 音色の選択（系統ごとに1行） ---- */
-.wave-mini{ display:flex; flex-direction:column; align-items:flex-start; gap:3px; }
-.wave-mini .wline{ display:flex; gap:4px; align-items:center; flex-wrap:nowrap; }
-.wave-mini .wfam{ width:76px; flex-shrink:0; font-size:10px; color:var(--text-dim);
-  text-align:right; padding-right:4px; white-space:nowrap; }
-.wave-mini button{ padding:4px 9px; font-size:10.5px; border-radius:7px; cursor:pointer;
-  background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.16); color:var(--text); }
-.wave-mini button.active{ background:var(--teal); border-color:var(--teal); color:#14100c;
-  font-weight:700; box-shadow:0 0 0 2px rgba(79,176,168,0.32); }
-
 /* ---- フレーズと並び ---- */
 .phrase-list{ display:flex; gap:6px; flex-wrap:wrap; }
 .phrase{ padding:6px 12px; border-radius:8px; cursor:pointer; font-size:12px;
@@ -917,7 +907,6 @@ function zcLog(){
    実時間で録るしかなかった。ここが一番大きな違い。
    ============================================================ */
 
-const STEPS_PER_BAR = 16;          // 16分音符きざみ（4/4のときの1小節。既定値として残す）
 
 /* ============================================================
    ⑨ 拍子（time signature）— 2026-08-23 フェーズ0
@@ -985,11 +974,6 @@ function posInBeat(song, s){
   const m = meterOf(song);
   return (s % m.stepsPerBar) - m.beatStarts[beatIndexInBar(song, s % m.stepsPerBar)];
 }
-// 小節の中で強拍（accents）にあたるか
-function isAccentStep(song, s){
-  return meterOf(song).accents.indexOf(s % meterOf(song).stepsPerBar) >= 0;
-}
-
 /* ⑨ パターン表の切り替え。4/4 のときは必ず従来の表をそのまま返す。
    （ここが「既存曲を1音も変えない」ことの担保。表を1つも作り替えていない） */
 function drumPatterns(song){
@@ -1003,10 +987,6 @@ function chordPatterns(song){
 function bassPatterns(song){
   const m = (song && song.meter) || DEFAULT_METER;
   return m === DEFAULT_METER ? BASS_PATTERNS : (BASS_PATTERNS_BY_METER[m] || BASS_PATTERNS);
-}
-function rhythmCells(song){
-  const m = (song && song.meter) || DEFAULT_METER;
-  return m === DEFAULT_METER ? RHYTHM_CELLS : (RHYTHM_CELLS_BY_METER[m] || RHYTHM_CELLS);
 }
 
 /* ------------------------------------------------------------
@@ -1129,7 +1109,6 @@ function withSeed(seed, fn){
   try{ return fn(); } finally { songRng = prev; }
 }
 function pick(a){ return a[Math.floor(rnd() * a.length)]; }
-function pickN(a, n){ const o = []; for(let i=0;i<n;i++) o.push(pick(a)); return o; }
 function chance(p){ return rnd() < p; }
 
 /* 曲の乱数列（songRng）を消費せずに、seed から再現可能な 0〜1 を作る。
@@ -2348,9 +2327,6 @@ class PluckedString {
     return this;
   }
 }
-
-/* ---------- 音の質感（全楽器に共通の調整） ---------- */
-const voiceKnobs = { bright:12000 };
 
 function instOpts(spec){
   return JSON.parse(JSON.stringify(spec.opts || {}));
@@ -4745,49 +4721,6 @@ function genMotif(song){
   return out;
 }
 
-// 1小節ぶんのリズムの型。#2 の拍組み立てが使えないときの控えとして残す。
-const RHYTHM_CELLS = [
-  [0],[8],[0,8],[4,12],[0,6],[8,14],
-  [0,4,8],[0,6,10],[0,8,12],[2,8,14],[0,4,14],
-  [0,4,8,12],[0,3,8,11],[0,2,8,10],[0,6,8,14],[2,4,10,12],[0,4,6,12],
-  [0,2,4,8,12],[0,3,6,8,12],[0,4,6,8,12,14],[0,2,6,8,10,14],
-  [0,4,7,8,12,15],[0,2,4,8,10,12],
-  [0,2,4,6,8,10,12,14],[0,2,3,6,8,10,11,14],[0,1,4,6,8,9,12,14],
-];
-/* ⑨ 拍子ごとの旋律リズム型。genMelodyInto は「欲しい音数±2」で絞り込むので、
-   1音のものから8音のものまで幅を持たせておくこと（絞り込みで空になると
-   pick(全部) にフォールバックして、拍子に合わない型が出る）。 */
-const RHYTHM_CELLS_BY_METER = {
-  '3/4': [
-    [0],[4],[0,8],[0,4],[4,8],[0,6],
-    [0,4,8],[0,2,8],[0,6,10],[2,6,10],[0,4,10],
-    [0,2,4,8],[0,4,6,10],[0,3,6,9],[0,2,6,8],
-    [0,2,4,6,8],[0,4,5,8,10],
-    [0,2,4,6,8,10],[0,1,4,6,8,10]
-  ],
-  '6/8': [
-    [0],[6],[0,6],[0,4],[4,10],
-    [0,4,6],[0,6,10],[0,2,6],[0,6,8],
-    [0,2,6,8],[0,3,6,9],[0,4,6,10],
-    [0,2,4,6,8],[0,6,8,10],
-    [0,2,4,6,8,10],[0,1,2,6,7,8]
-  ],
-  '5/4': [
-    [0],[12],[0,12],[0,8],[4,16],
-    [0,8,12],[0,4,12],[0,12,16],[0,6,12],
-    [0,4,8,12],[0,6,12,18],[0,4,12,16],
-    [0,4,8,12,16],[0,2,4,12,14],[0,3,6,12,15],
-    [0,2,4,6,8,12,14],[0,2,4,8,12,14,16],
-    [0,2,4,6,8,10,12,14,16,18]
-  ],
-  '7/8': [
-    [0],[8],[0,8],[0,4],[4,12],
-    [0,4,8],[0,6,8],[0,8,12],[4,8,12],
-    [0,2,4,8],[0,4,8,10],[0,4,8,12],
-    [0,2,4,8,10],[0,4,8,10,12],
-    [0,2,4,6,8,10],[0,2,4,6,8,10,12]
-  ]
-};
 // 旋律の輪郭。ただ音を並べるだけだと「上がって下がる」形にならない。
 const CONTOURS = [
   { key:'arch',  f:(t) => Math.sin(Math.PI * t) },
@@ -4818,13 +4751,14 @@ function emptyPhrase(bars, song){
   ph.inv = new Array(nb).fill(0);
   return ph;
 }
+/* このフレーズに音が1つでも入っているか。tests/ の検査（①生成の健全性・
+   ⑥昔の版で保存した曲）が「無音のフレーズが混ざっていないか」を見るのに使う。 */
 function phraseHasNotes(ph){
   if(!ph) return false;
   if(ph.chord.some(v => v !== null && v !== undefined)) return true;
   if(['mel1','mel2','sub','bass','wind1','wind2'].some(k => ph[k].some(v => v))) return true;
   return Object.keys(ph.drum).some(k => ph.drum[k].some(Boolean));
 }
-
 /* ---------- コードの構成音 ---------- */
 /* ============================================================
    B-2 旋律が着地する和音の音（2026-08-23 追加）
@@ -7657,51 +7591,6 @@ async function renderOneStem(song, trackKey, onProgress){
   }
 }
 
-/* ⚠️ この関数はもう呼ばれていない（ZIPボタンを撤去したため）。
-   消さずに名前だけ変えて残す。1パートずつの書き出し（renderOneStem）と
-   音量のそろえ方が同じで、将来まとめて書き出す形に戻すときの土台になるため。
-   このファイルの他の「印だけ付けて残す」と同じ扱い。 */
-async function __unusedRenderStems(song, onProgress){
-  const original = JSON.parse(JSON.stringify(song.tracks));
-  const stems = [];
-  /* 【2026-08-23 修正⑮】画面が見ている song には触らず、複製に対して書き出す。
-     ------------------------------------------------------------
-     以前は song.tracks を一時的な設定に差し替えたまま await していた。
-     renderSong の中には進捗表示のための `await setTimeout(r,0)` があり、
-     そこでブラウザに制御が戻るので、その隙に利用者がミキサーを触ると
-     一時設定（1パートだけON）に対して操作したことになり、finally で
-     捨てられて消える。さらにその間に scheduleAutosave() が起きると
-     **1パートだけONの状態が自動保存に焼かれる**。
-     複製を作ってそちらを書き出せば、画面側の song は最初から最後まで無傷。 */
-  const work = JSON.parse(JSON.stringify(song));
-  try{
-    const parts = TRACKS.filter(x => original[x.key] && original[x.key].on);
-    const total = parts.length;
-
-    if(onProgress) onProgress('全体の音量を測っています…');
-    const mix = await renderSong(work, null);
-    const sharedGain = mix.gain;
-
-    for(const t of parts){
-      if(onProgress){
-        onProgress(`パート ${stems.length + 1}/${total}　「${t.label}」を計算しています…`);
-      }
-      const temp = {};
-      TRACKS.forEach(tt => {
-        temp[tt.key] = Object.assign({}, original[tt.key], {
-          on: tt.key === t.key, mute:false, solo:false
-        });
-      });
-      work.tracks = temp;
-      const res = await renderSong(work, null, { fixedGain: sharedGain });
-      stems.push({ key:t.key, label:t.label, blob:encodeWav(res) });
-    }
-  } finally {
-    work.tracks = original;      // 複製側を戻す（画面の song はそもそも触っていない）
-  }
-  return stems;
-}
-
 /* ============================================================
    画面
    ============================================================ */
@@ -8255,26 +8144,8 @@ function buildSEButtons(){
     w.appendChild(line);
   });
 }
-/* 2026-08-23 追加：トランスポート帯の「効果音を重ねる」クイック選択。
-   ⑥の設定（種類・高さ・長さ・ゆらぎ・SE番号）をそのまま使い回す。
-   新しい生成ロジックは無く、既存の pickSE / playCurrentSE の入口を
-   スクロールせずに押せる場所へもう1つ置くだけ。 */
-function buildSFXQuickPick(){
-  const w = $('sfxQuickPick'); if(!w) return;
-  w.innerHTML = '';
-  ['ノイズ系','クリック系','スイープ系','コミカル系'].forEach(g => {
-    const og = document.createElement('optgroup'); og.label = g;
-    Object.keys(SE_TYPES).filter(k => SE_TYPES[k].group === g).forEach(k => {
-      const o = document.createElement('option');
-      o.value = k; o.textContent = SE_TYPES[k].label;
-      og.appendChild(o);
-    });
-    w.appendChild(og);
-  });
-  w.value = pickSE;
-}
+/* 効果音の種類ボタンの選択表示を合わせる。 */
 function syncSFXPick(){
-  const w = $('sfxQuickPick'); if(w) w.value = pickSE;
   document.querySelectorAll('#sePick button').forEach(b =>
     b.classList.toggle('active', b.dataset.se === pickSE));
 }
@@ -9189,7 +9060,7 @@ async function togglePlay(){
        書き出しが終わってもそのまま鳴り続ける）。
        止める操作はいつでも通す（鳴りっぱなしのほうが困るため）。 */
     if(playing){ stopPlayback(); clearHighlight(); $('playBtn').textContent = '▶'; try{ zcSyncMixPlayBtn(); }catch(e){} }
-    else if(rendering || zcOfflineBusy){
+    else if(rendering){
       zcPlayHint('書き出しの計算中は再生できません。終わるまでお待ちください（書き出したファイルには影響しません）。');
       $('playBtn').textContent = '▶';
     }
@@ -9657,24 +9528,6 @@ $('loopPick').addEventListener('click', (e) => {
     ? '頭とお尻がつながるように書き出します（動画でループさせる用）'
     : '1回で終わる形で書き出します');
 });
-// 繋ぎ目の確認：終わりの4秒＋頭の4秒を続けて鳴らす
-/* 【2026-08-23 追加】オフライン書き出しの排他ロック。
-   Tone.Offline は計算のあいだ**グローバルの音声コンテキストを差し替える**
-   （Tone.js 14 の Offline.js: setContext(offline) → callback → setContext(元)）。
-   書き出し・繋ぎ目確認・フェード試聴・パート別書き出しはどれも Tone.Offline を
-   使うのに、ロックは書き出しボタンにしか無く、書き出し中でも繋ぎ目確認が
-   押せて2本同時に走れる状態だった。1つのロックにまとめる。 */
-let zcOfflineBusy = false;
-function zcOfflineLock(statusId){
-  if(zcOfflineBusy || rendering){
-    if(statusId) status(statusId, 'いま別の書き出し／試聴を計算中です。終わってからもう一度押してください。', 'warn');
-    return false;
-  }
-  zcOfflineBusy = true;
-  return true;
-}
-function zcOfflineUnlock(){ zcOfflineBusy = false; }
-
 /* 【2026-08-24 作り直し】繋ぎ目もその場で鳴らす。
    以前はここで曲を丸ごと計算し、終わり4秒＋頭4秒を貼り合わせて
    鳴らしていた（3分の曲で十数秒待ち、しかも止められなかった）。
@@ -10329,9 +10182,20 @@ function zcSetEditLock(on){
   });
 }
 let rendering = false;
+/* 書き出しは Tone.Offline を使い、計算のあいだ**グローバルの音声コンテキストを
+   差し替える**（Tone.js 14 の Offline.js: setContext(offline) → callback → 戻す）。
+   2本同時に走らせるとお互いの音を壊すので、4つの書き出しボタンはこの旗ひとつで
+   排他にする。
+   ⚠️ 以前はもう1つ別のロックがあったが、繋ぎ目確認とフェード試聴が
+      Tone.Offline を使わない「その場で鳴らす」方式に変わり、
+      Tone.Offline を使うのは書き出しだけになったので1つにまとめた。 */
+function zcRenderBusy(){
+  if(!rendering) return false;
+  status('ioStatus', 'いま書き出しを計算中です。終わってからもう一度押してください。', 'warn');
+  return true;
+}
 $('renderBtn').addEventListener('click', async () => {
-  if(rendering) return;
-  if(zcOfflineBusy){ status('ioStatus', 'いま別の試聴を計算中です。終わってからもう一度押してください。', 'warn'); return; }
+  if(zcRenderBusy()) return;
   if(!song || !songSteps(song)){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
   rendering = true;
   zcSetEditLock(true);                       /* 【修正④】曲を作り替える操作を止める */
@@ -10360,8 +10224,7 @@ $('renderBtn').addEventListener('click', async () => {
   rendering = false;
 });
 $('renderWavBtn').addEventListener('click', async () => {
-  if(rendering) return;
-  if(zcOfflineBusy){ status('ioStatus', 'いま別の試聴を計算中です。終わってからもう一度押してください。', 'warn'); return; }
+  if(zcRenderBusy()) return;
   if(!song || !songSteps(song)){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
   rendering = true;
   zcSetEditLock(true);                       /* 【修正④】曲を作り替える操作を止める */
@@ -10388,8 +10251,7 @@ $('renderWavBtn').addEventListener('click', async () => {
   rendering = false;
 });
 $('oneStemBtn').addEventListener('click', async () => {
-  if(rendering) return;
-  if(zcOfflineBusy){ status('ioStatus', 'いま別の試聴を計算中です。終わってからもう一度押してください。', 'warn'); return; }
+  if(zcRenderBusy()) return;
   if(!song || !songSteps(song)){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
   const key = $('oneStemPick').value;
   const tr = TRACKS.find(t => t.key === key);
@@ -10423,8 +10285,7 @@ $('oneStemBtn').addEventListener('click', async () => {
 
 /* 【2026-08-24 追加】曲の一部分だけを書き出す。 */
 $('sectionBtn').addEventListener('click', async () => {
-  if(rendering) return;
-  if(zcOfflineBusy){ status('ioStatus', 'いま別の試聴を計算中です。終わってからもう一度押してください。', 'warn'); return; }
+  if(zcRenderBusy()) return;
   if(!song || !songSteps(song)){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
   const v = ($('sectionPick').value || '').split('-');
   const from = parseInt(v[0], 10), to = parseInt(v[1], 10);
@@ -10639,7 +10500,6 @@ function boot(){
   buildArrangeButtons();
   buildSpreadButtons(); updateSpreadNote();   /* 【追加E】曲のゆらぎ */
   buildSEButtons();
-  buildSFXQuickPick();
   setupFolds();
   let restored = null;
   /* 圧縮して保存してあるので戻す。古い（圧縮前の）データはそのまま通る。 */
@@ -12779,410 +12639,100 @@ boot();
 </script>
 
 <script>
-/* ZCNOVA: トランペットだけ — 単体演奏項目のみ追加 */
-(function(){
-  if (typeof PLAY_MODES === 'undefined') return;
-  if (!PLAY_MODES.some(x => x.key === 'trumpetSolo')) {
-    PLAY_MODES.push({
-      key: 'trumpetSolo',
-      label: 'トランペットだけ',
-      group: '楽器1つ',
-      solo: 'trumpet'
-    });
-  }
-
-  /* トランペット追加後も「楽器1つ」の画面を最新化 */
-  if (typeof buildPlayModeButtons === 'function') {
-    buildPlayModeButtons();
-  }
-})();
-</script>
-
-<script>
 /* ============================================================
-   ZCNOVA SOLO REALISM — FINAL INTEGRATION
+   「楽器1つ」（単体演奏）の登録
    ------------------------------------------------------------
-   単体演奏：バイオリン / サックス / トランペット
-   ・既存ZCNOVAの曲生成、ミキサー、Master、Reverb、WAV/MP3
-     書き出し経路は変更しない
-   ・通常のアンサンブル音色は変更しない
-   ・「楽器1つ」で選んだ時だけ専用物理モデルを使用
-   ・外部録音・サンプル音源は使用しない
+   音そのものは末尾の ZCNOVA ACOUSTIC INSTRUMENT MODULE が作る。
+   ここでやるのは登録だけ。
+     1. 単体演奏専用の音源キーを INSTRUMENTS に足す
+        （足さないと音色プルダウンで名前が引けず、実際はチェロが
+          鳴っているのに「ピアノ」と表示される）
+     2. 「楽器1つ」の項目を PLAY_MODES に足す／書き換える
+     3. 楽器の種類ごとの段（sub）に振り分ける
+
+   【2026-08-24 統合】ここは以前5つの <script> に分かれていた
+   （バイオリン/サックス/トランペット・チェロ/コントラバス/
+     アコーディオン・クラリネット・トランペット追加・表示整合）。
+   どのブロックも当初は専用の物理モデルを持っていたが、音源が
+   ACOUSTIC MODULE に一本化された時点で中身は登録処理だけになり、
+   使われないクラスと補助関数（noiseBuffer / curve / clamp など）が
+   ブロックごとに重複して残っていた（約330行）。同じことを
+   1箇所でやる形にまとめる。**登録される中身は1つも変えていない**
+   （PLAY_MODES / INSTRUMENTS / MAX_VOICES の中身を統合の前後で
+     突き合わせて一致を確認済み）。
    ============================================================ */
 (function(){
   'use strict';
 
-  if(window.ZCNOVA_SOLO_REALISM_FINAL) return;
-  window.ZCNOVA_SOLO_REALISM_FINAL = true;
-
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const midiFreq=m=>440*Math.pow(2,(m-69)/12);
-  const noteFreq=n=>{const m=noteToMidi(n);return m==null?440:midiFreq(m);};
-
-  function noiseBuffer(ctx,seconds){
-    const len=Math.max(1,Math.floor(ctx.sampleRate*seconds));
-    const b=ctx.createBuffer(1,len,ctx.sampleRate),d=b.getChannelData(0);
-    let s=0x9e3779b9;
-    for(let i=0;i<len;i++){
-      s|=0;s=(s+0x6D2B79F5)|0;
-      let t=Math.imul(s^(s>>>15),1|s);
-      t=(t+Math.imul(t^(t>>>7),61|t))^t;
-      d[i]=((t^(t>>>14))>>>0)/2147483648-1;
-    }
-    return b;
-  }
-
-  function curve(amount){
-    const n=2048,c=new Float32Array(n),k=Math.max(0,amount)*18;
-    for(let i=0;i<n;i++){
-      const x=i*2/(n-1)-1;
-      c[i]=((1+k)*x)/(1+k*Math.abs(x));
-    }
-    return c;
-  }
-
-  /* ==========================================================
-     VIOLIN — 弓圧 / 弓速 / 弓位置 / 弓ノイズ / 遅延ビブラート
-     ========================================================== */
-  const VIOLIN_REAL={
-    maxPoly:8,
-    bowPressure:0.52,
-    bowSpeed:0.58,
-    bowPosition:0.38,
-    vibratoRate:5.45,
-    vibratoDepth:24,
-    vibratoDelayMin:0.14,
-    vibratoDelayMax:0.48,
-    attackMin:0.035,
-    attackMax:0.085,
-    releaseMin:0.15,
-    releaseMax:0.32
+  /* ---------- 1. 単体演奏専用の音源キー ---------- */
+  const K = {
+    violin        : '__zc_solo_violin_real_final',
+    cello         : '__zc_solo_cello_real_final',
+    contrabass    : '__zc_solo_contrabass_real_final',
+    contrabassPizz: '__zc_solo_contrabass_pizz_real_final',
+    sax           : '__zc_solo_sax_real_final',
+    clarinet      : '__zc_solo_clarinet_real_final',
+    trumpet       : '__zc_solo_trumpet_real_final',
+    accordion     : '__zc_solo_accordion_real_final'
   };
-
-
-
-  /* ==========================================================
-     SAX — リード / 息 / ブレスノイズ / 音程の入り / ビブラート
-     ========================================================== */
-  const SAX_REAL={maxPoly:6};
-
-
-  /* ==========================================================
-     TRUMPET — 唇のアタック / 金管倍音 / ブレス / ビブラート
-     ========================================================== */
-  const TRUMPET_REAL={maxPoly:6};
-
-
-  /* 通常音色の定義は保持。単体専用キーだけ専用クラスへ送る。 */
-  Object.assign(INSTRUMENTS,{
-    violin:INSTRUMENTS.violin||{label:'バイオリン',fam:'弦（擦る）'},
-    sax:INSTRUMENTS.sax||{label:'サックス',fam:'木管'},
-    trumpet:INSTRUMENTS.trumpet||{label:'トランペット',fam:'金管'}
-  });
-  Object.assign(MAX_VOICES,{violin:8,sax:6,trumpet:6});
-
-  /* 【整理】専用キー方式へ統一。
-     以前は 'violin' / 'sax' / 'trumpet' そのものを横取りしていたため、
-     アンサンブルの中の1パートとして鳴らすときまで単体演奏用の重い
-     物理モデルに置き換わっていた（チェロ・クラリネット等は最初から
-     専用キー方式で、実装が2系統に割れていた）。
-     ここを他楽器と同じ専用キーに揃え、「楽器1つ」で選んだときだけ
-     専用モデルを使う。通常のアンサンブル音色は本来の定義へ戻る。 */
-  const K_SOLO={
-    violin :'__zc_solo_violin_real_final',
-    sax    :'__zc_solo_sax_real_final',
-    trumpet:'__zc_solo_trumpet_real_final'
-  };
-
-  /* ここには以前 makeVoice の差し替えがあり、この3つのキーを
-     専用の古い音源クラスへ繋いでいた。いまは末尾の
-     ZCNOVA ACOUSTIC INSTRUMENT MODULE が新音源へ繋ぐので不要。
-     このブロックは「楽器1つ」への登録だけを担当する。 */
-
-  /* 「楽器1つ」へ確実に追加。既存のチェロ等はそのまま。 */
-  const soloModes=[
-    {key:'violin',label:'バイオリンだけ',solo:K_SOLO.violin},
-    {key:'sax',label:'サックスだけ',solo:K_SOLO.sax},
-    {key:'trumpetSolo',label:'トランペットだけ',solo:K_SOLO.trumpet}
-  ];
-  soloModes.forEach(pm=>{
-    const old=PLAY_MODES.find(x=>x.key===pm.key);
-    if(old){old.group='楽器1つ';old.solo=pm.solo;old.label=pm.label;}
-    else PLAY_MODES.push({key:pm.key,label:pm.label,group:'楽器1つ',solo:pm.solo});
-  });
-
-  if(typeof buildPlayModeButtons==='function') buildPlayModeButtons();
-  if(typeof renderAll==='function' && typeof song!=='undefined' && song){try{renderAll()}catch(e){}}
-
-  zcLog('ZCNOVA SOLO REALISM FINAL: バイオリン / サックス / トランペット 統合完了');
-})();
-</script>
-
-<script>
-/* ============================================================
-   ZCNOVA SOLO REALISM — CELLO / CONTRABASS / ACCORDION FINAL
-   ------------------------------------------------------------
-   「楽器1つ」の時だけ専用演奏モデルを使用。
-   既存の通常アンサンブル音色・ミキサー・Reverb・書き出し経路は変更しない。
-   外部サンプル音源は使用せず、Web Audio/Tone.jsで発音する。
-   ============================================================ */
-(function(){
-  'use strict';
-  if(window.ZCNOVA_SOLO_REALISM_CCA_FINAL) return;
-  window.ZCNOVA_SOLO_REALISM_CCA_FINAL=true;
-
-  const ctx=()=>Tone.getContext().rawContext;
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const rnd=(a,b)=>a+Math.random()*(b-a);
-  const freq=m=>440*Math.pow(2,(m-69)/12);
-  const noise=(seconds)=>{
-    const c=ctx(), n=Math.max(1,Math.floor(c.sampleRate*seconds)), b=c.createBuffer(1,n,c.sampleRate), d=b.getChannelData(0);
-    for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
-    return b;
-  };
-  const stop=(n,t)=>{try{n.stop(t)}catch(e){}};
-  const curve=(amount)=>{
-    const c=new Float32Array(2048),k=Math.max(0,amount)*18;
-    for(let i=0;i<c.length;i++){const x=i*2/(c.length-1)-1;c[i]=((1+k)*x)/(1+k*Math.abs(x));}
-    return c;
-  };
-
-  /* 【2026-08-23 ㉖】このクラスは未使用（このファイル内に new も extends も無い）。
-     中身の音源クラスだけが後の版で差し替えられ、土台だけが残ったもの。
-     消しても動作は変わらないが、消して得られるのはファイル数KBだけで、
-     将来この土台に戻す可能性もあるため、印だけ付けて残す。 */
-  class BaseSolo{
-    constructor(poly){this.ctx=ctx();this.out=this.ctx.createGain();this.out.gain.value=1;this.active=new Map();this.order=[];this.maxPolyphony=poly;}
-    connect(d){this.out.connect(d&&d.input?d.input:d);return this;}
-    triggerAttack(n,t,v){(Array.isArray(n)?n:[n]).forEach(x=>this.start(x,t,v));return this;}
-    triggerRelease(n,t){(Array.isArray(n)?n:[n]).forEach(x=>this.end(x,t));return this;}
-    triggerAttackRelease(n,d,t,v){const tt=typeof t==='number'?t:Tone.now(),dd=typeof d==='number'?d:Tone.Time(d||'8n').toSeconds();this.triggerAttack(n,tt,v);this.triggerRelease(n,tt+Math.max(.01,dd));return this;}
-    limit(){while(this.order.length>this.maxPolyphony)this.end(this.order.shift(),this.ctx.currentTime);}
-    dispose(){Array.from(this.active.keys()).forEach(k=>this.end(k,this.ctx.currentTime));try{this.out.disconnect()}catch(e){}}
-  }
-
-  /* ---------------- Cello ----------------
-     弓圧 / 弓速 / 弓ノイズ / 発音ポルタメント / 遅延ビブラート / 木部共鳴 */
-
-
-  /* ---------------- Contrabass ----------------
-     低域の胴鳴り / アルコの摩擦 / ピチカートの立ち上がりを専用化 */
-
-
-  /* ---------------- Accordion ----------------
-     リード2系統 / わずかなビート / ベローズ息 / アタックの揺れ */
-
-
-  const K={cello:'__zc_solo_cello_real_final',contrabass:'__zc_solo_contrabass_real_final',contrabassPizz:'__zc_solo_contrabass_pizz_real_final',accordion:'__zc_solo_accordion_real_final'};
-  /* makeVoice の差し替えは廃止（末尾の新音源モジュールが担当）。
-     このブロックは「楽器1つ」への登録だけを行う。 */
-
-  const modes=[
-    {key:'cello',label:'チェロだけ',solo:K.cello},
-    {key:'contrabassSoloReal',label:'コントラバスだけ',solo:K.contrabass},
-    {key:'accordion',label:'アコーディオンだけ',solo:K.accordion}
-  ];
-  modes.forEach(pm=>{
-    const old=PLAY_MODES.find(x=>x.key===pm.key);
-    if(old){old.group='楽器1つ';old.label=pm.label;old.solo=pm.solo;old.bassOnly=false;}
-    else PLAY_MODES.push({key:pm.key,label:pm.label,group:'楽器1つ',solo:pm.solo});
-  });
-
-  /* 既存の「ベースだけ」は従来仕様を維持。専用の「コントラバスだけ」だけ新音源へ送る。 */
-  window.ZCNOVA_SOLO_REALISM_CCA={version:'FINAL',cello:true,contrabass:true,accordion:true};
-  try{if(typeof buildPlayModeButtons==='function')buildPlayModeButtons();}catch(e){}
-  try{if(typeof renderAll==='function'&&typeof song!=='undefined'&&song)renderAll();}catch(e){}
-  zcLog('ZCNOVA SOLO REALISM FINAL: チェロ / コントラバス / アコーディオン 統合完了');
-})();
-</script>
-
-<script>
-/* ============================================================
-   ZCNOVA SOLO REALISM — CLARINET FINAL
-   「クラリネットだけ」の時だけ専用演奏モデルを使用。
-   外部サンプル音源なし。Web Audio API / Tone.jsのみ。
-   ============================================================ */
-(function(){
-  'use strict';
-  if(window.ZCNOVA_SOLO_REALISM_CLARINET_FINAL) return;
-  window.ZCNOVA_SOLO_REALISM_CLARINET_FINAL=true;
-
-  const AC=()=>Tone.getContext().rawContext;
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const rnd=(a,b)=>a+Math.random()*(b-a);
-  const freq=m=>440*Math.pow(2,(m-69)/12);
-  const noiseBuffer=(seconds)=>{
-    const c=AC(), n=Math.max(1,Math.floor(c.sampleRate*seconds));
-    const b=c.createBuffer(1,n,c.sampleRate), d=b.getChannelData(0);
-    for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
-    return b;
-  };
-  const stop=(n,t)=>{try{n.stop(t)}catch(e){}};
-  const curve=(amount)=>{
-    const c=new Float32Array(2048), k=Math.max(0,amount)*18;
-    for(let i=0;i<c.length;i++){
-      const x=i*2/(c.length-1)-1;
-      c[i]=((1+k)*x)/(1+k*Math.abs(x));
-    }
-    return c;
-  };
-
-  /* 【2026-08-23 ㉖】このクラスは未使用（このファイル内に new も extends も無い）。
-     中身の音源クラスだけが後の版で差し替えられ、土台だけが残ったもの。
-     消しても動作は変わらないが、消して得られるのはファイル数KBだけで、
-     将来この土台に戻す可能性もあるため、印だけ付けて残す。 */
-  class SoloBase{
-    constructor(poly){
-      this.ctx=AC();
-      this.out=this.ctx.createGain();
-      this.out.gain.value=1;
-      this.active=new Map();
-      this.order=[];
-      this.maxPolyphony=poly;
-    }
-    connect(d){this.out.connect(d&&d.input?d.input:d);return this;}
-    triggerAttack(n,t,v){(Array.isArray(n)?n:[n]).forEach(x=>this.start(x,t,v));return this;}
-    triggerRelease(n,t){(Array.isArray(n)?n:[n]).forEach(x=>this.end(x,t));return this;}
-    triggerAttackRelease(n,d,t,v){
-      const tt=typeof t==='number'?t:Tone.now();
-      const dd=typeof d==='number'?d:Tone.Time(d||'8n').toSeconds();
-      this.triggerAttack(n,tt,v);
-      this.triggerRelease(n,tt+Math.max(.01,dd));
-      return this;
-    }
-    limit(){
-      while(this.order.length>this.maxPolyphony) this.end(this.order.shift(),this.ctx.currentTime);
-    }
-    dispose(){
-      Array.from(this.active.keys()).forEach(k=>this.end(k,this.ctx.currentTime));
-      try{this.out.disconnect()}catch(e){}
-    }
-  }
-
-  /* ------------------------------------------------------------
-     Clarinet
-     ・単純なサイン波ではなく、奇数倍音中心のリード振動
-     ・キー／トーンホールを想定した音域依存のスペクトル
-     ・リードの発音ノイズ
-     ・息の連続成分
-     ・音符ごとの微小なピッチ揺れ
-     ・発音直後から少し遅れて自然なビブラート
-     ・強く吹くほど高域が開く
-     ・低音域は丸く、高音域は明るくする
-     ------------------------------------------------------------ */
-
-
-  /* ------------------------------------------------------------
-     既存エンジンへの安全な差し込み
-     ------------------------------------------------------------ */
-  const CLARINET_KEY='__zc_solo_clarinet_real_final';
-  /* makeVoice の差し替えは廃止（末尾の新音源モジュールが担当）。 */
-
-  /* 「クラリネットだけ」を既存項目から置換／無ければ追加 */
-  const pm=PLAY_MODES.find(x=>x.key==='clarinet');
-  if(pm){
-    pm.group='楽器1つ';
-    pm.label='クラリネットだけ';
-    pm.solo=CLARINET_KEY;
-    pm.bassOnly=false;
-    pm.drumOnly=false;
-  }else{
-    PLAY_MODES.push({
-      key:'clarinet',
-      label:'クラリネットだけ',
-      group:'楽器1つ',
-      solo:CLARINET_KEY
-    });
-  }
-
-  if(typeof INSTRUMENTS!=='undefined'){
-    INSTRUMENTS.clarinet=INSTRUMENTS.clarinet||{
-      label:'クラリネット',
-      fam:'木管'
-    };
-  }
-  if(typeof MAX_VOICES!=='undefined'){
-    MAX_VOICES.clarinet=6;
-  }
-
-  window.ZCNOVA_SOLO_CLARINET_FINAL={
-    version:'FINAL',
-    clarinet:true,
-    dedicatedSoloEngine:true,
-    reed:true,
-    breath:true,
-    oddHarmonics:true,
-    registerDependentTone:true,
-    delayedVibrato:true,
-    pitchEntry:true,
-    humanVariation:true
-  };
-
-  try{
-    if(typeof buildPlayModeButtons==='function') buildPlayModeButtons();
-  }catch(e){}
-
-  try{
-    if(typeof renderAll==='function' && typeof song!=='undefined' && song) renderAll();
-  }catch(e){}
-
-  zcLog('ZCNOVA SOLO REALISM FINAL: クラリネット統合完了');
-})();
-</script>
-
-<script>
-/* ============================================================
-   ZCNOVA 整理パッチ — 表示の整合
-   ------------------------------------------------------------
-   ・単体演奏専用の音源キーを INSTRUMENTS へ正式登録する。
-     これまで音色プルダウンで名前が引けず、実際にはチェロや
-     クラリネットが鳴っているのに「ピアノ」と表示されていた。
-   ・使われなくなった音色をプルダウンから隠す。
-   ・「楽器1つ」を楽器の種類ごとの段に分ける。
-   音の内容・書き出し経路・保存データには手を入れない。
-   ============================================================ */
-(function(){
-  'use strict';
-  if(window.ZCNOVA_TIDY) return;
-
-  /* ---------- 1. 単体演奏専用の音源を正式登録 ---------- */
   const SOLO_VOICES = {
-    '__zc_solo_violin_real_final'         : { label:'バイオリン（単体演奏）',           fam:'弦（擦る）' },
-    '__zc_solo_cello_real_final'          : { label:'チェロ（単体演奏）',               fam:'弦（擦る）' },
-    '__zc_solo_contrabass_real_final'     : { label:'コントラバス（単体演奏・アルコ）',   fam:'弦（擦る）' },
-    '__zc_solo_contrabass_pizz_real_final': { label:'コントラバス（単体演奏・ピチカート）', fam:'弦（擦る）' },
-    '__zc_solo_sax_real_final'            : { label:'サックス（単体演奏）',             fam:'木管' },
-    '__zc_solo_clarinet_real_final'       : { label:'クラリネット（単体演奏）',         fam:'木管' },
-    '__zc_solo_trumpet_real_final'        : { label:'トランペット（単体演奏）',         fam:'金管' },
-    '__zc_solo_accordion_real_final'      : { label:'アコーディオン（単体演奏）',       fam:'リード' }
+    [K.violin]        : { label:'バイオリン（単体演奏）',              fam:'弦（擦る）' },
+    [K.cello]         : { label:'チェロ（単体演奏）',                  fam:'弦（擦る）' },
+    [K.contrabass]    : { label:'コントラバス（単体演奏・アルコ）',      fam:'弦（擦る）' },
+    [K.contrabassPizz]: { label:'コントラバス（単体演奏・ピチカート）',  fam:'弦（擦る）' },
+    [K.sax]           : { label:'サックス（単体演奏）',                fam:'木管' },
+    [K.clarinet]      : { label:'クラリネット（単体演奏）',            fam:'木管' },
+    [K.trumpet]       : { label:'トランペット（単体演奏）',            fam:'金管' },
+    [K.accordion]     : { label:'アコーディオン（単体演奏）',          fam:'リード' }
   };
+
+  /* アンサンブルで使う通常音色。無ければ最低限の定義を置いておく。 */
+  INSTRUMENTS.violin   = INSTRUMENTS.violin   || { label:'バイオリン',   fam:'弦（擦る）' };
+  INSTRUMENTS.sax      = INSTRUMENTS.sax      || { label:'サックス',     fam:'木管' };
+  INSTRUMENTS.trumpet  = INSTRUMENTS.trumpet  || { label:'トランペット', fam:'金管' };
+  INSTRUMENTS.clarinet = INSTRUMENTS.clarinet || { label:'クラリネット', fam:'木管' };
+  Object.assign(MAX_VOICES, { violin:8, sax:6, trumpet:6, clarinet:6 });
+
   Object.keys(SOLO_VOICES).forEach(k => {
     if(!INSTRUMENTS[k]) INSTRUMENTS[k] = Object.assign({ soloOnly:true }, SOLO_VOICES[k]);
   });
 
-  /* ---------- 2. 使われていない音色を隠す ----------
-     trumpetSolo は「トランペットだけ」が専用モデルへ移った時点で
-     音源としては呼ばれなくなったが、プルダウンには演奏モード名の
-     まま並んでいた。古い保存データが参照している可能性があるので
+  /* trumpetSolo は「トランペットだけ」が専用モデルへ移った時点で音源
+     としては呼ばれなくなったが、プルダウンには演奏モード名のまま
+     並んでいた。古い保存データが参照している可能性があるので
      定義は残し、一覧からだけ外す。 */
   if(INSTRUMENTS.trumpetSolo){
     INSTRUMENTS.trumpetSolo.hidden = true;
     INSTRUMENTS.trumpetSolo.label  = 'トランペット（旧）';
   }
 
-  /* ---------- 3. コントラバス・ピチカートの単体演奏を有効化 ----------
-     音源クラスは実装済みだったが、選ぶ手段がどこにも無く
-     一度も鳴らせなかった。「楽器1つ」に1項目足して使えるようにする。 */
-  if(!PLAY_MODES.some(p => p.key === 'contrabassPizzSoloReal')){
-    PLAY_MODES.push({
-      key:'contrabassPizzSoloReal',
-      label:'コントラバス（ピチカート）だけ',
-      group:'楽器1つ',
-      solo:'__zc_solo_contrabass_pizz_real_final'
-    });
-  }
+  /* ---------- 2. 「楽器1つ」の項目 ----------
+     ⚠️ 並べた順がそのままボタンの並び順になる。入れ替えないこと。 */
+  const SOLO_MODES = [
+    { key:'violin',                 label:'バイオリンだけ',              solo:K.violin },
+    { key:'sax',                    label:'サックスだけ',                solo:K.sax },
+    { key:'trumpetSolo',            label:'トランペットだけ',            solo:K.trumpet },
+    { key:'cello',                  label:'チェロだけ',                  solo:K.cello },
+    { key:'contrabassSoloReal',     label:'コントラバスだけ',            solo:K.contrabass },
+    { key:'accordion',              label:'アコーディオンだけ',          solo:K.accordion },
+    { key:'clarinet',               label:'クラリネットだけ',            solo:K.clarinet },
+    /* 音源クラスは実装済みだったが、選ぶ手段がどこにも無く一度も
+       鳴らせなかった項目。 */
+    { key:'contrabassPizzSoloReal', label:'コントラバス（ピチカート）だけ', solo:K.contrabassPizz }
+  ];
+  SOLO_MODES.forEach(pm => {
+    const old = PLAY_MODES.find(x => x.key === pm.key);
+    if(old){
+      old.group = '楽器1つ'; old.label = pm.label; old.solo = pm.solo;
+      /* 「ベースだけ」「ドラムだけ」から作り替えた項目が、元の
+         役割制限を引きずらないようにする。 */
+      old.bassOnly = false; old.drumOnly = false;
+    } else {
+      PLAY_MODES.push({ key:pm.key, label:pm.label, group:'楽器1つ', solo:pm.solo });
+    }
+  });
 
-  /* ---------- 4. 「楽器1つ」を種類ごとに分類 ---------- */
+  /* ---------- 3. 「楽器1つ」を種類ごとの段に分ける ---------- */
   const PM_SUB = {
     piano:'鍵盤・弦', ep:'鍵盤・弦', music:'鍵盤・弦',
     harp:'鍵盤・弦', guitar:'鍵盤・弦', synth:'鍵盤・弦',
@@ -13196,16 +12746,10 @@ boot();
   };
   PLAY_MODES.forEach(p => { if(PM_SUB[p.key]) p.sub = PM_SUB[p.key]; });
 
-  /* ---------- 5. 画面へ反映 ---------- */
+  /* ---------- 4. 画面へ反映 ---------- */
   try{ if(typeof buildPlayModeButtons === 'function') buildPlayModeButtons(); }catch(e){}
   try{ if(typeof renderAll === 'function' && typeof song !== 'undefined' && song) renderAll(); }catch(e){}
-
-  window.ZCNOVA_TIDY = {
-    version:'1.0.0',
-    soloVoicesNamed:Object.keys(SOLO_VOICES).length,
-    playModes:PLAY_MODES.length
-  };
-  zcLog('ZCNOVA 整理: 表示の整合を適用しました');
+  zcLog('ZCNOVA: 「楽器1つ」' + SOLO_MODES.length + '項目を登録しました');
 })();
 </script>
 
