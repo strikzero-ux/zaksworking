@@ -2215,13 +2215,23 @@ const INSTRUMENTS = {
   retro:   { label:'レトロ', fam:'シンセ', cls:'Synth', poly:true,
     opts:{ volume:-12, oscillator:{type:'square'},
            envelope:{attack:0.004, decay:0.22, sustain:0.45, release:0.25} } },
+  /* 【修正】余韻を短くする。
+     ------------------------------------------------------------
+     0.5秒の音を1つ鳴らして、鳴り終わる（-40dB）までを測った:
+       エアパッド 1.80秒 / 厚みパッド 1.70秒 / パッド 1.57秒
+       （ストリングス 1.15 / ピアノ 0.80 / シンセ 0.76 / トランペット 0.71）
+     パッド系だけ **音符が終わってから1.0〜1.25秒も残って**いた。
+     刻みで鳴らすと余韻どうしが重なって、音がずっと途切れない
+     もやになる。動画のBGMではここがいちばん邪魔になる。
+     ※「シンセが伸ばしすぎ」と感じるのはこの3つ。シンセ本体（0.76秒）と
+       アコーディオン（0.81秒）はむしろ短いほうだった。 */
   pad:     { label:'パッド', fam:'シンセ', cls:'Synth', poly:true,
     opts:{ volume:-14, oscillator:{type:'sine'},
-           envelope:{attack:0.9, decay:1.4, sustain:0.45, release:2.2} } },
+           envelope:{attack:0.9, decay:1.4, sustain:0.45, release:1.1} } },
   fat:     { label:'厚みパッド', fam:'シンセ', cls:'Synth', poly:true,
     /* spread 30→18。上の【修正】を参照（3本重ねなので、いちばんざらついていた）。 */
     opts:{ volume:-9, oscillator:{type:'fatsawtooth', count:3, spread:18},
-           envelope:{attack:0.6, decay:0.4, sustain:0.7, release:2.2} } },
+           envelope:{attack:0.6, decay:0.4, sustain:0.7, release:1.1} } },
 
   glocken: { label:'オルゴール', fam:'きらきら', cls:'FMSynth', poly:true,
     opts:{ harmonicity:5.5, modulationIndex:22, oscillator:{type:'sine'}, modulation:{type:'sine'},
@@ -2232,8 +2242,9 @@ const INSTRUMENTS = {
            envelope:{attack:0.001, decay:2, sustain:0.05, release:1.5},
            modulation:{type:'square'}, modulationEnvelope:{attack:0.002, decay:0.2, sustain:0, release:0.2} } },
   strings: { label:'ストリングス', fam:'弦（のばす）', cls:'AMSynth', poly:true,
+    /* release 1.2→0.8。上の【修正】を参照。 */
     opts:{ harmonicity:1.5, oscillator:{type:'sawtooth'},
-           envelope:{attack:0.4, decay:0.2, sustain:0.8, release:1.2} } },
+           envelope:{attack:0.4, decay:0.2, sustain:0.8, release:0.8} } },
 
   // ベース専用
   bassSynth:  { label:'シンセベース', fam:'ベース', cls:'Synth', poly:false, bassOnly:true,
@@ -4141,10 +4152,33 @@ const ZC_INST_TRIM = {
   /* 鉄琴は音量こそ小さいが、エネルギーの 39.7% が 2〜5kHz に集まっていて
      全楽器中で最も高い。金属の細い音なので、少し下げる。 */
   glockenspiel:                   0.75,
+
+  /* 【シンセ系・アコーディオンの「うるささ」をそろえる】
+     ------------------------------------------------------------
+     ⚠️ A特性だけでは足りない。A特性は純音向けの物差しなので、
+        のこぎり波のように**帯域の広い音のうるささを過小評価する**。
+        人の耳は臨界帯域ごとに聞いていて、広く散らばった音ほど
+        うるさく感じる（同じA特性の値でも、笛より鋸のほうがうるさい）。
+        だから帯域ごとに圧縮して足す測り方（ラウドネスの考え方）で見る。
+
+     同じ高さ（G4）でそろえて測った値 ── 左が「うるささ」、右がA特性:
+       アコーディオン 22.0 / 59.6dB   ← 全楽器中いちばんうるさい
+       トランペット   21.9 / 58.6dB
+       バイオリン     21.9 / 58.4dB
+       シンセ        21.5 / 55.3dB   ← A特性では小さいのに、管楽器と同列
+       ホルン        20.9 / 58.5dB
+       リード        20.5 / 49.9dB
+       フルート       20.5 / 58.5dB
+       ピアノ        18.5 / 51.8dB
+     管楽器・弦楽器の一群は 20.9〜21.9。シンセ系はここより耳につくので、
+     1段下（20.0前後）へ置く。 */
+  accordion:                      0.55,   /* うるささ 22.0 → 約20.8 */
+  synth:                          0.55,   /* うるささ 21.5 → 約20.3 */
+  lead:                           2.65,   /* 3.40 から下げる（20.5 → 約20.0） */
+  fat:                            0.78,   /* 20.5 → 約20.0 */
   // ② 小さすぎる側を持ち上げる（4倍で頭打ち＝わざと控えめに残す）
   glass:                          4.00,   // (0.059)
-  airPad:                         4.00,   // (0.045)
-  lead:                           3.40    // (0.131)
+  airPad:                         4.00    // (0.045)
 };
 function zcInstTrim(key){ return ZC_INST_TRIM[key] || 1; }
 
@@ -4571,13 +4605,25 @@ const TRACKS = [
    トラックごとに「短め～長め」の候補を持たせ、曲を作るたびにどれか1つを
    引く（song.noteLen に焼き込む＝再生でも書き出しでも同じ長さになる）。
    スタッカート気味／レガート気味などキャラクターがはっきり変わる。 */
+/* 【修正】伸ばす音を短くする。
+   ------------------------------------------------------------
+   「伸びる音が耳に触る／動画のBGMには使いにくい」という指摘を受けて
+   実際の長さを測った（120曲・テンポ込みの秒数）:
+       wind2  平均 1.05秒 / 最長 2.47秒 / **51%が1秒超** ← 突出
+       mel2   平均 0.63秒 / 18%が1秒超
+       wind1  平均 0.56秒 / mel1 0.45秒 / bass 0.32秒 / sub 0.17秒
+   wind2（金管ハーモニー）はいちばん短い選択肢が4分音符しかなく、
+   **短い音を鳴らせない**作りになっていた。計算で作った音は長く伸ばす
+   ほど作り物っぽさが出るうえ、動画に乗せると他の音を邪魔する。
+   選択肢ごと1段ずつ短い側へずらす（数は4つのままなので、乱数の
+   消費数は変わらない＝旋律・リズム・和音は1音も変わらない）。 */
 const NOTE_LEN_SETS = {
   mel1: ['16n', '8n', '8n.', '4n', '4n.'],
-  mel2: ['8n', '4n', '4n.', '2n'],
+  mel2: ['8n', '8n.', '4n', '4n.'],      /* 2n（半音符）をやめた */
   sub:  ['32n', '16n', '16n.', '8n'],
   bass: ['16n', '8n', '8n.', '4n'],
   wind1: ['8n', '8n.', '4n', '4n.'],
-  wind2: ['4n', '4n.', '2n', '2n.'],
+  wind2: ['8n', '8n.', '4n', '4n.'],     /* 2n・2n. をやめて1段下げた */
 };
 function pickNoteLens(){
   const out = {};
@@ -12028,8 +12074,9 @@ boot();
         modulationIndex:1.15,
         oscillator:{type:'sine'},
         modulation:{type:'triangle'},
-        envelope:{attack:0.62, decay:1.1, sustain:0.48, release:3.2},
-        modulationEnvelope:{attack:0.9, decay:1.3, sustain:0.28, release:2.5}
+        /* release 3.2→1.2。上の【修正】を参照（鳴り終わりが1.80秒で最長だった）。 */
+        envelope:{attack:0.62, decay:1.1, sustain:0.48, release:1.2},
+        modulationEnvelope:{attack:0.9, decay:1.3, sustain:0.28, release:1.0}
       }
     }
   });
@@ -13656,10 +13703,27 @@ boot();
          いま重なっている数（busy）で見れば、和音1つぶんは本来の音で
          鳴らせる。重なって混んできたときだけ落とす。
          書き出しは実時間で動かないので、混まない限り常に本来の音になる。 */
-      var chordLean = !!chord && (busy >= 4 || (this.live && (this.active >= 6 || LIVE >= 12)));
-      var lean = lite || chordLean
-        || (!longNote && (busy >= 3 || (this.live && (this.active >= 5  || LIVE >= 12))))
-        || ( longNote && (busy >= 8 || (this.live && (this.active >= 12 || LIVE >= 18))));
+      /* 【修正】簡易版へ落とす判定を「その楽器1台の重なり」から
+         「全体の負荷」へ変える。
+         ------------------------------------------------------------
+         busy はこの楽器1台ぶんの重なり数。ところが「楽器1つ」の編成では
+         旋律も和音もぜんぶ同じ1台に集まるので、**全体としては軽いのに**
+         その1台だけが簡単にしきい値へ届いてしまっていた。実測:
+             クラリネットだけ 51% / サックスだけ 51% / フルートだけ 38%
+             （吹奏楽 20% ／ 木管 0% ／ 金管 3%）
+         簡易版は発振器1本だけで、息の音・揺れ・歪みが全部落ちる。
+         半分以上がそれで鳴っていたので「管楽器なのにただのシンセ」に
+         聞こえていた。この変更で実測 51% → 0%。
+
+         ⚠️ 落とすのは**再生中だけ**にする。書き出しは実時間で動かないので
+            間に合わなくなることが無く、落とす理由がそもそも無い。
+            → 書き出したファイルは常に本来の音になる。
+         守りは残っている：再生が本当に間に合わなくなったときは
+         「再生の重さ＝自動」（zcLiteOn）が全体をまとめて軽くする。 */
+      var lean = lite || (this.live && (
+           (!!chord   && (this.active >= 8  || LIVE >= 14))
+        || (!longNote && (this.active >= 8  || LIVE >= 14))
+        || ( longNote && (this.active >= 14 || LIVE >= 20))));
 
       var dis = [];
       var nOut = null;
@@ -14662,9 +14726,47 @@ boot();
     console.warn('ZCNOVA: 音域合わせを適用できません（前提の関数が見つかりません）');
     return;
   }
+  /* 【跳びすぎを抑える】
+     ------------------------------------------------------------
+     実測（120曲）: 7半音以上の跳躍が 18%、1オクターブ以上が 611回、
+     いちばん大きいもので **34半音（約3オクターブ）**。
+     跳躍の平均は 3.9半音なので、ふだんは滑らかなのに時々とんでもなく
+     跳ぶ。「変に高くはねて耳に触る」のはこれ。
+     上限を超えたぶんは**オクターブ単位で折り返す**ので、
+     音名（ドレミ）は変わらない＝和音とぶつからない。
+     ⚠️ 乱数は1回も使わない。音の位置・数・リズム・和音は1つも変わらず、
+        変わるのは「どのオクターブで鳴るか」だけ。
+     ⚠️ 音域合わせ（zcFitRangesToInstruments）より**先**に掛けること。
+        音域合わせはパートまるごとオクターブで動かすので、
+        先に跳躍を詰めておけば、そのあと動かしても跳躍は保たれる。 */
+  const 跳躍の上限 = 14;                     /* 1オクターブ＋2半音 */
+  const 対象パート = ['mel1','mel2','sub','wind1','wind2'];
+  function zcTameLeaps(song){
+    if(!song || !song.phrases) return 0;
+    let 直した = 0;
+    song.phrases.forEach(ph => {
+      対象パート.forEach(k => {
+        const arr = ph[k]; if(!arr) return;
+        let 前 = null;
+        for(let i = 0; i < arr.length; i++){
+          const v = arr[i]; if(!v) continue;
+          let m = noteToMidi(v); if(m === null) continue;
+          if(前 !== null){
+            while(m - 前 >  跳躍の上限) m -= 12;
+            while(前 - m >  跳躍の上限) m += 12;
+            if(m !== noteToMidi(v)){ arr[i] = midiToName(m); 直した++; }
+          }
+          前 = m;
+        }
+      });
+    });
+    return 直した;
+  }
+
   const prev = makeSong;
   makeSong = function(){
     const song = prev.apply(this, arguments);
+    try{ zcTameLeaps(song); }catch(e){ console.warn('ZCNOVA: 跳躍を抑えられません', e); }
     try{ zcFitRangesToInstruments(song); }catch(e){ console.warn('ZCNOVA: 音域合わせに失敗', e); }
     return song;
   };

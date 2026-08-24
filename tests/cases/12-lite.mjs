@@ -75,6 +75,62 @@ export async function run({ page, errors }){
       label: 'つまみ（自動／軽くする／そのまま）が効いて覚える', info: JSON.stringify(r.つまみ) },
     { ok: errors.length === before, label: '画面のエラーが増えていない',
       info: errors.slice(before).join('\n') },
+    ...(await 簡易版で鳴りすぎないか(page)),
   ];
   return { checks };
+}
+
+/* 【書き出しが簡易版で鳴っていないか】
+   ------------------------------------------------------------
+   簡易版（lean）は発振器1本だけで、息の音・揺れ・歪みが全部落ちる。
+   軽くするための逃げ道であって、音としては「ただのシンセ」になる。
+
+   以前は「その楽器1台の重なり数（busy）」で落としていたため、
+   **楽器1つの編成**では旋律も和音も同じ1台に集まり、全体としては
+   軽いのにその1台だけがしきい値に届いていた。実測:
+       クラリネットだけ 51% / サックスだけ 51% / フルートだけ 38%
+   半分以上が発振器1本で鳴っていたので「管楽器なのにシンセ」に聞こえた。
+
+   いまは全体の負荷で見て、**落とすのは再生中だけ**にしてある。
+   書き出しは実時間で動かないので間に合わなくなることが無く、
+   常に本来の音で書き出される。ここが 0 でなくなったら、
+   判定がまた「楽器1台ぶん」に戻っている。 */
+async function 簡易版で鳴りすぎないか(page){
+  const r = await page.evaluate(async () => {
+    const 元 = window.ZCnovaAcoustic.prototype._one;
+    let 全 = 0, 簡易 = 0;
+    window.ZCnovaAcoustic.prototype._one = function(note, dur, time, vel, chord){
+      全++;
+      const sec = typeof dur === 'number' ? dur : Tone.Time(dur || '8n').toSeconds();
+      const longNote = sec >= 0.45;
+      const LIVE = window.ZC_LIVE_VOICES ? window.ZC_LIVE_VOICES() : 0;
+      const lean = this.live && (
+           (!!chord   && (this.active >= 8  || LIVE >= 14))
+        || (!longNote && (this.active >= 8  || LIVE >= 14))
+        || ( longNote && (this.active >= 14 || LIVE >= 20)));
+      if(lean) 簡易++;
+      return 元.apply(this, arguments);
+    };
+    const out = {};
+    try{
+      for(const [pm, 名] of [['clarinet','クラリネットだけ'], ['sax','サックスだけ'],
+                             ['fam_concert','吹奏楽']]){
+        全 = 0; 簡易 = 0;
+        pickPM = pm; pickBars = 1; pickSec = 15; pickMood = 'bright';
+        makeNewSong(20260824);
+        await renderSong(song, null);
+        out[名] = { 全, 簡易 };
+      }
+    } finally { window.ZCnovaAcoustic.prototype._one = 元; }
+    return out;
+  });
+  const 悪い = Object.entries(r).filter(([, v]) => v.簡易 > 0)
+    .map(([k, v]) => `${k} ${v.簡易}/${v.全}`);
+  const 一覧 = Object.entries(r).map(([k, v]) => `${k} ${v.全}音`).join(' / ');
+  return [
+    { ok: 悪い.length === 0,
+      label: '書き出しは簡易版を使わない（管楽器が本来の音のまま出る）',
+      info: 悪い.length ? '簡易版で鳴った: ' + 悪い.join(' / ')
+                        : 一覧 + '  ／ 直す前は「クラリネットだけ」で51%が簡易版だった' },
+  ];
 }

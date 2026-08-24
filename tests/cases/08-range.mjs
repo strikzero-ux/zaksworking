@@ -77,7 +77,50 @@ export async function run({ page }){
       label: '全部の音色で音域が引ける', info: r.音域が引けない音色 ? `${r.音域が引けない音色}種で引けない` : '' },
     ...(await 高い音の使いすぎ(page)),
     ...(await 耳で聞いた音量のそろい(page)),
+    ...(await 跳びすぎ(page)),
   ] };
+}
+
+/* 【旋律が跳びすぎないか】
+   ------------------------------------------------------------
+   実測（120曲）: 7半音以上の跳躍が18%、1オクターブ以上が611回、
+   いちばん大きいもので **34半音（約3オクターブ）** あった。
+   跳躍の平均は3.9半音なので、ふだんは滑らかなのに時々とんでもなく跳ぶ。
+   「変に高くはねて耳に触る」のはこれ。
+   上限を超えたぶんはオクターブ単位で折り返すので、音名（ドレミ）は
+   変わらない＝和音とぶつからない。 */
+async function 跳びすぎ(page){
+  const r = await page.evaluate(() => {
+    const 上限 = 14;                      /* 1オクターブ＋2半音 */
+    const PM = ['fam_random_all','fam_concert','fam_orchestra','fullband','band','piano'];
+    let 音数 = 0, 超過 = 0, 最大 = 0; const 例 = [];
+    for(let i = 0; i < 90; i++){
+      const sg = makeSong(MOODS[i % MOODS.length].key, 2, PM[i % PM.length], 120, 700 + i*23);
+      ['mel1','mel2','sub','wind1','wind2'].forEach(k => {
+        const t = sg.tracks[k]; if(!t || !t.on) return;
+        sg.phrases.forEach(ph => {
+          let 前 = null;
+          (ph[k] || []).forEach(n => {
+            if(!n) return; const m = noteToMidi(n); if(m === null) return;
+            音数++;
+            if(前 !== null){
+              const d = Math.abs(m - 前);
+              if(d > 最大) 最大 = d;
+              if(d > 上限){ 超過++; if(例.length < 3) 例.push(`${k} ${d}半音`); }
+            }
+            前 = m;
+          });
+        });
+      });
+    }
+    return { 音数, 超過, 最大, 例 };
+  });
+  return [
+    { ok: r.超過 === 0,
+      label: `旋律が跳びすぎない（いちばん大きい跳躍 ${r.最大}半音／${r.音数}音を確認）`,
+      info: r.超過 ? `14半音を超えた跳躍が${r.超過}回: ` + r.例.join(' / ')
+                   : '直す前は最大34半音（約3オクターブ）跳んでいた' },
+  ];
 }
 
 /* 【刺さる楽器が高いところに居座らないか】
