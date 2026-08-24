@@ -78,6 +78,32 @@ export async function run({ page, errors }){
     const se = [...document.querySelectorAll('#trackArea .trk')].find(x => x.dataset.trk === 'se');
     out.効果音のボタン = se ? [...se.querySelectorAll('button')].map(x => x.textContent.trim()).filter(Boolean) : [];
 
+    /* 3-b. ④の「聴く範囲」。選んだところだけを鳴らし、曲データは触らないこと。
+       ここで song.arrangement を書き換える作りにすると、自動保存や書き出しに
+       半端な曲が入り込む。範囲は再生の予約時にだけ使う。 */
+    {
+      const c4 = document.getElementById('card4');
+      if(!c4.classList.contains('open')) c4.querySelector('.fold-head').click();
+      await new Promise(r => setTimeout(r, 250));
+      const w = document.getElementById('mixRangePick');
+      const 並び前 = song.arrangement.slice().join(',');
+      const 項目 = w ? w.options.length : 0;
+      let 範囲 = null, 全部に戻る = false, 並び無事 = false;
+      if(w && 項目 >= 2){
+        w.value = w.options[1].value;
+        w.dispatchEvent(new Event('change', { bubbles:true }));
+        await new Promise(r => setTimeout(r, 250));
+        範囲 = zcPlayRange;
+        並び無事 = song.arrangement.slice().join(',') === 並び前;
+        document.getElementById('playBtn').click();     // 上のバーは曲ぜんぶ
+        await new Promise(r => setTimeout(r, 600));
+        全部に戻る = (zcPlayRange === null);
+        document.getElementById('playBtn').click();
+        await new Promise(r => setTimeout(r, 300));
+      }
+      out.聴く範囲 = { 項目, 範囲: 範囲 ? (範囲.from + '-' + 範囲.to) : null, 全部に戻る, 並び無事 };
+    }
+
     /* 4. 書き出しの計算中は再生を始められない／止めるのは効く */
     document.getElementById('playBtn').click();
     await new Promise(r => setTimeout(r, 700));
@@ -107,6 +133,10 @@ export async function run({ page, errors }){
     info: JSON.stringify(r.試聴) });
   checks.push({ ok: String(r.音色を替えても開いたまま).startsWith('true'),
     label: `音色を替えてもレーンが開いたまま（${r.音色を替えても開いたまま}）` });
+  const mr = r.聴く範囲 || {};
+  checks.push({ ok: mr.項目 >= 2 && !!mr.範囲 && mr.全部に戻る && mr.並び無事,
+    label: `④の「聴く範囲」で一部だけ鳴らせる（曲データは触らない）`,
+    info: JSON.stringify(mr) });
   checks.push({ ok: r.効果音のボタン.includes('鳴らす') || r.効果音のボタン.includes('鳴らさない'),
     label: `効果音レーンの言い方がほかのパートとそろっている（${r.効果音のボタン.join(' / ')}）` });
   const e = r.書き出し中;
