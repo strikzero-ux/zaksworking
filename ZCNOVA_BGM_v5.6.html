@@ -257,9 +257,6 @@ footer b{ color:var(--brass); }
     <button id="playBtn" title="再生／停止（スペースキー）">▶</button>
     <div class="now" id="nowPlaying">まだ曲がありません。下の「① 曲を作る」から曲調を選んでください。</div>
     <span class="badge" id="lenBadge">長さ —</span>
-    <!-- 曲番号の札はここにあったが撤去した。
-         生成のしくみを直すと同じ番号でも別の曲になるため、番号で曲を
-         管理することはできない。代わりに、いつでも押せる保存を置く。 -->
     <button class="io-btn save" id="topSaveBtn"
             title="この曲をこの端末に保存します（下の「保存した曲」に並びます）">💾 この曲を保存</button>
     <button class="io-btn" id="undoBtn" disabled>↩ やり直す</button>
@@ -267,10 +264,6 @@ footer b{ color:var(--brass); }
          普段は透明で場所だけ確保し、保存された瞬間だけ1.4秒ふわっと出る。 -->
     <span id="saveMark" class="save-mark"></span>
       <button class="io-btn" id="cleanupBtn" title="ZCnova内部の音声処理を整理して再初期化します">🔧 動作を安定化</button>
-    <!-- 「🔊 効果音を重ねる」（その場で1回鳴らすだけ）は 2026-08-23 に撤去。
-         効果音レーン（トラック編集で好きな所に置ける／曲データに焼き込まれる
-         ので書き出しにも入る）へ移行したため。
-         試聴と効果音単体の書き出しは「効果音」カードに残っている。 -->
   </div>
 
   <!-- 再生できない理由は、押した指のすぐ近くに出す -->
@@ -596,10 +589,6 @@ footer b{ color:var(--brass); }
       <span class="t-label">書き出し</span>
       <button class="io-btn" id="renderBtn">● MP3で書き出す</button>
       <button class="io-btn" id="renderWavBtn">● WAVで書き出す</button>
-      <!-- 「パート別に書き出す（ZIP）」は 2026-08-23 に撤去。
-           JSZip(CDN) への依存を無くすため、および 3分8パートで200MB超になり
-           スマホでは実用にならなかったため。
-           右の「● このパートだけ」で1本ずつ書き出せる。 -->
       <span style="display:inline-flex;gap:5px;align-items:center;">
         <select id="oneStemPick" title="書き出すパートを選びます" style="background:#1d1710;border:1px solid #4a3d2a;color:var(--text);border-radius:6px;padding:5px 6px;font-size:11px;font-family:inherit;"></select>
         <button class="io-btn" id="oneStemBtn" title="選んだパートだけをWAVで書き出します（そのパート単体の音。動画編集で重ねたいとき用）">● このパートだけ</button>
@@ -691,8 +680,6 @@ footer b{ color:var(--brass); }
       <span class="t-label">ゆらぎ</span>
       <input type="range" id="seWobble" min="0" max="100" value="50">
       <span class="fx-val" id="seWobbleVal">50%</span>
-      <!-- SE番号の札と「番号を指定」も曲番号と同じ理由で撤去。
-           気に入った音は、その場で書き出して残す。 -->
       <button class="io-btn" id="seRandomBtn">🎲 ちがう音にする</button>
     </div>
 
@@ -2191,8 +2178,30 @@ const INSTRUMENTS = {
   harp:    { label:'ハープ', fam:'弦（はじく）', cls:'Synth', poly:true,
     opts:{ oscillator:{type:'triangle'}, envelope:{attack:0.002, decay:2.5, sustain:0, release:2.0} } },
 
+  /* ============================================================
+     【修正】高い音の「ざわつき」を止める — デチューンの幅を狭める
+     ------------------------------------------------------------
+     fatsawtooth は同じ波を spread（セント）だけずらして重ねる。
+     ずれが同じ**セント**なら、うなりの速さは音の高さに比例して速くなる。
+       リード spread 16 … C4 で毎秒 2.4回（気持ちのいいコーラス）
+                          C6 で 3〜6倍音が毎秒 30〜60回
+     人の耳がいちばん「ざらつく」と感じるのが毎秒 15〜70回で、
+     高い音でちょうどそこへ入ってしまう。これが「シンセ・リードが
+     耳にざわつく」の正体だった（音量の問題ではない。音量は
+     pitchTilt で既に C6 が C4 より 2dB 小さく鳴っている）。
+
+     実測（音の揺れのうち毎秒15〜70回ぶんの割合）:
+                       C4     C5     C6
+       リード 16      0.1%   0.7%   6.8%
+       リード 10      0.0%   0.2%   1.4%   ← 採用
+       厚みパッド 30  0.2%   1.7%  30.7%
+       厚みパッド 18  0.2%   0.6%   1.2%   ← 採用
+     低い音のざらつきは元から0%台なので、**低音の厚みは落ちない**。
+     ⚠️ 乱数を1回も使わないので、音符の並び・リズム・和音は1つも変わらない。
+        変わるのは重ね方（音色）だけ。
+     ============================================================ */
   lead:    { label:'リード', fam:'シンセ', cls:'Synth', poly:true,
-    opts:{ volume:-12, oscillator:{type:'fatsawtooth', count:2, spread:16},
+    opts:{ volume:-12, oscillator:{type:'fatsawtooth', count:2, spread:10},
            envelope:{attack:0.02, decay:0.25, sustain:0.35, release:0.3} } },
   synth:   { label:'シンセ', fam:'シンセ', cls:'Synth', poly:true,
     opts:{ volume:-6, oscillator:{type:'sawtooth'}, envelope:{attack:0.01, decay:0.2, sustain:0.2, release:0.3} } },
@@ -2203,7 +2212,8 @@ const INSTRUMENTS = {
     opts:{ volume:-14, oscillator:{type:'sine'},
            envelope:{attack:0.9, decay:1.4, sustain:0.45, release:2.2} } },
   fat:     { label:'厚みパッド', fam:'シンセ', cls:'Synth', poly:true,
-    opts:{ volume:-9, oscillator:{type:'fatsawtooth', count:3, spread:30},
+    /* spread 30→18。上の【修正】を参照（3本重ねなので、いちばんざらついていた）。 */
+    opts:{ volume:-9, oscillator:{type:'fatsawtooth', count:3, spread:18},
            envelope:{attack:0.6, decay:0.4, sustain:0.7, release:2.2} } },
 
   glocken: { label:'オルゴール', fam:'きらきら', cls:'FMSynth', poly:true,
@@ -4393,8 +4403,15 @@ function pitchTilt(note){
   /* 【変更】高い音の抑えが足りなかった。
      旧: 1 - over*0.035（下限0.55）→ C7(96)以上は 0.55 で頭打ち＝約-5dB しか
      下がらず、いちばん耳に刺さる帯域がそのまま出ていた。
-     傾きを強め、下限も下げる。C6で0.62 / C7で0.32（約-10dB）。
-     C5以下（72以下）は今までどおり 1 のまま＝低音・中音の聞こえ方は不変。 */
+     傾きを強め、下限も下げる。C6で0.46（約-6.7dB）/ C7以上は 0.32（約-10dB）。
+     C5以下（72以下）は今までどおり 1 のまま＝低音・中音の聞こえ方は不変。
+
+     これが効いているかは実測で確かめてある。A特性（耳の感じやすさ）で
+     測った「実際に鳴るときの大きさ」は C4 → C6 で
+       リード -2.1dB / シンセ -2.7dB / レトロ -1.4dB / 厚みパッド -1.9dB
+     と、**高い音のほうが小さく鳴っている**。これ以上下げると高音が埋もれる。
+     ⚠️ 高い音が耳につくときは、まず音量ではなく「ざわつき（うなり）」を
+        疑うこと。リード・厚みパッドの spread がその原因だった。 */
   return Math.max(0.32, 1 - over * 0.045);
 }
 /* ============================================================
@@ -4953,7 +4970,7 @@ function zcBpmRange(mood, song){
 
 /* ---------- コード進行を置く ---------- */
 function genChords(ph, song, mood){
-  /* 【曲のゆらぎ】同じグループの曲調からも進行を借りる（ゆらぎの設定しだい） */
+  /* 同じグループの曲調からも進行を借りる（ゆらぎの設定しだい） */
   const progKey = zcPickWide(mood, 'progs', song, ph, 0x11a7c3d5,
     k => PROGRESSIONS.some(p => p.key === k));
   const prog = PROGRESSIONS.find(p => p.key === progKey) || PROGRESSIONS[0];
@@ -5180,7 +5197,7 @@ function zcBuildChordHits(ph, song, mood){
      ・曲全体の顔は song.cpat のままにしたいので、6割はそのまま
      ・残りは同じ曲調の候補から選ぶ＝曲調の性格は崩れない
      ・seedNoise で決めるので rnd() は消費しない＝他パートは不変 */
-  /* 【曲のゆらぎ】フレーズごとの持ち替え先も、ゆらぎのぶんだけグループから借りる。 */
+  /* フレーズごとの持ち替え先も、ゆらぎのぶんだけグループから借りる。 */
   let cpSrc = (mood && Array.isArray(mood.cpat) ? mood.cpat : []);
   if(zcSpreadP(song) > 0 && mood){
     const wide = zcCatPool(mood, 'cpat');
@@ -5255,7 +5272,7 @@ function chordAt(ph, beat){
 /* ---------- ベース ---------- */
 function genBass(ph, song, mood){
   const BP = bassPatterns(song);
-  /* 【曲のゆらぎ】ベースの型も同じグループから借りる。
+  /* ベースの型も同じグループから借りる。
      拍子によって無い型があるので、在ることを確かめてから候補に入れる。 */
   const pat = BP[zcPickWide(mood, 'bass', song, ph, 0x22b3e7f1, k => !!BP[k])] || BP.root;
   const spb = stepsPerBar(song);
@@ -6122,7 +6139,7 @@ function generatePhrase(song, bars, opts){
      opts で thin を直接指定されたときは従来の3段階で動かす（互換）。 */
   const thin = o.thin !== undefined ? o.thin : role.thin;
   const layers = (o.thin === undefined) ? ROLE_LAYERS[role.key] : null;
-  /* 【曲のゆらぎ】役割が意図して消すパートの控え。
+  /* 役割が意図して消すパートの控え。
      このあとの zcPartInOut が、消したはずのパートに合いの手を入れて
      役割の作り分けを台無しにしないようにするため。 */
   const roleMuted = layers ? layers.mute.slice()
@@ -6150,7 +6167,7 @@ function generatePhrase(song, bars, opts){
   ph.rescuedTrack = zcEnsureAudibleNotes(ph, song, mood,
     { center, style, roleDens: role.dens, thin });
 
-  /* 【曲のゆらぎ】副次パートを小節単位で出入りさせる。
+  /* 副次パートを小節単位で出入りさせる。
      保険（zcEnsureAudibleNotes）のあとに置くこと。 */
   zcPartInOut(ph, song, roleMuted);
 
@@ -6245,7 +6262,7 @@ function makeSong(moodKey, bars, playModeKey, targetSec, seed, opt){
       seed:s, moodKey:mood.key, bars,
       key: pick(mood.keys),
       scale: pick(mood.scales),
-      /* 【曲のゆらぎ】ゆらぎ。曲へ焼き込むので、保存・読み込みでも同じ曲になる。
+      /* ゆらぎ。曲へ焼き込むので、保存・読み込みでも同じ曲になる。
          ここより上で使うので、先に取り出しておく（下の zcBpmRange / zcPickWide が見る）。 */
       bpm: irand(...zcBpmRange(mood, { spread: o.spread || ZC_SPREAD_DEFAULT })),
       cpat: zcPickWide(mood, 'cpat', { seed:s, spread: o.spread || ZC_SPREAD_DEFAULT }, null, 0x33c5a9b7,
@@ -8185,7 +8202,7 @@ function syncSFXPick(){
   document.querySelectorAll('#sePick button').forEach(b =>
     b.classList.toggle('active', b.dataset.se === pickSE));
 }
-/* 【曲のゆらぎ】ゆらぎのボタン */
+/* ゆらぎのボタン */
 function buildSpreadButtons(){
   const w = $('spreadPick'); if(!w) return;
   w.innerHTML = '';
@@ -8228,7 +8245,7 @@ function markPicked(){
     b.classList.toggle('active', parseInt(b.dataset.sec, 10) === song.targetSec));
   document.querySelectorAll('#loopPick button').forEach(b =>
     b.classList.toggle('active', (b.dataset.loop === '1') === !!song.loop));
-  /* 【曲のゆらぎ】ゆらぎ。読み込んだ曲の設定を画面へ戻す
+  /* ゆらぎ。読み込んだ曲の設定を画面へ戻す
      （設定を持たない古い曲は「いつもどおり」として見せる）。 */
   pickSpread = ZC_SPREAD[song.spread] ? song.spread : 'off';
   document.querySelectorAll('#spreadPick button').forEach(b =>
@@ -9121,7 +9138,7 @@ let pickBars = 2, pickPM = 'random', pickSec = 180;
 let pickSE = 'impact';
 let seSeed = newSeed();
 let pickMel = 'auto', pickArr = 'auto', pickDensity = 60, pickHumanize = 35;
-/* 【曲のゆらぎ】曲のゆらぎ。曲へ焼き込むので、画面の値はここで持つ。 */
+/* 曲のゆらぎ。曲へ焼き込むので、画面の値はここで持つ。 */
 let pickSpread = ZC_SPREAD_DEFAULT;
 
 $('moodPick').addEventListener('click', (e) => {
@@ -9201,7 +9218,7 @@ function makeNewSong(seed){
     /* 【UI整理②】「くわしく決める」のつまみ。曲に焼き込むので、
        再生・書き出し・保存・読み込みのどれでも同じ結果になる。 */
     melTweak: melKnobOverride(),
-    /* 【曲のゆらぎ】曲のゆらぎ */
+    /* 曲のゆらぎ */
     spread: pickSpread,
   });
   curPhrase = 0;
@@ -9213,7 +9230,7 @@ function makeNewSong(seed){
     `${fmtTime(songSeconds(song))}）　気に入ったら上の「💾 この曲を保存」で残せます`, 'ok');
   if(wasPlaying) restartPlayback();
 }
-/* 【曲のゆらぎ】ゆらぎを押したら作り直す */
+/* ゆらぎを押したら作り直す */
 $('spreadPick').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if(!b || !b.dataset.spread) return;
   pickSpread = b.dataset.spread;
@@ -10501,7 +10518,7 @@ function boot(){
   buildPlayModeButtons();
   buildMelStyleButtons();
   buildArrangeButtons();
-  buildSpreadButtons(); updateSpreadNote();   /* 【曲のゆらぎ】曲のゆらぎ */
+  buildSpreadButtons(); updateSpreadNote();   /* 曲のゆらぎ */
   buildSEButtons();
   setupFolds();
   let restored = null;
@@ -14480,6 +14497,142 @@ boot();
     return song;
   };
   zcLog('ZCNOVA: 楽器の音域合わせを適用しました');
+})();
+</script>
+
+<script>
+/* ============================================================
+   保存が使えない環境で、黙って失敗させない
+   ------------------------------------------------------------
+   【なぜ要るか】
+   zcLSGet / zcLSSet は例外を握りつぶして null / false を返す作りなので、
+   保存が止められている環境でも**アプリは普通に動いてしまう**。
+   使う人から見ると「保存を押した → 何も起きない → 一覧にも出ない」で、
+   壊れているのか自分の操作が悪いのか分からない。これが一番たちが悪い。
+
+   保存が止まるのは主に3つ。
+     ① プライベート／シークレットウィンドウで開いている
+     ② ブラウザの設定でサイトデータが禁止されている（Safari に多い）
+     ③ よそのページに枠（iframe）で埋め込まれた状態で開いている
+   どれなのかは確実には見分けられないので、3つ並べて本人に切り分けて
+   もらう。Tone.js が読めなかったときの案内と同じ考え方。
+
+   【やること】
+   ・起動時に一度だけ「本当に書けるか」を試す（存在確認だけでは足りない。
+     Safari のプライベートは localStorage が有り、書いた瞬間に例外を投げる）
+   ・駄目なら保存ボタンを止め、保存欄の頭に赤い一行を出す
+   ・既存の説明文（「保存先はこの端末のブラウザの中です」）は
+     この環境では嘘になるので、薄く落として目立たなくする
+   ・音・曲の作りには一切触らない
+
+   ⚠️ このブロックは必ず最後に置くこと。status / zcLog を使うので、
+      本体より前に置くと参照できない。
+   ============================================================ */
+(function(){
+  'use strict';
+
+  /* 書き込みまで試して初めて「使える」と判断する。
+     読み取りだけ通って書き込みで落ちる環境があるため。 */
+  function zcStorageUsable(){
+    try{
+      if(!window.localStorage) return false;
+      var probe = '__zc_probe__';
+      window.localStorage.setItem(probe, '1');
+      var ok = window.localStorage.getItem(probe) === '1';
+      window.localStorage.removeItem(probe);
+      return ok;
+    }catch(e){ return false; }
+  }
+
+  var 案内 = null;                 // 二度貼らないように覚えておく
+
+  function apply(){
+    if(zcStorageUsable()) return;   // ふつうの環境では何もしない
+    if(案内 && 案内.parentNode) return;
+
+    try{
+      /* ⚠️ 保存ボタンは2つある（⑤の中と、上部バーの「💾 この曲を保存」）。
+         上部のほうが目立つので、こちらを止め忘れると
+         「押したのに何も起きない」がそのまま残る。 */
+      ['saveBtn', 'topSaveBtn'].forEach(function(id){
+        var b = document.getElementById(id);
+        if(!b) return;
+        b.disabled = true;
+        b.title = 'この開き方では曲を保存できません。MP3かWAVで書き出してください。';
+      });
+
+      /* 案内は保存欄の頭に置く。ページ下の ioStatus では、
+         カードを畳んでいる人に届かない。 */
+      var note = document.createElement('p');
+      note.className = 'hint';
+      note.style.cssText = 'margin:0 0 10px;padding:9px 11px;border-radius:6px;'
+        + 'border:1px solid rgba(216,90,48,0.55);background:rgba(216,90,48,0.10);'
+        + 'color:#e8b9a4;line-height:1.8;';
+      note.innerHTML =
+        '<b style="color:#d85a30;">この開き方では、曲を保存できません。</b><br>'
+        + 'ブラウザ側で保存領域が使えない状態になっています。'
+        + '考えられるのは、①プライベート（シークレット）ウィンドウで開いている　'
+        + '②ブラウザの設定でサイトデータが禁止されている　'
+        + '③このページが別のサイトの中に枠で埋め込まれている　の3つです。'
+        + '<br><b>作った曲は MP3 か WAV で書き出してください。</b>'
+        + '書き出しはこの状態でも問題なく使えます。';
+
+      /* ⚠️ 置き場所は⑤の中ではなく、上部バーのすぐ下。
+         ⑤「保存・書き出し」は**畳んだ状態で始まる**ので、中に入れると
+         開くまで見えない（実測：案内を入れても画面には出ていなかった）。
+         止めた💾のすぐ近く＝いつでも見える所に置く。 */
+      var top = document.getElementById('playHint');
+      if(top && top.parentNode){
+        top.parentNode.insertBefore(note, top.nextSibling);
+        案内 = note;
+      }else{
+        var btn = document.getElementById('saveBtn');
+        var row = btn ? btn.closest('.fx-row') : null;
+        var host = row || document.getElementById('card5');
+        if(host && host.parentNode){
+          (row ? host.parentNode.insertBefore(note, row) : host.appendChild(note));
+          案内 = note;
+        }
+      }
+
+      /* 既存の「保存先はこの端末のブラウザの中です」は、この環境では
+         事実と違う。消すと戻ったとき困るので、薄くするだけにする。 */
+      var card5 = document.getElementById('card5');
+      if(card5){
+        Array.prototype.forEach.call(card5.querySelectorAll('p.hint'), function(p){
+          if(p !== note && p.textContent.replace(/\s/g, '').indexOf('保存先は') === 0){
+            p.style.opacity = '0.35';
+            p.style.textDecoration = 'line-through';
+          }
+        });
+      }
+
+      /* 【重要】自動保存の失敗メッセージを止める。
+         zcWriteAutosave は失敗を必ず「保存容量がいっぱいです」と説明するが、
+         ここで扱っている環境の原因は容量ではないので、そのまま出すと
+         使う人を間違った対処（曲の削除）へ誘導してしまう。
+         警告済みの旗を先に立てて黙らせ、正しい説明はこの帯に一本化する。 */
+      try{ zcAutosaveWarned = true; }catch(e){}
+
+      /* ページ下の帯にも出しておく（warn は自動で消えない）。 */
+      if(typeof status === 'function'){
+        status('ioStatus', 'この開き方では曲を保存できません。MP3かWAVで書き出してください。', 'warn');
+      }
+
+      if(typeof zcLog === 'function') zcLog('ZCNOVA: 保存領域が使えないため、保存機能を止めて案内を出しました');
+    }catch(e){
+      console.warn('ZCNOVA: 保存不可の案内を出せませんでした', e);
+    }
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', apply);
+  else apply();
+
+  /* 【動作確認用】コンソールから手動で再判定できるようにしておく。
+     本番の動きには一切関わらない（誰も呼ばなければ何も起きない）。
+     Safari のプライベートブラウズが無くても、ふつうの画面のまま
+     「保存が壊れた状態」を再現して見た目を確認できる。 */
+  window.__zcRecheckStorage = apply;
 })();
 </script>
 </body>

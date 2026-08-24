@@ -15,6 +15,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
+import { APP_FILE } from '../lib/serve.mjs';
+
 export const name = '③ SRI ハッシュ（外部ライブラリ）';
 
 const TARGETS = [
@@ -23,7 +25,7 @@ const TARGETS = [
 ];
 
 export async function run({ root }){
-  const html = fs.readFileSync(path.join(root, 'ZCNOVA_BGM_v5.6.html'), 'utf8');
+  const html = fs.readFileSync(APP_FILE, 'utf8');
   const checks = [];
   const wanted = new Set();
 

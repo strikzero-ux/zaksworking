@@ -1,0 +1,5 @@
+node_modules/
+# 配布物の中身は毎回組み立て直せるので、置いたままにしない。
+# 出来上がりの zip だけは、そのまま配れるように残しておく。
+dist/blogger/_app.min.html
+dist/zip/

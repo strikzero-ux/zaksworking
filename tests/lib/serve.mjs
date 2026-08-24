@@ -13,7 +13,11 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '..', '..');
-export const APP_FILE = path.join(ROOT, 'ZCNOVA_BGM_v5.6.html');
+/* 検査するファイル。既定は本体。ZC_APP を指せば、配布用に組み立てた
+   ファイル（dist/…）にも同じ検査一式をそのまま掛けられる。 */
+export const APP_FILE = process.env.ZC_APP
+  ? path.resolve(process.env.ZC_APP)
+  : path.join(ROOT, 'ZCNOVA_BGM_v5.6.html');
 const VENDOR = path.join(ROOT, 'tests', 'vendor');
 
 const TONE_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js';
@@ -25,8 +29,14 @@ export function appHtmlForTest(keepFonts){
   let s = fs.readFileSync(APP_FILE, 'utf8');
   s = s.replaceAll(TONE_CDN, '/vendor/Tone.js');
   s = s.replaceAll(LAME_CDN, '/vendor/lame.min.js');
-  s = s.replace(/\s*integrity="sha384-[^"]*"/g, '');
-  s = s.replace(/\s*s\.integrity\s*=\s*'sha384-[^']*';/g, '');
+  /* ⚠️ 「integrity="sha384-…"」を無条件に消すと、JavaScript の中の
+     s.integrity="sha384-…" まで消えて `s.;` という壊れた文になる。
+     （説明を外した配布用ファイルでは引用符が " に揃うので実際に踏んだ。
+       症状は「Unexpected token ';'」でブロック丸ごと動かなくなる。）
+     HTML の属性は「前が空白・後ろが空白か >」に限り、
+     JavaScript 側は行ごと消す、と分けて書く。 */
+  s = s.replace(/\s+integrity="sha384-[^"]*"(?=[\s>])/g, '');
+  s = s.replace(/s\.integrity\s*=\s*["']sha384-[^"']*["']\s*;?/g, '');
   /* 外部フォントは検査に関係が無く、ネットが無いと必ずエラーが出るので外す。
      これを残すと「起動時のJSエラー0件」の判定がネットの有無で揺れる。 */
   if(!keepFonts) s = s.replace(/<link[^>]+fonts\.(googleapis|gstatic)\.com[^>]*>/g, '');

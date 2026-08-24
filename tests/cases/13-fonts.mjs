@@ -10,12 +10,14 @@
        この形の link … 0.4秒で全部出る（字体は届いたところで入れ替わる）
 
    ここでは実際に宛先を「応答しない」状態にして、それでも画面が出るかを見る。 */
+import { APP_FILE } from '../lib/serve.mjs';
+
 export const name = '⑬ 字体が届かなくても画面が出るか';
 
 export async function run({ page, url, root }){
   const checks = [];
   const fs = await import('node:fs');
-  const src = fs.readFileSync(root + '/ZCNOVA_BGM_v5.6.html', 'utf8');
+  const src = fs.readFileSync(APP_FILE, 'utf8');
 
   /* 1. 画面を止める形（CSS の @import）で読んでいないこと */
   checks.push({
