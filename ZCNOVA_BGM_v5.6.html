@@ -545,16 +545,17 @@ footer b{ color:var(--brass); }
         </div>
         <div class="fx-row"><span class="t-label"></span>
           <button class="io-btn" id="loopCheckBtn">▶ 繋ぎ目を聴く</button>
-          <span class="hint" style="margin:0;">終わり4秒＋頭4秒を続けて鳴らします（もう一度押すと止まります）</span>
+          <span class="hint" style="margin:0;">終わりと頭を4秒ぶんずつ続けて鳴らします（もう一度押すと止まります）</span>
         </div>
       </div>
     </div>
     <p class="hint">
       <b>聴く範囲</b>で選んだところだけを繰り返し鳴らせます。サビだけ流しながら音量やひびきを決められます
       （選ぶのは鳴らす範囲だけで、曲そのものは変わりません。書き出しは常に曲ぜんぶです）。<br>
-      <b>頭を聴く・終わりを聴く</b>は用途が違います。フェードは<b>書き出したファイルにだけ掛かる</b>もので、
-      ふつうの再生には掛かりません。そこで、この2つだけは<b>実際に書き出すのと同じ計算をしてから</b>
-      その端を鳴らします（少し待ちます）。フェードの効き具合を確かめるためのものです。<br>
+      <b>頭を聴く・終わりを聴く・繋ぎ目を聴く</b>は、フェードやループの効き具合を確かめるためのものです。
+      フェードは<b>書き出したファイルに掛かる</b>もので、ふつうの再生には掛かりません。
+      この3つを押したときだけ、その部分をフェード付きで繰り返し鳴らします
+      （待ち時間はありません。もう一度押すと止まります）。<br>
       <b>つなげて繰り返す</b>を選ぶと、書き出したファイルの頭とお尻が自然につながるように作ります（動画でループさせる用）。
       フェードを付けるとループは切れるので、両方は同時に使いません。
     </p>
@@ -1700,7 +1701,9 @@ const MOODS = [
     bass:['root','walk','half'], cpat:['oom','quarter','hold','arp','strum'],
     inst:{ mel1:['piano','strings','flute'], mel2:['strings','pad'], sub:['pluck'],
            chord:['piano','harp'], bass:['bassString'],
-           wind1:['flute','clarinet'], wind2:['strings'] },
+           /* 金管レーンには金管を置く。ここだけ弦（strings）が入っていて、
+              画面に「金管　弦（のばす）」と出ていた。ワルツに合うホルンにする。 */
+           wind1:['flute','clarinet'], wind2:['horn'] },
     dens:[4,7], leap:0.30, rest:0.16, sub:0.40, counter:0.5, wind1:0.30, wind2:0.15 },
 
   { key:'barcarolle', label:'舟歌', meter:'6/8', bpm:[92,132], scales:['major','dorian','minor'],
@@ -1709,7 +1712,7 @@ const MOODS = [
     bass:['root','two','walk'], cpat:['two','quarter','hold','arp','oom'],
     inst:{ mel1:['flute','violin','piano'], mel2:['strings','pad'], sub:['pluck'],
            chord:['harp','piano'], bass:['bassString'],
-           wind1:['flute','clarinet'], wind2:['strings'] },
+           wind1:['flute','clarinet'], wind2:['horn'] },   /* 同上（舟歌） */
     dens:[4,7], leap:0.34, rest:0.18, sub:0.45, counter:0.55, wind1:0.35, wind2:0.18 },
 
   { key:'quintet', label:'5拍子', meter:'5/4', bpm:[104,144], scales:['dorian','minor','mixo'],
@@ -13791,12 +13794,13 @@ boot();
 
     random_all: {
       label:'完全ランダム', icon:'🎲',
-      note:'旋律と伴奏は必ず鳴ります。ほかのパートは曲ごとに出たり出なかったりで、音色も全楽器から選びます。',
+      note:'旋律と伴奏は必ず鳴ります。ほかのパートは曲ごとに出たり出なかったりで、音色も全楽器から選びます（木管・金管のレーンだけは、その名前どおりの楽器から選びます）。',
       on:['mel1','chord'],
       optionalOn:{ mel2:0.5, sub:0.4, bass:0.7, drum:0.6, wind1:0.3, wind2:0.25 },
       poolFn: function(){
         const p = allPitched(), b = allBass();
-        return { mel1:p, mel2:p, sub:p, chord:p, wind1:p, wind2:p, bass:b };
+        return { mel1:p, mel2:p, sub:p, chord:p, bass:b,
+                 wind1:allWood(), wind2:allBrass() };
       }
     },
 
@@ -13977,6 +13981,21 @@ boot();
     if(!_pitched) _pitched = Object.keys(INSTRUMENTS).filter(k => usable(k) && !INSTRUMENTS[k].bassOnly);
     return _pitched;
   }
+  /* 木管レーン・金管レーンに入れてよい音色。
+     ------------------------------------------------------------
+     ⚠️ レーンの名前が「木管」「金管」なのだから、そこに入る音色も
+     木管・金管であること。「完全ランダム」で全楽器から選んでいたため、
+     実測（80曲）で **木管レーンにピアノ・鉄琴・シンセ・打楽器、
+     金管レーンにハープやバイオリン**が入っていた。画面には
+     「金管　ハープ」と出るので、見た人には何かが壊れているように見える。
+     ほかのパート（旋律・対旋律・サブ・伴奏・低音）は今までどおり全楽器から選ぶ。 */
+  let _wood = null, _brass = null;
+  function famPool(fam, keep){
+    return Object.keys(INSTRUMENTS).filter(k => usable(k) && !INSTRUMENTS[k].bassOnly
+                                           && (INSTRUMENTS[k].fam || '') === fam);
+  }
+  function allWood(){  if(!_wood)  _wood  = famPool('木管'); return _wood.length  ? _wood  : allPitched(); }
+  function allBrass(){ if(!_brass) _brass = famPool('金管'); return _brass.length ? _brass : allPitched(); }
   function allBass(){
     if(!_bass) _bass = Object.keys(INSTRUMENTS).filter(k => usable(k) && INSTRUMENTS[k].bassOnly);
     return _bass;

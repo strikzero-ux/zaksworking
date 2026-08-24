@@ -74,5 +74,51 @@ export async function run({ page }){
     label: 'オーケストラ：ピアノ・弦楽器・木管・金管・打楽器がそろう',
     info: '鳴った楽器: ' + あるもの(r.orch).join(' ') });
 
+  /* 木管レーン・金管レーンの中身
+     ------------------------------------------------------------
+     レーンの名前が「木管」「金管」なのだから、そこに入る音色も木管・金管で
+     あること。以前は「完全ランダム」が全楽器から選んでいたため、実測で
+     **木管レーンにピアノ・鉄琴・シンセ・打楽器、金管レーンにハープや
+     バイオリン**が入り、画面に「金管　ハープ」と出ていた。
+     曲調ごとの候補（MOODS.inst）にも同じ取り違えが2件あった。
+     候補表を機械で洗って、二度と紛れ込まないようにする。 */
+  const 変なの = await page.evaluate(() => {
+    const fam = k => (INSTRUMENTS[k] || {}).fam || '(不明)';
+    const 期待 = { wind1:['木管','リード'], wind2:['金管'] };
+    const bad = [];
+    const 見る = (どこ, pool) => {
+      if(!pool) return;
+      ['wind1','wind2'].forEach(t => (pool[t] || []).forEach(k => {
+        if(!期待[t].includes(fam(k))) bad.push(`${どこ}.${t}: ${k}（${fam(k)}）`);
+      }));
+    };
+    const F = (window.ZCNOVA_FAMILIES || {}).defs || {};
+    Object.keys(F).forEach(fk => 見る('楽器カテゴリ:' + fk, F[fk].pool || (F[fk].poolFn ? F[fk].poolFn() : null)));
+    PLAY_MODES.forEach(pm => 見る('編成:' + pm.key, pm.pool));
+    MOODS.forEach(m => 見る('曲調:' + m.key, m.inst));
+    return [...new Set(bad)];
+  });
+  checks.push({ ok: 変なの.length === 0,
+    label: '木管レーンには木管、金管レーンには金管しか入らない（候補表を全部確認）',
+    info: 変なの.join(' / ') });
+
+  /* 実際に作った曲でも同じか（候補表を通らない道が無いことの確認） */
+  const 実際 = await page.evaluate(() => {
+    const fam = k => (INSTRUMENTS[k] || {}).fam || '(不明)';
+    const bad = [];
+    ['fam_random_all', 'random', 'fam_concert', 'fam_orchestra', 'full'].forEach(pm => {
+      for(let i = 0; i < 30; i++){
+        const sg = makeSong(MOODS[i % MOODS.length].key, 2, pm, 120, 700 + i * 31);
+        [['wind1', ['木管','リード']], ['wind2', ['金管']]].forEach(([t, ok]) => {
+          const tr = sg.tracks[t];
+          if(tr && tr.on && tr.inst && !ok.includes(fam(tr.inst))) bad.push(`${pm}.${t}: ${tr.inst}（${fam(tr.inst)}）`);
+        });
+      }
+    });
+    return [...new Set(bad)];
+  });
+  checks.push({ ok: 実際.length === 0,
+    label: '作った曲でも同じ（5編成 × 30曲）', info: 実際.join(' / ') });
+
   return { checks };
 }
