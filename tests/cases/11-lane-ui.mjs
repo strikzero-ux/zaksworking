@@ -93,15 +93,36 @@ export async function run({ page, errors }){
         w.value = w.options[1].value;
         w.dispatchEvent(new Event('change', { bubbles:true }));
         await new Promise(r => setTimeout(r, 250));
-        範囲 = zcPlayRange;
+        範囲 = zcPlayOrder ? { from: zcPlayOrder[0], to: zcPlayOrder[zcPlayOrder.length - 1] } : null;
         並び無事 = song.arrangement.slice().join(',') === 並び前;
         document.getElementById('playBtn').click();     // 上のバーは曲ぜんぶ
         await new Promise(r => setTimeout(r, 600));
-        全部に戻る = (zcPlayRange === null);
+        全部に戻る = (zcPlayOrder === null);
         document.getElementById('playBtn').click();
         await new Promise(r => setTimeout(r, 300));
       }
       out.聴く範囲 = { 項目, 範囲: 範囲 ? (範囲.from + '-' + 範囲.to) : null, 全部に戻る, 並び無事 };
+    }
+
+    /* 3-c. 頭／終わり／繋ぎ目が「その場で」鳴ること。
+       以前は曲を丸ごと計算し終わるまで無音で待たされ、止める手段も
+       無かった。押した瞬間に鳴り、もう一度押すと止まることを見る。 */
+    {
+      song.fadeIn = 3; song.fadeOut = 3; syncControls();
+      const res = {};
+      for(const id of ['fadeInPreviewBtn','fadeOutPreviewBtn','loopCheckBtn']){
+        const t0 = performance.now();
+        document.getElementById(id).click();
+        await new Promise(r => setTimeout(r, 800));
+        const 鳴った = Tone.Transport.state === 'started';
+        const 順 = zcPlayOrder ? zcPlayOrder.length : 0;
+        const 待ち = (performance.now() - t0) / 1000;
+        document.getElementById(id).click();
+        await new Promise(r => setTimeout(r, 400));
+        res[id] = { 鳴った, 順, 待ち: +待ち.toFixed(1),
+                    止まった: Tone.Transport.state === 'stopped' && zcPlayOrder === null };
+      }
+      out.端の試聴 = res;
     }
 
     /* 4. 書き出しの計算中は再生を始められない／止めるのは効く */
@@ -137,6 +158,11 @@ export async function run({ page, errors }){
   checks.push({ ok: mr.項目 >= 2 && !!mr.範囲 && mr.全部に戻る && mr.並び無事,
     label: `④の「聴く範囲」で一部だけ鳴らせる（曲データは触らない）`,
     info: JSON.stringify(mr) });
+  const ed = r.端の試聴 || {};
+  const edOk = Object.values(ed).every(x => x.鳴った && x.順 > 0 && x.止まった && x.待ち < 2);
+  checks.push({ ok: edOk,
+    label: '頭・終わり・繋ぎ目がその場で鳴り、もう一度押すと止まる',
+    info: JSON.stringify(ed) });
   checks.push({ ok: r.効果音のボタン.includes('鳴らす') || r.効果音のボタン.includes('鳴らさない'),
     label: `効果音レーンの言い方がほかのパートとそろっている（${r.効果音のボタン.join(' / ')}）` });
   const e = r.書き出し中;

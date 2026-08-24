@@ -4267,6 +4267,7 @@ function buildEngine(cfg){
   eng.seGain = segain;
 
   eng.drums = D; eng.drumGain = dgain;
+  eng.isLive = !!cfg.live;      /* 【2026-08-24】再生用フェードの判定に使う */
   eng.master = master; eng.fadeGain = fadeGain; eng.bright = bright;
   eng.revSend = revSend; eng.reverb = reverb;
   eng.cfg = cfg;
@@ -6643,21 +6644,54 @@ function playStep(eng, song, ph, s, time){
    ④「音を整える」で「サビだけ流しながらつまみを動かす」ができるように
    するためのもの。**曲データ（song.arrangement）は一切触らない**ので、
    書き出し・保存・自動保存には影響しない。null なら曲ぜんぶ。 */
-let zcPlayRange = null;     // { from, to }（並びの何枠目から何枠目か）
-function zcSetPlayRange(r){ zcPlayRange = (r && r.to >= r.from) ? r : null; }
+/* 【2026-08-24】鳴らす順番。並びの何枠目を、どの順で鳴らすか。
+   null なら曲ぜんぶ（今までどおり）。
+   ・④の「聴く範囲」   … 連続した一部分
+   ・頭を聴く／終わりを聴く … 端の数枠だけ
+   ・繋ぎ目を聴く      … 終わりの数枠 → 頭の数枠（続けて鳴らす）
+   曲データ（song.arrangement）は触らないので、書き出し・保存には影響しない。 */
+let zcPlayOrder = null;     // 並びの添字の配列
+let zcLiveFade  = null;     // { in:秒, out:秒 } 再生にもフェードを掛けるとき
+function zcSetPlayOrder(order, fade){
+  zcPlayOrder = (Array.isArray(order) && order.length) ? order.slice() : null;
+  zcLiveFade  = fade || null;
+}
+function zcSetPlayRange(r){
+  if(!r || r.to < r.from){ zcSetPlayOrder(null, null); return; }
+  const o = []; for(let i = r.from; i <= r.to; i++) o.push(i);
+  zcSetPlayOrder(o, null);
+}
+/* 何秒ぶん欲しいか から、端の枠を数える */
+function zcSlotSeconds(song, ai){
+  const ph = song.phrases[song.arrangement[ai]];
+  return ph ? ph.bars * beatsPerBar(song) * 60 / (song.bpm || 100) : 0;
+}
+function zcHeadSlots(song, sec){
+  const out = []; let acc = 0;
+  for(let i = 0; i < song.arrangement.length && acc < sec; i++){ out.push(i); acc += zcSlotSeconds(song, i); }
+  return out.length ? out : [0];
+}
+function zcTailSlots(song, sec){
+  const out = []; let acc = 0;
+  for(let i = song.arrangement.length - 1; i >= 0 && acc < sec; i--){ out.unshift(i); acc += zcSlotSeconds(song, i); }
+  return out.length ? out : [song.arrangement.length - 1];
+}
 
 function scheduleSong(eng, song, transport, onStep){
   let off = 0, offSec = 0;
   const ids = [];
-  const R = zcPlayRange;
-  const lastAi = R ? Math.min(R.to, song.arrangement.length - 1) : song.arrangement.length - 1;
+  const order = zcPlayOrder || song.arrangement.map((_, i) => i);
+  const isFull = !zcPlayOrder;
+  const lastAi = order[order.length - 1];
   const rit = ritardOf(song);
-  song.arrangement.forEach((pi, ai) => {
-    if(R && (ai < R.from || ai > R.to)) return;   // 範囲の外は鳴らさない
+  order.forEach((ai) => {
+    const pi = song.arrangement[ai];
     const ph = song.phrases[pi];
     if(!ph) return;
     const n = ph.bars * stepsPerBar(song);
-    const slowing = rit > 0 && ai === lastAi;     // ⑧ 最後のスロットだけ減速
+    /* ⑧ 最後のスロットだけ減速。一部分だけ鳴らしているときは掛けない
+       （途中を切り出しているのに終わりのように遅くなると変に聞こえる）。 */
+    const slowing = isFull && rit > 0 && ai === lastAi;
     for(let s = 0; s < n; s++){
       // 位置は「スロットの先頭からの相対」で出す。off は必ず16の倍数なので
       // スウィングの位相（s%4）は従来と一致し、音は1つも動かない。
@@ -6671,6 +6705,31 @@ function scheduleSong(eng, song, transport, onStep){
     off += n;
     offSec += slowing ? ritSlotDur(song, n) : n * stepDur(song);
   });
+  /* 【2026-08-24】再生にもフェードを掛ける。
+     ------------------------------------------------------------
+     フェードは元は書き出しにしか掛からず、確かめるには「書き出しと同じ
+     計算を待ってから端を鳴らす」しかなかった。出口の fadeGain は
+     最初から用意してあったので、そこに予約を置けばその場で聴ける。
+     ⚠️ 書き出し側でも scheduleSong を通るので、再生用のときだけ掛ける
+        （二重に掛かると書き出しのフェードが二乗になる）。 */
+  if(eng && eng.isLive && eng.fadeGain){
+    const g = eng.fadeGain.gain;
+    const fi = (zcLiveFade && zcLiveFade.in)  || 0;
+    const fo = (zcLiveFade && zcLiveFade.out) || 0;
+    ids.push(transport.schedule((t) => {
+      try{
+        g.cancelScheduledValues(t);
+        if(fi > 0){ g.setValueAtTime(0.0001, t); g.linearRampToValueAtTime(1, t + fi); }
+        else g.setValueAtTime(1, t);
+      }catch(e){}
+    }, 0));
+    if(fo > 0){
+      ids.push(transport.schedule((t) => {
+        try{ g.cancelScheduledValues(t); g.setValueAtTime(1, t);
+             g.linearRampToValueAtTime(0.0001, t + fo); }catch(e){}
+      }, Math.max(0, offSec - fo)));
+    }
+  }
   return { ids, totalSteps: off, seconds: offSec };
 }
 
@@ -9545,29 +9604,12 @@ function zcOfflineLock(statusId){
 }
 function zcOfflineUnlock(){ zcOfflineBusy = false; }
 
-$('loopCheckBtn').addEventListener('click', async () => {
-  if(!song || !songSteps(song)) return;
-  if(!zcOfflineLock('mixStatus')) return;
-  status('mixStatus', '繋ぎ目を作っています…');
-  try{
-    const res = await renderSong(song);
-    const sr = res.sampleRate, len = res.channels[0].length;
-    const seg = Math.min(Math.floor(sr * 4), Math.floor(len / 2));
-    const total = seg * 2;
-    const ctx = Tone.getContext().rawContext;
-    const buf = ctx.createBuffer(res.channels.length, total, sr);
-    for(let c = 0; c < res.channels.length; c++){
-      const d = buf.getChannelData(c);
-      for(let i = 0; i < seg; i++) d[i] = res.channels[c][len - seg + i];
-      for(let i = 0; i < seg; i++) d[seg + i] = res.channels[c][i];
-    }
-    if(!started){ await Tone.start(); started = true; }
-    const src = ctx.createBufferSource();
-    src.buffer = buf; src.connect(ctx.destination); src.start();
-    status('mixStatus', '終わり4秒 → 頭4秒 を鳴らしています（真ん中が繋ぎ目です）', 'ok');
-  }catch(err){ status('mixStatus', '確認できませんでした：' + err.message, 'warn'); }
-  finally{ zcOfflineUnlock(); }
-});
+/* 【2026-08-24 作り直し】繋ぎ目もその場で鳴らす。
+   以前はここで曲を丸ごと計算し、終わり4秒＋頭4秒を貼り合わせて
+   鳴らしていた（3分の曲で十数秒待ち、しかも止められなかった）。
+   いまは並びの順番を『終わりの数枠 → 頭の数枠』にするだけで、
+   ふつうの再生と同じ仕組みで繰り返し鳴らせる。 */
+$('loopCheckBtn').addEventListener('click', () => zcPlayPart('loopCheckBtn'));
 
 /* 2026-08-23 追加：④の各項目に付けた▶ボタン。
    全体音量／テンポ／明るさ／余韻はスライダーを動かすと再生中の音へ
@@ -9587,6 +9629,7 @@ document.querySelectorAll('.adj-play').forEach(b => {
    だけで**止める手段がどこにも無かった**。1つにまとめて、押すたびに
    始める／止めるが入れ替わる形にする。 */
 function zcSyncMixPlayBtn(){
+  try{ zcSyncPartBtns(); }catch(e){}
   const b = $('mixPlayBtn');
   if(b){ b.textContent = playing ? '■ 止める' : '▶ 聴きながら調整'; b.style.opacity = '1'; }
   /* ①の再生ボタンも同じ状態に合わせる（別々に持つと必ず食い違う） */
@@ -9598,6 +9641,7 @@ $('mixRangePick').addEventListener('change', async () => {
   if(playing){ try{ await restartPlayback(); }catch(e){} }
 });
 $('mixPlayBtn').addEventListener('click', async () => {
+  zcPartPlaying = null;
   zcApplyMixRange();
   try{ await togglePlay(); }catch(e){}
   zcSyncMixPlayBtn();
@@ -9610,7 +9654,7 @@ function zcSyncMakePlayBtn(){
   b.textContent = playing ? '■ 止める' : '▶ 聴く';
 }
 $('makePlayBtn').addEventListener('click', async () => {
-  if(!playing) zcSetPlayRange(null);      // ①の再生も曲ぜんぶ
+  if(!playing){ zcSetPlayOrder(null, null); zcPartPlaying = null; }   // ①の再生も曲ぜんぶ
   try{ await togglePlay(); }catch(e){}
   zcSyncMakePlayBtn();
 });
@@ -9639,82 +9683,76 @@ $('makePlayBtn').addEventListener('click', async () => {
 /* フェードイン／フェードアウトの試聴。ライブ再生にはフェードの仕組みが
    無い（フェードは書き出し時にだけ効く）ので、実際に render して
    その一部だけを切り出して鳴らす。loopCheckBtn と同じ発想・同じ手段。 */
-/* 【2026-08-24】試聴を止められるようにする。
-   鳴っている途中でもう一度押せば止まる（止め方が無いのがいちばん困る）。 */
-let zcEdgeSrc = null;
-function zcStopEdgePreview(){
-  if(zcEdgeSrc){ try{ zcEdgeSrc.stop(); }catch(e){} try{ zcEdgeSrc.disconnect(); }catch(e){} }
-  zcEdgeSrc = null;
-  const a = $('fadeInPreviewBtn'), b = $('fadeOutPreviewBtn');
-  if(a) a.textContent = '▶ 頭を聴く';
-  if(b) b.textContent = '▶ 終わりを聴く';
+/* ============================================================
+   【2026-08-24 作り直し】頭／終わり／繋ぎ目を「その場で」鳴らす
+   ------------------------------------------------------------
+   前は、フェードが書き出しにしか掛からないという理由で
+   「書き出しと同じ計算をしてから端を鳴らす」形にしていた。
+   確かめたいだけなのに毎回待たされ、しかも押した瞬間に何も起きないので
+   壊れているように見えていた。
+   出口の fadeGain に予約を置けば**再生にもフェードを掛けられる**ので、
+   ふつうの再生と同じ仕組みで、押した瞬間に鳴らせる。
+   ・鳴らす範囲は zcPlayOrder で指定（曲データは触らない）
+   ・繋ぎ目は「終わりの数枠 → 頭の数枠」を続けて鳴らす
+   ・どれも繰り返し鳴るので、鳴らしたままつまみを動かせる
+   ・もう一度押せば止まる
+   ============================================================ */
+const ZC_PART_BTNS = ['fadeInPreviewBtn', 'fadeOutPreviewBtn', 'loopCheckBtn'];
+const ZC_PART_LABEL = { fadeInPreviewBtn:'▶ 頭を聴く', fadeOutPreviewBtn:'▶ 終わりを聴く',
+                        loopCheckBtn:'▶ 繋ぎ目を聴く' };
+let zcPartPlaying = null;   // いま鳴らしているボタンのid
+function zcSyncPartBtns(){
+  ZC_PART_BTNS.forEach(id => {
+    const b = $(id); if(!b) return;
+    b.textContent = (zcPartPlaying === id && playing) ? '■ 止める' : ZC_PART_LABEL[id];
+  });
+  if(!playing) zcPartPlaying = null;
 }
-async function previewFadeEdge(which){
+async function zcPlayPart(id){
   if(!song || !songSteps(song)) return;
-  if(zcEdgeSrc){ zcStopEdgePreview(); status('mixStatus', '止めました'); return; }
-  if(!zcOfflineLock('mixStatus')) return;
-  const label = which === 'in' ? '頭' : '終わり';
-  const btn = $(which === 'in' ? 'fadeInPreviewBtn' : 'fadeOutPreviewBtn');
-  if(btn) btn.textContent = '… 計算中';
-  status('mixStatus', `${label}を計算しています…`);
-  const origArr = song.arrangement.slice();
-  try{
-    const sec = which === 'in'
-      ? Math.max(1, (song.fadeIn || 0) + 2)
-      : Math.max(1, (song.fadeOut || 0) + 2);
-    /* 【2026-08-23 ⑯で見送った短縮を、ここで有効にする】
-       見送った理由は「並びを切り詰めると音量の倍率が変わり、全長版と
-       最大0.4986ずれる。本来の倍率を得るには先に全長を計算する必要があり
-       堂々巡り」だった。いまは全体の倍率を一度測って覚える仕組み
-       （zcMixGainOf / ZC_MIX_GAIN）があるので、それを渡せば堂々巡りに
-       ならない。まだ測っていないときだけ全長を1回計算する（以後は使い回し）。
-       これで2回目以降は端だけの計算＝数秒で鳴る。 */
-    const gain = await zcMixGainOf(song, (m) => status('mixStatus', m));
-    const secOfSlot = (pi) => {
-      const ph = song.phrases[pi];
-      return ph ? ph.bars * beatsPerBar(song) * 60 / (song.bpm || 100) : 0;
-    };
-    const need = sec + 2;
-    let sub;
-    if(which === 'in'){
-      let k = 0, acc = 0;
-      while(k < origArr.length && acc < need){ acc += secOfSlot(origArr[k]); k++; }
-      sub = origArr.slice(0, Math.max(1, k));
-    } else {
-      let j = origArr.length, acc = 0;
-      while(j > 0 && acc < need){ j--; acc += secOfSlot(origArr[j]); }
-      sub = origArr.slice(Math.min(j, origArr.length - 1));
-    }
-    song.arrangement = sub;
-    const res = await renderSong(song, null, { fixedGain: gain });
-    song.arrangement = origArr;
-
-    const sr = res.sampleRate, len = res.channels[0].length;
-    const n = Math.min(Math.floor(sr * sec), len);
-    const ctx = Tone.getContext().rawContext;
-    const buf = ctx.createBuffer(res.channels.length, n, sr);
-    for(let c = 0; c < res.channels.length; c++){
-      const d = buf.getChannelData(c);
-      const off = which === 'in' ? 0 : len - n;
-      for(let i = 0; i < n; i++) d[i] = res.channels[c][off + i];
-    }
-    if(!started){ await Tone.start(); started = true; }
-    const src = ctx.createBufferSource();
-    src.buffer = buf; src.connect(ctx.destination);
-    src.onended = () => { if(zcEdgeSrc === src) zcStopEdgePreview(); };
-    src.start();
-    zcEdgeSrc = src;
-    if(btn) btn.textContent = '■ 止める';
-    status('mixStatus', `${label}（${sec.toFixed(1)}秒）を鳴らしています。もう一度押すと止まります`, 'ok');
-  }catch(err){
-    song.arrangement = origArr;
-    zcStopEdgePreview();
-    status('mixStatus', '試聴できませんでした：' + err.message, 'warn');
+  if(zcPartPlaying === id && playing){        // もう一度押した＝止める
+    stopPlayback(); clearHighlight();
+    zcSetPlayOrder(null, null);
+    zcPartPlaying = null;
+    $('playBtn').textContent = '▶';
+    try{ zcSyncMixPlayBtn(); }catch(e){}
+    zcSyncPartBtns();
+    status('mixStatus', '止めました');
+    return;
   }
-  finally{ zcOfflineUnlock(); }
+  const fi = song.fadeIn || 0, fo = song.fadeOut || 0;
+  let order = null, fade = null, name = '';
+  if(id === 'fadeInPreviewBtn'){
+    order = zcHeadSlots(song, fi + 4); fade = { in:fi }; name = '頭';
+  } else if(id === 'fadeOutPreviewBtn'){
+    order = zcTailSlots(song, fo + 4); fade = { out:fo }; name = '終わり';
+  } else {
+    const tail = zcTailSlots(song, 4), head = zcHeadSlots(song, 4);
+    order = tail.concat(head); fade = null; name = '繋ぎ目（終わり→頭）';
+  }
+  zcSetPlayOrder(order, fade);
+  zcPartPlaying = id;
+  try{
+    if(playing){ stopPlayback(); clearHighlight(); }
+    await restartPlayback();
+    $('playBtn').textContent = '⏸';
+    try{ zcSyncMixPlayBtn(); }catch(e){}
+    zcSyncPartBtns();
+    status('mixStatus',
+      `${name}を繰り返し鳴らしています。もう一度押すと止まります` +
+      ((id !== 'loopCheckBtn' && (fi + fo) === 0) ? '（いまフェードは0秒です）' : ''), 'ok');
+  }catch(err){
+    zcSetPlayOrder(null, null); zcPartPlaying = null; zcSyncPartBtns();
+    status('mixStatus', '鳴らせませんでした：' + err.message, 'warn');
+  }
 }
-$('fadeInPreviewBtn').addEventListener('click', () => previewFadeEdge('in'));
-$('fadeOutPreviewBtn').addEventListener('click', () => previewFadeEdge('out'));
+
+/* 【2026-08-24 撤去】previewFadeEdge / zcStopEdgePreview
+   曲を丸ごと計算してから端を切り出して鳴らしていた仕組み。
+   フェードを再生にも掛けられるようにしたので不要になった
+   （いまは zcPlayPart が、ふつうの再生と同じ仕組みでその場で鳴らす）。 */
+$('fadeInPreviewBtn').addEventListener('click',  () => zcPlayPart('fadeInPreviewBtn'));
+$('fadeOutPreviewBtn').addEventListener('click', () => zcPlayPart('fadeOutPreviewBtn'));
 
 /* ---------- ⑤ 保存・書き出し ---------- */
 const AUTOSAVE_KEY = 'zcnova-bgm-studio-autosave-v1';
@@ -10483,7 +10521,7 @@ $('seRenderMp3Btn').addEventListener('click', () => doRenderSE('mp3'));
 $('playBtn').addEventListener('click', () => {
   /* 上のバーの再生は必ず曲ぜんぶ。範囲を絞るのは④の中だけの話にする
      （どこを押したかで鳴る範囲が変わると、何が起きているか分からなくなる）。 */
-  if(!playing) zcSetPlayRange(null);
+  if(!playing){ zcSetPlayOrder(null, null); zcPartPlaying = null; }
   togglePlay().catch(err => status('makeStatus', '再生できませんでした：' + err.message, 'warn'));
 });
 $('undoBtn').addEventListener('click', () => {
