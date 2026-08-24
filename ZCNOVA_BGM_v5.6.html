@@ -137,6 +137,13 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
 .cell.on-mel2{ background:#a87fd0; border-color:#6b4a93; }
 .cell.on-sub{ background:#e8a0c8; border-color:#8f2a63; }
 .cell.on-bass{ background:#c8963e; border-color:#8a6b3a; }
+/* 【2026-08-24 修正】木管・金管のマスの色が**そもそも書かれていなかった**。
+   トラックを後から足したときに色だけ入れ忘れたもので、押すと
+   class（on-wind1 / on-wind2）は付くのに見た目が変わらず、
+   「押しても点灯しない＝打ち込めない」と見えていた。
+   ほかのパートと重ならない色にする（木管＝緑／金管＝銅）。 */
+.cell.on-wind1{ background:#7fc98a; border-color:#2f7a44; }
+.cell.on-wind2{ background:#e0805a; border-color:#94402a; }
 .cell.on-kick{ background:#8f89e8; border-color:#3c3489; }
 .cell.on-snare{ background:#e79576; border-color:#993c1d; }
 .cell.on-hihat{ background:#5dcaa5; border-color:#0f6e56; }
@@ -8530,7 +8537,7 @@ function buildTrackArea(){
                                        off:false, pitch:72, dur:0.35, wobble:50, vol:55,
                                        seed:1, skipRoles:['intro','outro'] });
     const box = document.createElement('div');
-    box.className = 'trk' + (openTracks.se ? ' open' : '');
+    box.className = 'trk' + (openTracks.se ? ' open' : '') + (sc.on === false ? ' trk-off' : '');
     box.dataset.trk = 'se';
 
     const head = document.createElement('div');
@@ -8572,14 +8579,19 @@ function buildTrackArea(){
     });
     ctrl.appendChild(vol);
 
-    // 鳴らす／消す
+    /* 【2026-08-24】ほかのパートと同じ言い方・同じ見た目にそろえる。
+       ここだけ「消音」「全消し」で、しかも押した状態が反転していたため、
+       同じことをしているのに操作を覚え直す必要があった。 */
     const mute = document.createElement('button');
-    mute.className = 'mute' + (sc.on === false ? ' on' : '');
-    mute.textContent = '消音';
+    mute.className = 'clr-btn';
+    mute.textContent = (sc.on === false) ? '鳴らさない' : '鳴らす';
+    if(sc.on === false) mute.style.opacity = '0.55';
     mute.addEventListener('click', ev => {
       ev.stopPropagation();
       sc.on = (sc.on === false);
-      mute.classList.toggle('on', sc.on === false);
+      mute.textContent = (sc.on === false) ? '鳴らさない' : '鳴らす';
+      mute.style.opacity = (sc.on === false) ? '0.55' : '1';
+      if(box) box.classList.toggle('trk-off', sc.on === false);
       if(liveEngine && liveEngine.seGain){
         try{ liveEngine.seGain.gain.rampTo(sc.on === false ? 0 : (sc.vol === undefined ? 55 : sc.vol) / 100, 0.05); }catch(e){}
       }
@@ -8589,7 +8601,7 @@ function buildTrackArea(){
 
     // このフレーズの効果音を全部消す
     const clr = document.createElement('button');
-    clr.className = 'mute'; clr.textContent = '全消し';
+    clr.className = 'clr-btn'; clr.textContent = '消去';
     clr.title = 'このフレーズの効果音だけを消します';
     clr.addEventListener('click', ev => {
       ev.stopPropagation();
@@ -8905,7 +8917,18 @@ async function togglePlay(){
     }
     zcPlayHint('');
     if(zcTrackPreview !== null){ zcStopTrackPreview(); return; }
+    /* 【2026-08-24】書き出しの最中は「止める」だけ効かせ、「始める」は断る。
+       ------------------------------------------------------------
+       書き出しは始まるときに再生を止めるが、そのあと再生ボタンを押せば
+       また鳴り出せてしまい、30〜60秒の計算とCPUを取り合ったまま
+       止め方が分からない状態になっていた（実測：押すと started に戻り、
+       書き出しが終わってもそのまま鳴り続ける）。
+       止める操作はいつでも通す（鳴りっぱなしのほうが困るため）。 */
     if(playing){ stopPlayback(); clearHighlight(); $('playBtn').textContent = '▶'; }
+    else if(rendering || zcOfflineBusy){
+      zcPlayHint('書き出しの計算中は再生できません。終わるまでお待ちください（書き出したファイルには影響しません）。');
+      $('playBtn').textContent = '▶';
+    }
     else { await restartPlayback(); $('playBtn').textContent = '⏸'; }
   }finally{
     // 再生中でもロックは解除する。次のクリックはplaying状態を見て停止／再生を判断する。
@@ -9246,6 +9269,20 @@ $('trackArea').addEventListener('click', (e) => {
     refreshLiveEngine(song); scheduleAutosave();
     return;
   }
+  /* 【2026-08-24 修正】試聴の判定を、見出し（.trk-head）の判定より**前**に置く。
+     ------------------------------------------------------------
+     試聴ボタンは見出しの中にあるので、先に見出しの判定に入ってしまい、
+     レーンが開閉するだけで試聴は一度も動いていなかった。
+     消去・鳴らす／鳴らさないの判定が上にあるのは、同じ理由で
+     stopPropagation を付けてあるため。ここも同じ形にそろえる。 */
+  const pv = e.target.closest('[data-preview-for]');
+  if(pv){
+    e.stopPropagation();
+    const k = pv.dataset.previewFor;
+    if(zcTrackPreview === k) zcStopTrackPreview();
+    else zcStartTrackPreview(k);
+    return;
+  }
   const head = e.target.closest('.trk-head');
   if(head){
     const box = head.parentElement;
@@ -9256,13 +9293,6 @@ $('trackArea').addEventListener('click', (e) => {
     if(openTracks[k] && typeof box._zcFill === 'function') box._zcFill();
     box.classList.toggle('open', openTracks[k]);
     head.querySelector('.tri').textContent = openTracks[k] ? '▲' : '▼';
-    return;
-  }
-  const pv = e.target.closest('[data-preview-for]');
-  if(pv){
-    const k = pv.dataset.previewFor;
-    if(zcTrackPreview === k) zcStopTrackPreview();
-    else zcStartTrackPreview(k);
     return;
   }
   const cc = e.target.closest('[data-chord-beat]');
