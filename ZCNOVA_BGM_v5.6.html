@@ -567,13 +567,28 @@ footer b{ color:var(--brass); }
         <button class="io-btn" id="oneStemBtn" title="選んだパートだけをWAVで書き出します（ZIPを作らないぶん速く、通信も不要）">● このパートだけ</button>
       </span>
     </div>
+
+    <!-- 【2026-08-24 追加】曲の一部分だけを切り出す。
+         動画に使う人が欲しいのは「イントロだけ」「サビだけ」であって、
+         パートごとの書き出し（DAW向け）ではない、という指摘への対応。 -->
+    <div class="fx-row">
+      <span class="t-label">部分だけ</span>
+      <span style="display:inline-flex;gap:5px;align-items:center;">
+        <select id="sectionPick" title="書き出す部分を選びます" style="background:#1d1710;border:1px solid #4a3d2a;color:var(--text);border-radius:6px;padding:5px 6px;font-size:11px;font-family:inherit;max-width:260px;"></select>
+        <button class="io-btn" id="sectionBtn" title="選んだ部分だけを、全パート込みでWAVで書き出します">● この部分だけ</button>
+      </span>
+    </div>
     <p class="hint">
       書き出しは<b>鳴らさずに計算で作る</b>ので、再生するより速く終わります。
       それでも<b>3分の曲でおよそ30〜60秒</b>かかります（機種と音数によって前後します）。
       画面を閉じずにお待ちください。
       音量は動画で扱いやすい大きさに自動でそろえます。書き出し中は再生を止めます（同時に動かすと不安定になるため）。<br>
       「このパートだけ」は、選んだパート（メロディ・伴奏・ドラムなど）だけをWAVで書き出します。
-      DAWで混ぜ直せるよう、曲全体の音量を測ってから同じ倍率で書き出すので、足し戻せば元のバランスになります。
+      DAWで混ぜ直せるよう、曲全体の音量を測ってから同じ倍率で書き出すので、足し戻せば元のバランスになります。<br>
+      <b>「この部分だけ」</b>は、イントロ・Aメロ・サビといった<b>曲の一部分を、全パート込みで</b>切り出します。
+      動画の場面に合わせて短く使いたいときはこちらです。
+      音量は曲全体を測ってからそろえるので、<b>切り出した部分どうしをつないでも段差になりません</b>。
+      フェードイン・アウトは掛かりません（曲の途中を切り出すため）。
     </p>
     <div class="status" id="ioStatus"></div>
     </div>
@@ -7835,6 +7850,109 @@ function buildOneStemPick(){
   if(keep && [...w.options].some(o => o.value === keep)) w.value = keep;
 }
 
+/* 【2026-08-24 追加】書き出す「部分」の一覧。
+   ------------------------------------------------------------
+   並びの1枠ずつ出すと 40枠を超えて選べないので、
+   **同じ役割が続いているところをひとまとまり**にして出す。
+   例）5〜8枠が全部サビ → 「サビ（5〜8枠・12秒）」の1行。 */
+function zcSectionRanges(song){
+  const out = [];
+  if(!song || !Array.isArray(song.arrangement)) return out;
+  const roleOf = (pi) => {
+    const ph = song.phrases[pi];
+    if(!ph) return '—';
+    const r = PHRASE_ROLES.find(x => x.key === ph.role);
+    return (r && r.label) || ph.name || '—';
+  };
+  const secOf = (pi) => {
+    const ph = song.phrases[pi];
+    if(!ph) return 0;
+    return ph.bars * beatsPerBar(song) * 60 / (song.bpm || 100);
+  };
+  const runs = [];
+  let i = 0;
+  while(i < song.arrangement.length){
+    const label = roleOf(song.arrangement[i]);
+    let j = i, sec = 0;
+    while(j < song.arrangement.length && roleOf(song.arrangement[j]) === label){
+      sec += secOf(song.arrangement[j]); j++;
+    }
+    runs.push({ from:i, to:j - 1, labels:[label], sec });
+    i = j;
+  }
+  /* 役割は A→B→サビ→A… と細かく入れ替わるので、そのまま出すと
+     4秒の項目が40個並んで選べない（実測：3分の曲で47枠→20項目）。
+     短いものは次とくっつけて、1項目が使える長さになるようにする。 */
+  const MIN_SEC = 12;
+  runs.forEach(r => {
+    const last = out[out.length - 1];
+    if(last && last.sec < MIN_SEC){
+      last.to = r.to; last.sec += r.sec;
+      if(last.labels[last.labels.length - 1] !== r.labels[0]) last.labels.push(r.labels[0]);
+    } else {
+      out.push({ from:r.from, to:r.to, labels:r.labels.slice(), sec:r.sec });
+    }
+  });
+  /* 最後がまだ短ければ、1つ前に足す（半端な尻切れを作らない） */
+  if(out.length >= 2 && out[out.length - 1].sec < MIN_SEC * 0.5){
+    const t = out.pop(), p2 = out[out.length - 1];
+    p2.to = t.to; p2.sec += t.sec;
+    t.labels.forEach(l => { if(p2.labels[p2.labels.length - 1] !== l) p2.labels.push(l); });
+  }
+  /* 「Aメロ〜Aメロ」のように最初と最後が同じだと何が入っているか分からないので、
+     途中の役割まで順に並べる（長すぎるときだけ「…」で省く）。 */
+  out.forEach(r => {
+    r.label = r.labels.slice(0, 3).join('〜') + (r.labels.length > 3 ? '〜…' : '');
+  });
+  return out;
+}
+function buildSectionPick(){
+  const w = $('sectionPick'); if(!w) return;
+  const keep = w.value;
+  w.innerHTML = '';
+  if(!song) return;
+  zcSectionRanges(song).forEach((r, n) => {
+    const o = document.createElement('option');
+    o.value = r.from + '-' + r.to;
+    const n枠 = r.to - r.from + 1;
+    o.textContent = `${n + 1}. ${r.label}（${n枠}枠・${fmtTime(r.sec)}）`;
+    w.appendChild(o);
+  });
+  if(keep && [...w.options].some(o => o.value === keep)) w.value = keep;
+}
+
+/* 選んだ部分だけを、全パート込みで計算する。
+   音量は曲全体を測った倍率をそのまま使うので、切り出した部分どうしを
+   つないでも段差にならない（1パート書き出しと同じ考え方）。 */
+/* 曲全体の音量の基準。部分を何回も書き出すたびに曲まるごと計算し直すと
+   3分の曲で毎回40秒かかる（実測）。曲に変更があるまで覚えておく。
+   ・WeakMap なので保存する .json には入らない
+   ・scheduleAutosave（＝何か変えたとき）で捨てる */
+const ZC_MIX_GAIN = new WeakMap();
+function zcForgetMixGain(){ try{ if(typeof song !== 'undefined' && song) ZC_MIX_GAIN.delete(song); }catch(e){} }
+async function zcMixGainOf(song, onProgress){
+  if(ZC_MIX_GAIN.has(song)) return ZC_MIX_GAIN.get(song);
+  if(onProgress) onProgress('全体の音量を測っています…');
+  const mix = await renderSong(song, null);
+  ZC_MIX_GAIN.set(song, mix.gain);
+  return mix.gain;
+}
+
+async function renderSection(song, from, to, onProgress){
+  const origArr = song.arrangement.slice();
+  const origIn = song.fadeIn, origOut = song.fadeOut;
+  try{
+    const gain = await zcMixGainOf(song, onProgress);
+    song.arrangement = origArr.slice(from, to + 1);
+    /* 曲の途中を切り出すので、曲全体のフェードは掛けない */
+    song.fadeIn = 0; song.fadeOut = 0;
+    if(onProgress) onProgress('この部分を計算しています…');
+    return await renderSong(song, null, { fixedGain: gain });
+  } finally {
+    song.arrangement = origArr; song.fadeIn = origIn; song.fadeOut = origOut;
+  }
+}
+
 function buildSEButtons(){
   const w = $('sePick'); w.innerHTML = '';
   ['ノイズ系','クリック系','スイープ系','コミカル系'].forEach(g => {
@@ -7927,6 +8045,7 @@ function markPicked(){
   try{ updateSpreadNote(); }catch(e){}
   try{ zcSyncSELaneUI(); }catch(e){}
   try{ buildOneStemPick(); }catch(e){}
+  try{ buildSectionPick(); }catch(e){}
   /* 【UI整理②】曲に焼き込まれているつまみを画面へ戻す。
      保存した曲や .json を開いたとき、画面と曲の中身がずれないようにする。 */
   if(song){
@@ -8620,6 +8739,7 @@ function zcEnsureTrackOn(k){
 }
 
 function onGridEdit(){
+  zcForgetMixGain();   /* 【2026-08-24】曲が変わったら音量の基準を測り直す */
   /* 【2026-08-23 修正③】保存はここで即座に予約する（旧実装は 500ms 待ってから
      scheduleAutosave を呼んでいて、そこから更に 700ms 待つ二段構えになっていた）。
      重い renderPhrases（音数の数え直し）だけを間引く。 */
@@ -9464,6 +9584,9 @@ function zcFlashSaved(){
   zcSavedFlashTimer = setTimeout(() => { el.style.opacity = '0'; }, 1400);
 }
 function scheduleAutosave(){
+  /* 【2026-08-24】曲に何か変更があった＝音量の基準を測り直す。
+     ここは編集のほぼ全部が通る場所なので、取りこぼしが少ない。 */
+  zcForgetMixGain();
   if(!zcSaveDirtySince) zcSaveDirtySince = Date.now();
   clearTimeout(autosaveTimer);
   autosaveTimer = setTimeout(() => zcWriteAutosave(false), ZC_SAVE_DEBOUNCE);
@@ -9779,7 +9902,7 @@ const ZC_LOCK_CARDS = ['card1', 'card2', 'card3'];
      ・効果音レーン  → 曲の効果音レーンが書き換わる（実測で中身が変化）
      ・動作を安定化  → 書き出しの最中に音声処理を作り直そうとする
    カードのロックと同じ理由で、ここも止める。 */
-const ZC_LOCK_CTRL = ['makeBtn','againBtn','addPhraseBtn','dupPhraseBtn','delPhraseBtn',
+const ZC_LOCK_CTRL = ['makeBtn','againBtn','addPhraseBtn','dupPhraseBtn','delPhraseBtn','sectionBtn','oneStemBtn',
   'autoArrangeBtn','clearArrangeBtn','regenPhraseBtn','clearPhraseBtn',
   'undoBtn','cleanupBtn','seLoopOn','seLoopEvery','seLoopBeat','seLoopOff','seLoopVol'];
 let zcUndoWasDisabled = false;
@@ -9887,6 +10010,43 @@ $('oneStemBtn').addEventListener('click', async () => {
   }
   btn.classList.remove('working'); btn.textContent = '● このパートだけ';
   zcSetEditLock(false);                      /* 【修正④】 */
+  rendering = false;
+});
+
+/* 【2026-08-24 追加】曲の一部分だけを書き出す。 */
+$('sectionBtn').addEventListener('click', async () => {
+  if(rendering) return;
+  if(zcOfflineBusy){ status('ioStatus', 'いま別の試聴を計算中です。終わってからもう一度押してください。', 'warn'); return; }
+  if(!song || !songSteps(song)){ status('ioStatus', 'まだ曲がありません', 'warn'); return; }
+  const v = ($('sectionPick').value || '').split('-');
+  const from = parseInt(v[0], 10), to = parseInt(v[1], 10);
+  if(!(from >= 0) || !(to >= from) || to >= song.arrangement.length){
+    status('ioStatus', '書き出す部分を選んでください', 'warn'); return;
+  }
+  const label = ($('sectionPick').selectedOptions[0] || {}).textContent || '';
+  const name = label.replace(/^\d+\.\s*/, '').replace(/（.*$/, '').trim() || '部分';
+  rendering = true;
+  zcSetEditLock(true);
+  const btn = $('sectionBtn');
+  btn.classList.add('working'); btn.textContent = '● 書き出し中…';
+  const t0 = performance.now();
+  const tick = startRenderTicker('sectionBtn', '● 書き出し中…', 'ioStatus');
+  try{
+    const res = await renderSection(song, from, to, (m) => tick.tell(m));
+    tick.tell('WAVにしています…');
+    const blob = encodeWav(res);
+    const base = songFileName('').replace(/\.$/, '');
+    download(blob, `${base}_${fnClean(name, 20) || 'part'}.wav`);
+    const ms = Math.round(performance.now() - t0);
+    status('ioStatus',
+      `「${name}」を書き出しました：${zcLastSavedName}（${(blob.size/1024/1024).toFixed(1)}MB／${(ms/1000).toFixed(1)}秒）`, 'ok');
+  }catch(err){
+    status('ioStatus', '書き出せませんでした：' + err.message, 'warn');
+  }finally{
+    tick.stop();
+  }
+  btn.classList.remove('working'); btn.textContent = '● この部分だけ';
+  zcSetEditLock(false);
   rendering = false;
 });
 
