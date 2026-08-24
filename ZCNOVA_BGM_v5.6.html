@@ -393,7 +393,8 @@ footer b{ color:var(--brass); }
       曲調ごとに<b>テンポ・音階・コード進行・楽器・リズム</b>がまとめて決まります。同じ曲調でも押すたびに違う曲になります。<br>
       気に入った曲は、上のバーの<b>💾 この曲を保存</b>（この端末に残す）で残してください。
       音のファイルとして残したいときは<b>⑤ 保存・書き出し</b>から MP3／WAV で書き出せます。
-      <b>作り直すと同じ曲は戻ってきません。</b><br>
+      作り直す前に戻したいときは、上のバーの<b>↩ やり直す</b>で12手ぶんまで戻せます。
+      <b>それより前の曲は戻せません。</b><br>
       <b>この設定で作る</b>はいまの曲のまま設定だけ反映します。
       <b>🎲 もう1曲つくる</b>は設定そのままで別の曲にします。<br>
       <b>メロディ</b>を変えると、同じコード進行でもまるで違う曲になります（いちばん効きます）。
@@ -1893,7 +1894,15 @@ const PLAY_MODES = [
      クラシック寄りの響きが要るときは、楽器カテゴリの
      「吹奏楽 / 木管 / 金管 / 弦楽器 / オーケストラ」を使う。
      ------------------------------------------------------------ */
-  { key:'full',   label:'フルバンド', group:'まとめて',
+  /* 【2026-08-24】ボタンとしては出さない（hidden）。
+     ------------------------------------------------------------
+     画面には「フルバンド」が2つ並んでいた。ここ（まとめて）と、
+     楽器カテゴリの 🎧 フルバンド（fam_full）。中身をそろえた結果、
+     **同じ曲番号なら1音も違わない完全に同じ曲**が出るようになり、
+     押す人には見分けがつかない（実測：40曲すべて一致）。
+     吹奏楽・オーケストラと並ぶ楽器カテゴリ側を残し、こちらは隠す。
+     定義そのものは残すので、この key で保存した曲はこれまでどおり開ける。 */
+  { key:'full',   label:'フルバンド', group:'まとめて', hidden:true,
     on:['mel1','mel2','sub','chord','bass','drum','wind1','wind2'],
     /* 【2026-08-24】画面に出る「フルバンド」（楽器カテゴリの full）と
        中身をそろえる。ジャズ寄り＝ピアノ・ギター・ウッドベース・ドラムに
@@ -7457,16 +7466,26 @@ function buildSEVoice(type, freq, dur, dest, t0, v){
   }
 }
 
+/* 効果音の出口（音量 → リミッター → やわらかい頭打ち）。
+   ⚠️ 試聴と書き出しで必ず同じ形にすること。以前は同じ4行を2箇所に
+      書いていた。片方だけ直すと「試聴では良いのに書き出すと歪む」に
+      なり、しかも鳴らし比べないと気づけない。 */
+function seOutChain(){
+  const master = new Tone.Gain(0.9);
+  const limiter = new Tone.Limiter(-1);
+  const safeClip = new Tone.WaveShaper(x => Math.tanh(x * 1.15) * 0.87, 4096);
+  master.chain(limiter, safeClip); safeClip.toDestination();
+  return { master, nodes:[master, limiter, safeClip] };
+}
+
 /* ---- 試聴（その場で鳴らす） ---- */
 let sePreviewNodes = [];
 async function previewSE(type, midi, dur, seed, wobble){
   await Tone.start();
   sePreviewNodes.forEach(n => { try{ n.dispose(); }catch(e){} });
   sePreviewNodes = [];
-  const master = new Tone.Gain(0.9);
-  const limiter = new Tone.Limiter(-1);
-  const safeClip = new Tone.WaveShaper(x => Math.tanh(x * 1.15) * 0.87, 4096);
-  master.chain(limiter, safeClip); safeClip.toDestination();
+  const out = seOutChain();
+  const master = out.master;
   const t0 = Tone.now() + 0.02;
   const v = seVariation(type, seed, wobble);
   const nodes = buildSEVoice(type, seFreq(midi), dur, master, t0, v);
@@ -7478,7 +7497,7 @@ async function previewSE(type, midi, dur, seed, wobble){
      効果音の画面は種類ボタンを押しても、つまみを離しても鳴るので
      ふだんの操作でかなりの頻度で踏む。
      自分の分だけを掴んだ配列を閉じ込めて、それを捨てる。 */
-  const mine = [master, limiter, safeClip, ...nodes];
+  const mine = [...out.nodes, ...nodes];
   sePreviewNodes = mine;
   // 使い終わったノードは少し待ってから片付ける（鳴り終わる前に消さない）
   setTimeout(() => {
@@ -7495,11 +7514,7 @@ async function renderSE(type, midi, dur, seed, wobble){
   const TAIL = 2.0;
   const total = dur + TAIL;
   const buf = await Tone.Offline(() => {
-    const master = new Tone.Gain(0.9);
-    const limiter = new Tone.Limiter(-1);
-    const safeClip = new Tone.WaveShaper(x => Math.tanh(x * 1.15) * 0.87, 4096);
-    master.chain(limiter, safeClip); safeClip.toDestination();
-    buildSEVoice(type, freq, dur, master, 0, v);
+    buildSEVoice(type, freq, dur, seOutChain().master, 0, v);
   }, total);
 
   const sr = buf.sampleRate, nch = buf.numberOfChannels;
@@ -7783,6 +7798,9 @@ function buildPlayModeButtons(){
     b.className = 'pat-btn'; b.textContent = p.label; b.dataset.pm = p.key;
     return b;
   };
+  /* hidden の項目はボタンを出さない。中身（PLAY_MODES の定義）は残すので、
+     保存済みの曲がその key を指していてもこれまでどおり開ける。 */
+  const 出す = list => list.filter(p => !p.hidden);
 
   // ---- まとめて ----
   const line = document.createElement('div');
@@ -7790,11 +7808,11 @@ function buildPlayModeButtons(){
   const cap = document.createElement('span');
   cap.style.cssText = CAP; cap.textContent = 'まとめて';
   line.appendChild(cap);
-  PLAY_MODES.filter(p => p.group === 'まとめて').forEach(p => line.appendChild(mkBtn(p)));
+  出す(PLAY_MODES.filter(p => p.group === 'まとめて')).forEach(p => line.appendChild(mkBtn(p)));
   w.appendChild(line);
 
   // ---- 楽器1つ（種類別に段分け） ----
-  const solos = PLAY_MODES.filter(p => p.group === '楽器1つ');
+  const solos = 出す(PLAY_MODES.filter(p => p.group === '楽器1つ'));
   const block = document.createElement('div');
   block.style.cssText = 'display:flex;align-items:flex-start;width:100%;';
   const cap2 = document.createElement('span');
@@ -10282,11 +10300,15 @@ $('sectionBtn').addEventListener('click', () =>
   }));
 
 /* ---------- ⑥ 効果音（SE） ---------- */
+/* 高さ・長さ・ゆらぎの3つのつまみ。試聴と書き出しで同じ値を読む。 */
+function seKnobs(){
+  return { midi:   parseInt($('sePitch').value, 10),
+           dur:    parseInt($('seDur').value, 10) / 100,
+           wobble: parseInt($('seWobble').value, 10) };
+}
 async function playCurrentSE(note){
   try{
-    const midi = parseInt($('sePitch').value, 10);
-    const dur = parseInt($('seDur').value, 10) / 100;
-    const wobble = parseInt($('seWobble').value, 10);
+    const { midi, dur, wobble } = seKnobs();
     await previewSE(pickSE, midi, dur, seSeed, wobble);
     status('seStatus', `「${SE_TYPES[pickSE].label}」${note || 'を鳴らしました'}`, 'ok');
   }catch(err){
@@ -10392,9 +10414,7 @@ async function doRenderSE(kind){
   btn.classList.add('working'); btn.textContent = '● 書き出し中…';
   const t0 = performance.now();
   try{
-    const midi = parseInt($('sePitch').value, 10);
-    const dur = parseInt($('seDur').value, 10) / 100;
-    const wobble = parseInt($('seWobble').value, 10);
+    const { midi, dur, wobble } = seKnobs();
     const res = await renderSE(pickSE, midi, dur, seSeed, wobble);
     let blob, ext;
     if(kind === 'mp3'){
