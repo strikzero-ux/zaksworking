@@ -4034,14 +4034,21 @@ function buildEngine(cfg){
   const master   = new Tone.Gain(cfg.masterVol === undefined ? 0.8 : cfg.masterVol);
   const highpass = new Tone.Filter({ type:'highpass', frequency:38, Q:0.6 });
   const bright   = new Tone.Filter({ type:'lowpass', frequency:cfg.bright || 12000, Q:0.4 });
+  /* 【2026-08-24 追加】耳が最も敏感な 3kHz あたりだけを軽く下げる。
+     実測で「幻想」は 1-2kHz に 49.4% / 2-4kHz に 22.0%、「クラシック(弦)」は
+     1-2kHz に 32.5% / 2-4kHz に 28.6% のエネルギーが集まっており、
+     しかも低域がほとんど無いぶん中高域がむき出しになっていた。
+     明るさ（bright）は 12kHz のローパスなので、この帯域には効かない。
+     全体を暗くせずに刺さりだけ取るため、ここを 1つだけ凹ませる。 */
+  const harsh    = new Tone.Filter({ type:'peaking', frequency:3200, Q:0.9, gain:-2.5 });
   const comp     = new Tone.Compressor({ threshold:-18, ratio:3, attack:0.006, release:0.16 });
   const makeup   = new Tone.Gain(1.35);
   const preLimit = new Tone.Gain(0.7);
   const limiter  = new Tone.Limiter(-1);
   const safeClip = new Tone.WaveShaper(x => Math.tanh(x * 1.15) * 0.87, 4096);
   const fadeGain = new Tone.Gain(1);           // フェード用
-  own(master, highpass, bright, comp, makeup, preLimit, limiter, safeClip, fadeGain);
-  master.chain(highpass, bright, comp, makeup, preLimit, limiter, safeClip, fadeGain);
+  own(master, highpass, bright, harsh, comp, makeup, preLimit, limiter, safeClip, fadeGain);
+  master.chain(highpass, bright, harsh, comp, makeup, preLimit, limiter, safeClip, fadeGain);
   fadeGain.toDestination();
 
   // ---- 残響（動画BGMは少し残響がある方がなじむ） ----
@@ -4176,10 +4183,109 @@ function buildEngine(cfg){
 /* ---------- 高い音を抑える ----------
    高音ほど耳に刺さるので、C5より上を少しずつ弱くする。
    （ZCnova で「高い音が耳障り・音割れする」と指摘を受けて入れた処理） */
+/* ============================================================
+   【2026-08-24 追加】楽器が出せる高さの中に音を収める
+   ------------------------------------------------------------
+   【なぜ要るか】実測でこうなっていた。
+     ・音域が決まっている音 22,245個のうち **30.7% が音域の外**
+     ・**8.9% は1オクターブ以上はみ出し**、最大 2.6オクターブ
+     ・多い順に ティンパニ1120 / トロンボーン965 / チューバ638 /
+       ホルン468 / ファゴット396 ＝ **低い楽器が出せない高さで
+       旋律を吹かされていた**。細く硬い音になり、耳に刺さる主因。
+     ・逆にピッコロ545・鉄琴472は下へはみ出していた。
+   音源には楽器ごとの音域（range）が最初から書いてあるのに、
+   フィルタの基準周波数を出すためだけに使われ、音の高さには
+   一度も使われていなかった。
+
+   【やり方】音符ごとに折り返すと旋律の形が壊れるので、
+   **パートごと・フレーズごとに、まるごとオクターブ単位で動かす**。
+   音程の関係は1つも変わらないので、旋律の形はそのまま残る。
+
+   【安全性】乱数を1回も使わない。曲データに焼き込むので、
+   画面のマス目・再生・書き出しの3つが必ず一致する。
+   すでに保存してある曲は読み込んでも作り直さないので変わらない。
+   ============================================================ */
+/* 音源に音域が書かれていない音色（ピアノ・シンセ系など27種）の控え。
+   実楽器の音域ではなく「ここから上は耳に刺さる」という上限で決めている。 */
+const ZC_RANGE_FALLBACK = {
+  piano:[24,96], ep:[28,96], soft:[28,96], harp:[24,96], pluck:[36,96],
+  guitar:[40,88], lead:[36,96], synth:[36,96], retro:[36,96], fat:[36,93],
+  pad:[28,92], airPad:[28,92], glocken:[60,96], bell:[60,96], glass:[60,96],
+  bassSynth:[28,60], bassString:[28,60], contrabassArco:[28,60],
+  trumpetSolo:[52,84]
+};
+const ZC_RANGE_DEFAULT = [36, 96];          // C2〜C7
+/* 楽器としては出せても、ここから上は動画BGMでは刺さるだけなので使わない。
+   96 = C7（約2093Hz）。ピッコロ(C8まで)・鉄琴(D8まで)・木琴(C8まで)は
+   実物ではもっと上まで出るが、その帯域こそが耳につくので頭を押さえる。 */
+const ZC_PITCH_CEIL = 96;
+function zcInstRange(instKey){
+  if(!instKey) return null;
+  let r = null;
+  try{
+    const S = window.ZCNOVA_ACOUSTIC_SPECS, M = window.ZCNOVA_ACOUSTIC_MAP;
+    if(S && M && S[M[instKey]] && S[M[instKey]].range) r = S[M[instKey]].range;
+  }catch(e){}
+  if(!r) r = ZC_RANGE_FALLBACK[instKey] || ZC_RANGE_DEFAULT;
+  /* 上限だけは全楽器共通で頭を押さえる（下限は楽器のまま）。 */
+  const hi = Math.min(r[1], ZC_PITCH_CEIL);
+  return [Math.min(r[0], hi), hi];
+}
+/* はみ出しがいちばん小さくなるオクターブのずらし量を返す。
+   何度かけても2回目からは0になる（＝2重に下がらない）。 */
+function zcBestOctShift(arr, lo, hi){
+  let mn = Infinity, mx = -Infinity, n = 0;
+  for(let i = 0; i < arr.length; i++){
+    const v = arr[i]; if(!v) continue;
+    const m = noteToMidi(v); if(m === null) continue;
+    n++; if(m < mn) mn = m; if(m > mx) mx = m;
+  }
+  if(!n) return 0;
+  let best = 0, bestScore = Infinity;
+  for(let sh = -3; sh <= 3; sh++){
+    const a = mn + sh * 12, b = mx + sh * 12;
+    const over = Math.max(0, b - hi) + Math.max(0, lo - a);
+    const score = over * 10 + Math.abs(sh);       // はみ出しを最優先、次に動かす量を小さく
+    if(score < bestScore){ bestScore = score; best = sh; }
+  }
+  return best;
+}
+const ZC_FIT_TRACKS = ['mel1','mel2','sub','bass','wind1','wind2'];
+function zcFitRangesToInstruments(song){
+  if(!song || !song.phrases || !song.tracks) return song;
+  ZC_FIT_TRACKS.forEach(k => {
+    const t = song.tracks[k]; if(!t) return;
+    const r = zcInstRange(t.inst); if(!r) return;
+    song.phrases.forEach(ph => {
+      const arr = ph && ph[k]; if(!arr) return;
+      const sh = zcBestOctShift(arr, r[0], r[1]);
+      if(sh) for(let i = 0; i < arr.length; i++) if(arr[i]) arr[i] = zcTranspose(arr[i], sh * 12);
+      /* まるごと動かしても収まらないフレーズ（音の幅が楽器の音域より広い）が
+         わずかに残る。実測で 0.7%。そこに E8（約5.3kHz）のような音が
+         混じると1音でも耳に刺さるので、**上にはみ出した音だけ**
+         オクターブ単位で下ろす。旋律の形はその音だけ変わる。
+         下にはみ出す音は耳に痛くないので触らない（低い音は残す）。 */
+      for(let i = 0; i < arr.length; i++){
+        if(!arr[i]) continue;
+        let m = noteToMidi(arr[i]); if(m === null) continue;
+        let d = 0;
+        while(m > ZC_PITCH_CEIL){ m -= 12; d -= 12; }
+        if(d) arr[i] = zcTranspose(arr[i], d);
+      }
+    });
+  });
+  return song;
+}
+
 function pitchTilt(note){
   const m = noteToMidi(note); if(m === null) return 1;
   const over = m - 72; if(over <= 0) return 1;
-  return Math.max(0.55, 1 - over * 0.035);
+  /* 【2026-08-24 変更】高い音の抑えが足りなかった。
+     旧: 1 - over*0.035（下限0.55）→ C7(96)以上は 0.55 で頭打ち＝約-5dB しか
+     下がらず、いちばん耳に刺さる帯域がそのまま出ていた。
+     傾きを強め、下限も下げる。C6で0.62 / C7で0.32（約-10dB）。
+     C5以下（72以下）は今までどおり 1 のまま＝低音・中音の聞こえ方は不変。 */
+  return Math.max(0.32, 1 - over * 0.045);
 }
 /* ============================================================
    曲を作る
@@ -8976,6 +9082,9 @@ $('trackArea').addEventListener('change', (e) => {
   const sel = e.target.closest('[data-inst-for]'); if(!sel) return;
   const k = sel.dataset.instFor;
   song.tracks[k].inst = sel.value;
+  /* 【2026-08-24】音色を替えたら、その楽器が出せる高さに合わせ直す。
+     チューバに替えたのに旋律が高いまま、という状態を作らない。 */
+  try{ zcFitRangesToInstruments(song); if(typeof renderAll === 'function') renderAll(); }catch(e){}
   swapVoice(song, k);
   scheduleAutosave();
   status('makeStatus', `${TRACKS.find(t=>t.key===k).label}を「${INSTRUMENTS[sel.value].label}」にしました`, 'ok');
@@ -13468,6 +13577,9 @@ boot();
 
   window.ZCnovaAcoustic = ZCnovaAcoustic;
   window.ZCNOVA_ACOUSTIC_SPECS = S;
+  /* 【2026-08-24】音色キー → 音源スペックの対応表。
+     zcInstRange（楽器の音域）が外から引けるようにする。 */
+  window.ZCNOVA_ACOUSTIC_MAP = MAP;
 
   /* 新音源を切ったとき（ZCNOVA_ACOUSTIC.off）の逃げ先。
      「楽器1つ」用のキーは INSTRUMENTS に無いので、
@@ -14164,6 +14276,37 @@ boot();
     zcLog('ZCNOVA: 選択ボタンを組み直しました' +
       `（曲調${MOODS.length} / メロ型${MELODY_STYLES.length} / 展開${ARRANGE_TYPES.length} / 効果音${Object.keys(SE_TYPES).length}）`);
   }catch(e){ console.warn('ZCNOVA: 選択ボタンの組み直しに失敗', e); }
+})();
+</script>
+
+<script>
+/* ============================================================
+   【2026-08-24】いちばん最後に置くもの — 楽器の音域に合わせる
+   ------------------------------------------------------------
+   makeSong は後方のパッチが何段も包み直していて、**曲を作り終えたあとに
+   音色を選び直す**段がある（ZC_CPAT の伴奏型や、楽器カテゴリの音色決め）。
+   そのため音域合わせは「いちばん外側」で掛けないと、
+   合わせたあとに別の楽器へ差し替えられて意味が無くなる。
+   ここはファイルの最後なので、確実に全部の包みの外側になる。
+
+   ・乱数は1回も使わないので、音の並び・リズム・和音は1つも変わらない。
+   ・変わるのは「どのオクターブで鳴るか」だけ。
+   ・保存済みの曲を読み込んだときは掛けない（読み込みは makeSong を
+     通らない）＝昔の曲はそのまま開ける。
+   ============================================================ */
+(function(){
+  'use strict';
+  if(typeof makeSong !== 'function' || typeof zcFitRangesToInstruments !== 'function'){
+    console.warn('ZCNOVA: 音域合わせを適用できません（前提の関数が見つかりません）');
+    return;
+  }
+  const prev = makeSong;
+  makeSong = function(){
+    const song = prev.apply(this, arguments);
+    try{ zcFitRangesToInstruments(song); }catch(e){ console.warn('ZCNOVA: 音域合わせに失敗', e); }
+    return song;
+  };
+  zcLog('ZCNOVA: 楽器の音域合わせを適用しました');
 })();
 </script>
 </body>
