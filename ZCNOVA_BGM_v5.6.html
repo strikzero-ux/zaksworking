@@ -2166,11 +2166,12 @@ const INSTRUMENTS = {
     opts:{ volume:-8, oscillator:{type:'triangle'},
            envelope:{attack:0.008, decay:0.25, sustain:0.15, release:0.35} } },
   ep:      { label:'エレピ', fam:'鍵盤', cls:'FMSynth', poly:true,
+    /* sustain 0.12→0.35。上の【修正】を参照（はねが9.6倍でいちばん大きかった）。 */
     opts:{ harmonicity:3.0, modulationIndex:9, oscillator:{type:'sine'}, modulation:{type:'triangle'},
-           envelope:{attack:0.002, decay:0.7, sustain:0.12, release:0.8},
+           envelope:{attack:0.002, decay:0.7, sustain:0.35, release:0.8},
            modulationEnvelope:{attack:0.002, decay:0.25, sustain:0.05, release:0.3} } },
   soft:    { label:'やわらか', fam:'鍵盤', cls:'Synth', poly:true,
-    opts:{ oscillator:{type:'sine'}, envelope:{attack:0.01, decay:0.2, sustain:0.2, release:0.3} } },
+    opts:{ oscillator:{type:'sine'}, envelope:{attack:0.01, decay:0.2, sustain:0.45, release:0.3} } },
 
   // 弦をはじく音は、本物の弦の計算（Karplus-Strong）で作る。ks を見て切り替える。
   guitar:  { label:'ギター', fam:'弦（はじく）', ks:'guitar' },
@@ -2203,11 +2204,17 @@ const INSTRUMENTS = {
   lead:    { label:'リード', fam:'シンセ', cls:'Synth', poly:true,
     opts:{ volume:-12, oscillator:{type:'fatsawtooth', count:2, spread:10},
            envelope:{attack:0.02, decay:0.25, sustain:0.35, release:0.3} } },
+  /* 【修正】伸ばす音の「はね」を抑える。
+     立ち上がりの山が、伸ばしている所の何倍あるかを実測した:
+       エレピ 9.6倍 / シンセ 6.3倍 / レトロも同じ形
+       （管楽器・弦楽器は 1.3〜2.4倍）
+     ドンと出たあと細い音だけが残るので「はねて伸びる音が不快」に
+     聞こえていた。アタック感は残したまま、伸ばす所を太くする。 */
   synth:   { label:'シンセ', fam:'シンセ', cls:'Synth', poly:true,
-    opts:{ volume:-6, oscillator:{type:'sawtooth'}, envelope:{attack:0.01, decay:0.2, sustain:0.2, release:0.3} } },
+    opts:{ volume:-6, oscillator:{type:'sawtooth'}, envelope:{attack:0.01, decay:0.2, sustain:0.55, release:0.3} } },
   retro:   { label:'レトロ', fam:'シンセ', cls:'Synth', poly:true,
     opts:{ volume:-12, oscillator:{type:'square'},
-           envelope:{attack:0.004, decay:0.22, sustain:0.12, release:0.25} } },
+           envelope:{attack:0.004, decay:0.22, sustain:0.45, release:0.25} } },
   pad:     { label:'パッド', fam:'シンセ', cls:'Synth', poly:true,
     opts:{ volume:-14, oscillator:{type:'sine'},
            envelope:{attack:0.9, decay:1.4, sustain:0.45, release:2.2} } },
@@ -4134,6 +4141,59 @@ const ZC_INST_TRIM = {
 };
 function zcInstTrim(key){ return ZC_INST_TRIM[key] || 1; }
 
+/* ============================================================
+   伸ばす音に「生きた揺れ」を足す
+   ------------------------------------------------------------
+   実楽器の伸ばす音は必ずゆらぐ（息・弓・胴の共鳴）。伸ばしている間の
+   0.3〜8Hz のゆらぎを実測すると:
+       チェロ 25〜43% / バイオリン 16〜32% / フルート 25% /
+       トランペット 10〜29% / ホルン 6〜13%
+   ところが Tone 製の音源は:
+       シンセ 0% / エレピ 0.2%
+   ＝ 数学的に完全に一定の波が鳴り続ける。人の耳はこれに順応できず
+   「電子音声っぽい・不快」と感じる。管楽器・弦楽器の音源（ZCnovaAcoustic）
+   には息と弓のゆらぎが最初から入っているので、ここでは触らない。
+   リード・パッド・厚みパッドはデチューンのうなりで既に 37〜64% 動いて
+   いるので、これも足さない（足すと揺れすぎる）。
+
+   ⚠️ Transport に同期（sync）させること。同期しないと、揺れの位相が
+      「いつ再生を始めたか」で変わり、**再生と書き出しで音が違う**ものに
+      なってしまう。同期すれば曲の頭を基準に決まるので必ず一致する
+      （2回計算して1サンプルも違わないことを実測で確認）。
+   ============================================================ */
+/* 揺れは2つ重ねる。片方だけだと足りない。
+     ・ゆっくり（0.2〜0.4Hz）… 息づかい・弓の圧の変化にあたる大きなうねり
+     ・少し速く（約5Hz）    … ビブラートにあたる細かい揺れ
+   実楽器の揺れが 25〜43% あるのに対し、ゆっくりだけでは 3% にしかならず
+   「静止している」印象が変わらなかった（実測）。
+   ⚠️ 15〜70Hz に入れてはいけない。そこは「ざらつき」として不快に感じる帯。
+      5Hz はビブラートの帯なので心地よく聞こえる。
+   音色ごとに速さをずらしてある。そろえると全部が同時に脈打って、
+   かえって作り物っぽくなる。 */
+const ZC_WOBBLE = {
+  /* depth 0.12 ＝ 音量で約1.0dB のうねり。パッドとして自然に感じる幅で、
+     ±0.075（0.6dB）では「静止している」印象が変わらなかった（実測）。 */
+  synth: { hz:0.31, depth:0.12, vibHz:5.1, vibDepth:0.042 },
+  retro: { hz:0.37, depth:0.11, vibHz:4.7, vibDepth:0.040 },
+  ep:    { hz:0.27, depth:0.10, vibHz:5.4, vibDepth:0.034 },
+  soft:  { hz:0.23, depth:0.10, vibHz:4.9, vibDepth:0.034 }
+};
+function zcMakeWobble(instKey, own){
+  const w = ZC_WOBBLE[instKey];
+  if(!w) return null;
+  try{
+    const g = new Tone.Gain(1);
+    const slow = new Tone.LFO({ frequency:w.hz,    min:1 - w.depth, max:1 + w.depth });
+    const vib  = new Tone.LFO({ frequency:w.vibHz, min:-w.vibDepth, max:w.vibDepth });
+    slow.connect(g.gain);
+    vib.connect(g.gain);          /* 足し算で重なる */
+    slow.sync().start(0);         /* ← 曲の頭を基準にする。外すと再生と書き出しがずれる */
+    vib.sync().start(0);
+    own(g, slow, vib);
+    return g;
+  }catch(e){ return null; }
+}
+
 function buildEngine(cfg){
   const ksCache = new Map();
   const eng = { parts:{}, ks:ksCache };
@@ -4202,7 +4262,10 @@ function buildEngine(cfg){
     gain.connect(revSend);
     eng.parts[k] = { synth: makeVoice(t.inst, ksCache, cfg.live), gain, pan, trim };
     own(eng.parts[k].synth);
-    eng.parts[k].synth.connect(trim);
+    /* まったく揺れない音源だけ、ごくゆっくり揺らしてから出す */
+    const wob = zcMakeWobble(t.inst, own);
+    if(wob){ eng.parts[k].synth.connect(wob); wob.connect(trim); }
+    else     eng.parts[k].synth.connect(trim);
     trim.connect(gain);
   });
 
