@@ -1809,24 +1809,25 @@ const PLAY_MODES = [
         で、ギターが候補にすら入っていなかった。
      そこで pool を持たせ、この編成のときだけ音色を上書きする。
 
-     【フルバンドとバンドの違い】厚みで分ける。
-       フルバンド … 6トラック。ツインギター＋鍵盤＋刻みが入る厚い編成
-       バンド     … 4トラック。旋律・伴奏・ベース・ドラムの最小構成
-     管の響きが要るときは、楽器カテゴリの「吹奏楽 / 木管 / 金管 /
-     オーケストラ」を使う（そちらは従来どおり）。
+     【フルバンドとバンドの違い】
+       フルバンド … ジャズ寄り。ピアノ・ギター・ウッドベース・ドラムに
+                    サックスとトランペットが必ず乗る（2026-08-24 作り直し）
+       バンド     … ギター・ベース・ドラム・シンセだけ。管楽器は入らない
+     クラシック寄りの響きが要るときは、楽器カテゴリの
+     「吹奏楽 / 木管 / 金管 / 弦楽器 / オーケストラ」を使う。
      ------------------------------------------------------------ */
   { key:'full',   label:'フルバンド', group:'まとめて',
     on:['mel1','mel2','sub','chord','bass','drum','wind1','wind2'],
-    pool:{ mel1: ['guitar','lead','synth','ep','retro'],
-           mel2: ['guitar','lead','pad','synth'],
-           sub:  ['pluck','guitar','retro'],
-           chord:['guitar','ep','piano','synth'],
-           bass: ['bassSynth','bassString'],
-           /* ジャズバンドのホーン隊。オーケストラの木管
-              （フルート・ピッコロ・オーボエ・ファゴット）や
-              ホルン・チューバは入れない。サックスを厚めに。 */
-           wind1:['sax','sax','clarinet'],
-           wind2:['trumpet','trumpet','trombone','brass'] } },
+    /* 【2026-08-24】画面に出る「フルバンド」（楽器カテゴリの full）と
+       中身をそろえる。ジャズ寄り＝ピアノ・ギター・ウッドベース・ドラムに
+       サックスとトランペットを必ず乗せる。 */
+    pool:{ mel1: ['piano','sax','trumpet','guitar'],
+           mel2: ['guitar','piano','trombone','sax'],
+           sub:  ['pluck','guitar','ep'],
+           chord:['piano','piano','ep','guitar'],
+           bass: ['contrabassPizz','contrabassPizz','bassString'],
+           wind1:['sax'],
+           wind2:['trumpet'] } },
   { key:'band',   label:'バンド（ドラム＋ベース＋伴奏＋旋律）', group:'まとめて',
     on:['mel1','chord','bass','drum'],
     pool:{ mel1: ['guitar','lead','ep'],
@@ -13740,12 +13741,25 @@ boot();
              mel2:['flute','clarinet','oboe','sax','piccolo','bassoon'] }
     },
 
+    /* 【2026-08-24 作り直し】吹奏楽 ＝ 木管・金管・打楽器。
+       ------------------------------------------------------------
+       ドラムセット（キック・スネア・ハイハットのロック用キット）は
+       吹奏楽には無いので外した。代わりに
+         ・ティンパニ（低音の打楽器）を低音側へ
+         ・木琴・鉄琴（鍵盤打楽器）を刻みへ
+       を入れて、打楽器の役割を実際の吹奏楽と同じ形で持たせる。
+       旋律も wind1/wind2 任せではなく mel1/mel2 に木管を置き、
+       和音は金管で支える。 */
     concert: {
       label:'吹奏楽', icon:'🎶',
-      // wind1/wind2 トラックの初期プール（TRACK_DEFAULT_INST）が既にこの分類と
-      // 一致しているので、mel1/mel2 は使わず wind1/wind2 に任せる。
-      on:['wind1','wind2','drum'],
-      pool:{ wind1:['flute','clarinet','oboe','sax','piccolo'],
+      note:'木管・金管・打楽器（ティンパニ・木琴・鉄琴）だけの編成。ドラムセットは入りません。',
+      on:['mel1','mel2','sub','chord','bass','wind1','wind2'],
+      pool:{ mel1: ['flute','clarinet','oboe','piccolo'],
+             mel2: ['clarinet','sax','horn','oboe'],
+             sub:  ['glockenspiel','xylophone'],
+             chord:['brass','horn','clarinet'],
+             bass: ['tuba','bassoon','timpani'],
+             wind1:['flute','clarinet','oboe','sax','piccolo'],
              wind2:['trumpet','horn','trombone','brass','tuba'] }
     },
 
@@ -13768,31 +13782,47 @@ boot();
              bass: ['bassSynth','bassString'] }
     },
 
+    /* 【2026-08-24 作り直し】フルバンド ＝ ジャズコンボ寄り。
+       ------------------------------------------------------------
+       【なぜ直したか】
+       ・サックスとトランペットが「出ない曲がある」という指摘。実測すると
+         40曲中サックス24曲・トランペット22曲で、曲ごとに1本だけ抽選して
+         いたため、クラリネットやトロンボーンに替わる曲があった。
+         **必ず鳴ってほしい2本なので、候補を1つに固定する。**
+       ・音色がギター・シンセ中心で、ピアノは伴奏に4分の1しか出なかった。
+         ジャズらしくピアノとウッドベースを主役側に持ってくる。
+       構成：ピアノ・ギター・ウッドベース・ドラム ＋ サックス・トランペット */
     full: {
       label:'フルバンド', icon:'🎧',
-      /* 2026-08-23：PLAY_MODES の 'full' と中身をそろえた。
-         以前は管楽器2つを含み、音色も曲調まかせだったため、
-         同じ「フルバンド」でも「まとめて」から選んだときと音が違っていた。
-         管の響きが要るときは 吹奏楽 / 木管 / 金管 / オーケストラ を使う。 */
+      note:'ジャズ寄りの編成。ピアノ・ギター・ウッドベース・ドラムに、サックスとトランペットが必ず乗ります。',
       on:['mel1','mel2','sub','chord','bass','drum','wind1','wind2'],
-      pool:{ mel1: ['guitar','lead','synth','ep','retro'],
-             mel2: ['guitar','lead','pad','synth'],
-             sub:  ['pluck','guitar','retro'],
-             chord:['guitar','ep','piano','synth'],
-             bass: ['bassSynth','bassString'],
-             wind1:['sax','sax','clarinet'],
-             wind2:['trumpet','trumpet','trombone','brass'] }
+      pool:{ mel1: ['piano','sax','trumpet','guitar'],
+             mel2: ['guitar','piano','trombone','sax'],
+             sub:  ['pluck','guitar','ep'],
+             chord:['piano','piano','ep','guitar'],
+             /* ウッドベース（指で弾く低音）。ジャズの土台。 */
+             bass: ['contrabassPizz','contrabassPizz','bassString'],
+             wind1:['sax'],          /* 必ずサックス */
+             wind2:['trumpet'] }     /* 必ずトランペット */
     },
 
+    /* 【2026-08-24 作り直し】オーケストラ ＝ ピアノ・吹奏楽（木管＋金管）・
+       打楽器・弦楽器の4つを合わせた編成。
+       ------------------------------------------------------------
+       以前はピアノが1つも入らず、打楽器も鍵盤打楽器（木琴・鉄琴・
+       ティンパニ）が入っていなかった。4つの柱がそろうように組み直す。
+       ドラムセットはこれまでどおり残してある（吹奏楽と違い、拍の芯が
+       無くなると動画BGMとして使いにくくなるため）。 */
     orchestra: {
       label:'オーケストラ', icon:'🎻',
-      // 打楽器を含める。violin/cello はアンサンブル用の通常キーを使う。
-      on:['mel1','mel2','chord','bass','wind1','wind2','drum'],
-      pool:{ mel1:['violin','flute'],
-             mel2:['viola','cello','clarinet'],
-             chord:['harp','violin','viola'],
-             bass:['contrabassArco','bassString'],
-             wind1:['flute','clarinet','oboe','sax','piccolo'],
+      note:'弦楽器・木管・金管・打楽器にピアノを加えた編成。',
+      on:['mel1','mel2','sub','chord','bass','wind1','wind2','drum'],
+      pool:{ mel1:['violin','flute','piano'],
+             mel2:['viola','cello','clarinet','horn'],
+             sub:['glockenspiel','xylophone','harp'],
+             chord:['piano','harp','violin','viola'],
+             bass:['contrabassArco','tuba','timpani'],
+             wind1:['flute','clarinet','oboe','piccolo','bassoon'],
              wind2:['trumpet','horn','trombone','brass','tuba'] }
     }
 
