@@ -19,8 +19,9 @@ const VENDOR = path.join(ROOT, 'tests', 'vendor');
 const TONE_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js';
 const LAME_CDN = 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js';
 
-/* 本体の HTML を、検査用に書き換えて返す */
-export function appHtmlForTest(){
+/* 本体の HTML を、検査用に書き換えて返す。
+   keepFonts:true のときは字体の <link> を残す（⑬ 字体の待ちの検査で使う）。 */
+export function appHtmlForTest(keepFonts){
   let s = fs.readFileSync(APP_FILE, 'utf8');
   s = s.replaceAll(TONE_CDN, '/vendor/Tone.js');
   s = s.replaceAll(LAME_CDN, '/vendor/lame.min.js');
@@ -28,7 +29,7 @@ export function appHtmlForTest(){
   s = s.replace(/\s*s\.integrity\s*=\s*'sha384-[^']*';/g, '');
   /* 外部フォントは検査に関係が無く、ネットが無いと必ずエラーが出るので外す。
      これを残すと「起動時のJSエラー0件」の判定がネットの有無で揺れる。 */
-  s = s.replace(/<link[^>]+fonts\.(googleapis|gstatic)\.com[^>]*>/g, '');
+  if(!keepFonts) s = s.replace(/<link[^>]+fonts\.(googleapis|gstatic)\.com[^>]*>/g, '');
   return s;
 }
 
@@ -37,11 +38,19 @@ const MIME = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; chars
 
 export function startServer(port = 8977){
   const html = appHtmlForTest();
+  const htmlWithFonts = appHtmlForTest(true);
   const server = http.createServer((req, res) => {
     const url = (req.url || '/').split('?')[0];
     if(url === '/' || url === '/app.html'){
       res.writeHead(200, { 'Content-Type': MIME['.html'] });
       res.end(html);
+      return;
+    }
+    /* 字体の <link> を残したまま返す。⑬ が「字体が届かない環境でも
+       画面がすぐ出るか」を確かめるのに使う。 */
+    if(url === '/app-fonts.html'){
+      res.writeHead(200, { 'Content-Type': MIME['.html'] });
+      res.end(htmlWithFonts);
       return;
     }
     if(url.startsWith('/vendor/')){

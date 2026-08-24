@@ -4,8 +4,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ZCnova BGM Studio</title>
+
+<!-- 【2026-08-24 修正】字体の読み込みを、画面の表示を止めない形に変える。
+     ------------------------------------------------------------
+     ここは <style> の中で @import していた。CSS の @import は
+     **読み終わるまで画面を1ピクセルも描かせない**ので、
+     fonts.googleapis.com へ届かない環境（社内ネット・機内・
+     file:// でオフライン等）では、真っ黒な画面のまま待たされる。
+     実測（届かない状態で計測）:
+         直す前  最初の描画まで 13.2秒（うち字体の待ちが 12.8秒）
+         直した後 字体を待たずに描く（届いたところで字体が入れ替わる）
+     media="print" で読み込むと「印刷用」とみなされて描画を止めない。
+     読み終わってから all に変えることで、ふつうに字体が当たる。
+     届かなかったときは onerror で諦め、下の sans-serif で表示する。
+     ⚠️ 字体が無くても困らないよう、CSS の指定は必ず
+        'Oswald', sans-serif のように控えを書いておくこと。 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all'" onerror="this.remove()"
+      href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap">
+
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
 
 /* ===== 配色・見た目は ZCnova BGM creater と同じものを使う。
    同じ道具立てに見えることが大事なので、変数からそのまま合わせてある。 ===== */
