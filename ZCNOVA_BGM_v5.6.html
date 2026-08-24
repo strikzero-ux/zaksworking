@@ -6820,6 +6820,13 @@ function playStep(eng, song, ph, s, time){
     if(ph.inv && !zcPlainVoicing){
       notes = zcInvertNotes(notes, ph.inv[beat] || 0);
     }
+    /* 【追加】和音が前の和音から飛びすぎないよう、まるごとオクターブで
+       寄せる。ずらす量は曲データに焼き込んである（ph.chordOct）ので、
+       再生でも書き出しでも必ず同じ。持っていない過去の保存データは 0＝従来どおり。 */
+    if(ph.chordOct && ph.chordOct[beat]){
+      const 寄せ = ph.chordOct[beat];
+      notes = notes.map(nm => zcTranspose(nm, 寄せ));
+    }
     const acc = ph.acc.chord[beat];
     /* 小節ごとに鳴らす位置を変える。
        genChords が ph.chordHits へ焼き込んでいればそれに従い、
@@ -14739,21 +14746,24 @@ boot();
      ⚠️ 音域合わせ（zcFitRangesToInstruments）より**先**に掛けること。
         音域合わせはパートまるごとオクターブで動かすので、
         先に跳躍を詰めておけば、そのあと動かしても跳躍は保たれる。 */
-  const 跳躍の上限 = 14;                     /* 1オクターブ＋2半音 */
-  const 対象パート = ['mel1','mel2','sub','wind1','wind2'];
+  /* 上限。ベースは動きが少ないほど土台として落ち着くので、旋律より狭くする
+     （実測でベースは最大22半音＝約2オクターブ跳んでいた）。 */
+  const 跳躍の上限 = { mel1:14, mel2:14, sub:14, wind1:14, wind2:14, bass:12 };
+  const 対象パート = ['mel1','mel2','sub','wind1','wind2','bass'];
   function zcTameLeaps(song){
     if(!song || !song.phrases) return 0;
     let 直した = 0;
     song.phrases.forEach(ph => {
       対象パート.forEach(k => {
+        const 上限 = 跳躍の上限[k] || 14;
         const arr = ph[k]; if(!arr) return;
         let 前 = null;
         for(let i = 0; i < arr.length; i++){
           const v = arr[i]; if(!v) continue;
           let m = noteToMidi(v); if(m === null) continue;
           if(前 !== null){
-            while(m - 前 >  跳躍の上限) m -= 12;
-            while(前 - m >  跳躍の上限) m += 12;
+            while(m - 前 >  上限) m -= 12;
+            while(前 - m >  上限) m += 12;
             if(m !== noteToMidi(v)){ arr[i] = midiToName(m); 直した++; }
           }
           前 = m;
@@ -14763,10 +14773,65 @@ boot();
     return 直した;
   }
 
+  /* 【和音が飛びすぎるのを抑える】
+     ------------------------------------------------------------
+     和音は「度数」で持っていて、鳴らす直前に音名へ組み立てている。
+     組み立ての中で転回（zcInvertNotes）が入るため、隣り合う和音の
+     重心が大きく離れることがある。実測（120曲・1389和音）:
+        重心の平均跳躍 3.1半音
+        **重心の最大跳躍 20.5半音（1.7オクターブ）**
+        最上声の最大跳躍 17半音 ／ 重心が7半音以上跳ぶのが 20.4%
+     弦楽器やパッドが和音を担当すると、これが「オクターブ飛ぶ」と
+     聞こえる。人が弾くときは前の和音のいちばん近い形を選ぶので、
+     ここでも**まるごとオクターブで前の和音へ寄せる**。
+
+     ⚠️ 和音の中身（どの音を鳴らすか）は変えない。まるごと動かすだけなので
+        和音の種類も転回形もそのまま。乱数も1回も使わない。
+     ⚠️ ずらす量は曲データ（ph.chordOct）へ焼き込む。再生時に計算すると
+        「どこから鳴らし始めたか」で変わってしまい、再生と書き出しがずれる。 */
+  function zcSmoothChords(song){
+    if(!song || !song.phrases) return 0;
+    const 素直 = (song.moodKey === 'fantasy' || song.moodKey === 'transparent');
+    let 寄せた = 0;
+    song.phrases.forEach(ph => {
+      if(!ph.chord) return;
+      const oct = new Array(ph.chord.length).fill(0);
+      let 前重心 = null;
+      for(let b = 0; b < ph.chord.length; b++){
+        const deg = ph.chord[b];
+        if(deg === null || deg === undefined) continue;
+        let notes;
+        try{ notes = degreeNotes(deg, song, 3, song.chordTones || 3); }catch(e){ continue; }
+        if(!notes || !notes.length) continue;
+        if(ph.keyShift) notes = notes.map(nm => zcTranspose(nm, ph.keyShift));
+        if(ph.inv && !素直){ try{ notes = zcInvertNotes(notes, ph.inv[b] || 0); }catch(e){} }
+        const ms = notes.map(noteToMidi).filter(x => x !== null);
+        if(!ms.length) continue;
+        const 重心 = ms.reduce((a, x) => a + x, 0) / ms.length;
+        if(前重心 !== null){
+          /* -12 / 0 / +12 のうち、前の和音にいちばん近くなるものを選ぶ */
+          let 最良 = 0, 最小 = Math.abs(重心 - 前重心);
+          [-12, 12].forEach(d => {
+            const 差 = Math.abs(重心 + d - 前重心);
+            if(差 < 最小 - 0.01){ 最小 = 差; 最良 = d; }
+          });
+          if(最良){ oct[b] = 最良; 寄せた++; }
+          前重心 = 重心 + 最良;
+        } else {
+          前重心 = 重心;
+        }
+      }
+      if(寄せた) ph.chordOct = oct;
+      else if(!ph.chordOct) ph.chordOct = oct;
+    });
+    return 寄せた;
+  }
+
   const prev = makeSong;
   makeSong = function(){
     const song = prev.apply(this, arguments);
     try{ zcTameLeaps(song); }catch(e){ console.warn('ZCNOVA: 跳躍を抑えられません', e); }
+    try{ zcSmoothChords(song); }catch(e){ console.warn('ZCNOVA: 和音を寄せられません', e); }
     try{ zcFitRangesToInstruments(song); }catch(e){ console.warn('ZCNOVA: 音域合わせに失敗', e); }
     return song;
   };

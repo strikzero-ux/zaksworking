@@ -113,13 +113,67 @@ async function 跳びすぎ(page){
         });
       });
     }
-    return { 音数, 超過, 最大, 例 };
+    /* 低音と和音も同じように見る */
+    let ベース音数 = 0, ベース超過 = 0, ベース最大 = 0;
+    const 和 = { 数:0, 跳躍:0, 最大:0, 大:0 };
+    for(let i = 0; i < 90; i++){
+      const sg = makeSong(MOODS[i % MOODS.length].key, 2, PM[i % PM.length], 120, 700 + i*23);
+      const bt = sg.tracks.bass;
+      if(bt && bt.on) sg.phrases.forEach(ph => {
+        let 前 = null;
+        (ph.bass || []).forEach(n => {
+          if(!n) return; const m = noteToMidi(n); if(m === null) return;
+          ベース音数++;
+          if(前 !== null){ const d = Math.abs(m - 前);
+            if(d > ベース最大) ベース最大 = d; if(d > 12) ベース超過++; }
+          前 = m;
+        });
+      });
+      const ct = sg.tracks.chord;
+      if(ct && ct.on) sg.phrases.forEach(ph => {
+        if(!ph.chord) return;
+        let 前重心 = null;
+        ph.chord.forEach((deg, bi) => {
+          if(deg === null || deg === undefined) return;
+          let list;
+          try{ list = degreeNotes(deg, sg, 3, sg.chordTones || 3); }catch(e){ return; }
+          if(!list || !list.length) return;
+          if(ph.keyShift) list = list.map(nm => zcTranspose(nm, ph.keyShift));
+          const 素直 = (sg.moodKey === 'fantasy' || sg.moodKey === 'transparent');
+          if(ph.inv && !素直){ try{ list = zcInvertNotes(list, ph.inv[bi] || 0); }catch(e){} }
+          const co = ph.chordOct && ph.chordOct[bi];
+          if(co) list = list.map(nm => zcTranspose(nm, co));
+          const ms = list.map(noteToMidi).filter(x => x !== null);
+          if(!ms.length) return;
+          const 重心 = ms.reduce((a, x) => a + x, 0) / ms.length;
+          和.数++;
+          if(前重心 !== null){
+            const d = Math.abs(重心 - 前重心);
+            和.跳躍 += d; if(d > 和.最大) 和.最大 = d; if(d >= 7) 和.大++;
+          }
+          前重心 = 重心;
+        });
+      });
+    }
+    return { 音数, 超過, 最大, 例, ベース音数, ベース超過, ベース最大,
+             和音: { 平均: +(和.跳躍 / Math.max(1, 和.数)).toFixed(1),
+                     最大: +和.最大.toFixed(1),
+                     大跳躍: +(和.大 / Math.max(1, 和.数) * 100).toFixed(1) } };
   });
   return [
     { ok: r.超過 === 0,
       label: `旋律が跳びすぎない（いちばん大きい跳躍 ${r.最大}半音／${r.音数}音を確認）`,
       info: r.超過 ? `14半音を超えた跳躍が${r.超過}回: ` + r.例.join(' / ')
                    : '直す前は最大34半音（約3オクターブ）跳んでいた' },
+    { ok: r.ベース超過 === 0,
+      label: `低音が跳びすぎない（いちばん大きい跳躍 ${r.ベース最大}半音）`,
+      info: r.ベース超過 ? `12半音を超えた跳躍が${r.ベース超過}回`
+                        : '直す前は最大22半音（約2オクターブ）跳んでいた' },
+    { ok: r.和音.平均 <= 2.2 && r.和音.大跳躍 <= 3,
+      label: `和音が前の和音から飛ばない（重心の平均跳躍 ${r.和音.平均}半音／7半音以上は ${r.和音.大跳躍}%）`,
+      info: r.和音.平均 <= 2.2 && r.和音.大跳躍 <= 3
+        ? '直す前は 平均3.1半音・7半音以上が20.4%・最大20.5半音（1.7オクターブ）だった'
+        : `最大 ${r.和音.最大}半音。ph.chordOct（まるごとオクターブの寄せ）が効いていない可能性` },
   ];
 }
 
