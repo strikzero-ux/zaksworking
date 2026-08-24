@@ -4545,9 +4545,19 @@ function zcFitRangesToInstruments(song){
   ZC_FIT_TRACKS.forEach(k => {
     const t = song.tracks[k]; if(!t) return;
     const r = zcInstRange(t.inst); if(!r) return;
+    /* 【修正】ずらす量は**フレーズごとではなく、そのパート全体で1つ**にする。
+       ------------------------------------------------------------
+       フレーズごとに best を選ぶと、隣り合うフレーズが違う量だけ動いて
+       しまい、曲としてつないだときに**継ぎ目でオクターブ跳ぶ**。
+       実測（60曲）: つなぎ目の 21.9%（1953箇所中427箇所）が12半音以上、
+       最大 37半音＝3オクターブ。フレーズの中は14半音以内に収めてあるのに、
+       継ぎ目だけ野放しだった。「まだオクターブ跳ぶところがある」の正体。
+       全フレーズの音をまとめて1つの量を決めれば、継ぎ目は動かない。 */
+    const 全部 = [];
+    song.phrases.forEach(ph => { const a = ph && ph[k]; if(a) for(let i = 0; i < a.length; i++) if(a[i]) 全部.push(a[i]); });
+    const sh = zcBestOctShift(全部, r[0], r[1]);
     song.phrases.forEach(ph => {
       const arr = ph && ph[k]; if(!arr) return;
-      const sh = zcBestOctShift(arr, r[0], r[1]);
       if(sh) for(let i = 0; i < arr.length; i++) if(arr[i]){ arr[i] = zcTranspose(arr[i], sh * 12); moved++; }
       /* まるごと動かしても収まらないフレーズ（音の幅が楽器の音域より広い）が
          わずかに残る。実測で 0.7%。そこに E8（約5.3kHz）のような音が
@@ -13455,6 +13465,21 @@ boot();
 
   /* ---------- 歪みカーブ（楽器ごとに1本だけ作って使い回す） ---------- */
   var curveCache = {};
+  /* 倍音表から「くり返す波」を1枚作る。
+     ------------------------------------------------------------
+     Tone.Oscillator に partials を渡すと Tone が中でこれを作ってくれるが、
+     そのぶん Tone の包み（下の説明を見よ）が付いてくる。ここで自分で
+     作っておけば、発音は**生の OscillatorNode 1個**で済む。
+     中身は Tone がやっているのと同じ計算：位相0なので
+     実部はすべて0、虚部の i 番目に i 倍音の大きさを入れる。
+     ⚠️ 長さ2048 も Tone に合わせる。ここを詰めると音が変わる。 */
+  function zcPeriodicWave(C, partials){
+    var real = new Float32Array(2048), imag = new Float32Array(2048);
+    var m = Math.min(partials.length, 2047);
+    for(var r = 1; r <= m; r++) imag[r] = partials[r - 1];
+    return C.createPeriodicWave(real, imag);
+  }
+
   function driveCurve(amount, bias){
     var k = amount + '/' + bias;
     if(curveCache[k]) return curveCache[k];
@@ -13521,6 +13546,11 @@ boot();
         return [tilt(1 - tl), h, tilt(1 + tl * 0.65)];
       })(this.p.harmonics, this.p);
 
+      /* くり返す波は「弱奏・通常・強奏」の3枚。文脈（再生用／書き出し用）が
+         変わったら作り直す。作るのに実測 2.5ms かかるので、
+         音ごとに作ると1秒あたり30枚＝75ms を無駄にすることになる。 */
+      this._waveCtx = null; this._waves = null;
+
       this.curves = [
         driveCurve(this.p.drive * 0.5, this.p.driveBias),
         this.curve,
@@ -13556,6 +13586,13 @@ boot();
         try{ this.vib.start(0); }catch(e){}
         this.nodes.push(this.vib);
       }
+    }
+
+    /* この文脈用の「くり返す波」を返す（無ければ作って覚える） */
+    _wave(C, step){
+      if(this._waveCtx !== C){ this._waveCtx = C; this._waves = [null, null, null]; }
+      if(!this._waves[step]) this._waves[step] = zcPeriodicWave(C, this.parts3[step]);
+      return this._waves[step];
     }
 
     connect(dest){ this.out.connect(dest); return this; }
@@ -14770,6 +14807,125 @@ boot();
     return 直した;
   }
 
+  /* 【フレーズどうしの高さをそろえる】
+     ------------------------------------------------------------
+     フレーズの中の跳躍は zcTameLeaps で14半音以内に収めてあるが、
+     **フレーズとフレーズのつなぎ目**は誰も見ていなかった。曲は
+     フレーズを並べて作るので、A の終わりと B の始まりが1〜3オクターブ
+     離れていると、そこで「オクターブ跳んだ」と聞こえる。
+     実測（60曲・1953箇所）: 12半音以上のつなぎ目が 21.9%、最大37半音。
+
+     つなぎ目ごとに直すことはできない。同じフレーズが曲の中で何度も
+     使われるため、「前が何だったか」で直すと同じフレーズが場所によって
+     違う高さになってしまう（＝再生と書き出しでずれる）。
+     そこで**どのフレーズも同じ高さの帯に置く**。パート全体の中央の高さを
+     求め、そこから1オクターブ以上ずれているフレーズだけをまるごと戻す。
+     どこから並べても跳ばない形になる。
+
+     ⚠️ 乱数は1回も使わない。動かすのはオクターブ単位だけなので、
+        音名（ドレミ）も和音との関係も変わらない。 */
+  function zcAlignPhraseOctaves(song){
+    if(!song || !song.phrases) return 0;
+    let 直した = 0;
+    const 中央値 = ms => { ms.sort((a, b) => a - b); return ms[Math.floor(ms.length / 2)]; };
+    対象パート.forEach(k => {
+      const 全部 = [];
+      song.phrases.forEach(ph => {
+        const arr = ph && ph[k]; if(!arr) return;
+        for(let i = 0; i < arr.length; i++) if(arr[i]){ const m = noteToMidi(arr[i]); if(m !== null) 全部.push(m); }
+      });
+      if(全部.length < 2) return;
+      const 目標 = 中央値(全部);
+      song.phrases.forEach(ph => {
+        const arr = ph && ph[k]; if(!arr) return;
+        const ms = [];
+        for(let i = 0; i < arr.length; i++) if(arr[i]){ const m = noteToMidi(arr[i]); if(m !== null) ms.push(m); }
+        if(!ms.length) return;
+        const ずれ = Math.round((目標 - 中央値(ms)) / 12);
+        if(!ずれ) return;
+        for(let i = 0; i < arr.length; i++) if(arr[i]){ arr[i] = zcTranspose(arr[i], ずれ * 12); 直した++; }
+      });
+    });
+    return 直した;
+  }
+
+  /* 【フレーズの出入りを同じ高さにそろえる】
+     ------------------------------------------------------------
+     フレーズの中の跳躍は 14半音以内に収めてあるのに、**フレーズと
+     フレーズのつなぎ目**は誰も見ていなかった。曲はフレーズを並べて
+     作るので、A の終わりと B の始まりが2〜3オクターブ離れていれば
+     そこで「オクターブ跳んだ」と聞こえる。
+     実測（60曲・つなぎ目1953箇所）: 12半音以上が 21.9%、最大 37半音。
+
+     つなぎ目ごとに直すことはできない。同じフレーズが曲の中で何度も
+     使われるので、「前が何だったか」で直すと**同じフレーズが場所に
+     よって違う高さ**になり、書き出し（フレーズ1種類につき1回だけ
+     計算する）と再生がずれてしまう。
+     そこで**どのフレーズも同じ高さで始まり、同じ高さで終わる**ように
+     する。どこへ並べてもつなぎ目が跳ばない形になる。
+
+       ・パート全体の中央の高さ（目標）を出す
+       ・フレーズの1音目を、目標にいちばん近いオクターブへ置く
+       ・そこから順に、跳躍が上限を超えたらオクターブで折り返す
+       ・最後の音も、跳躍の上限を壊さない範囲で目標へ寄せる
+
+     ⚠️ 乱数は1回も使わない。動かすのはオクターブ単位だけなので、
+        音名（ドレミ）も和音との関係も変わらない。 */
+  function zcSeamGuard(song){
+    if(!song || !song.phrases) return 0;
+    let 直した = 0;
+    対象パート.forEach(k => {
+      const 上限 = 跳躍の上限[k] || 14;
+      const 全部 = [];
+      song.phrases.forEach(ph => {
+        const arr = ph && ph[k]; if(!arr) return;
+        for(let i = 0; i < arr.length; i++) if(arr[i]){ const m = noteToMidi(arr[i]); if(m !== null) 全部.push(m); }
+      });
+      if(全部.length < 2) return;
+      全部.sort((a, b) => a - b);
+      const 目標 = 全部[Math.floor(全部.length / 2)];
+      song.phrases.forEach(ph => {
+        const arr = ph && ph[k]; if(!arr) return;
+        const 位置 = [];
+        for(let i = 0; i < arr.length; i++) if(arr[i] && noteToMidi(arr[i]) !== null) 位置.push(i);
+        if(!位置.length) return;
+        const 読む = j => noteToMidi(arr[位置[j]]);
+        const 書く = (j, m) => { if(m !== 読む(j)){ arr[位置[j]] = midiToName(m); 直した++; } };
+        /* 1音目を目標のオクターブへ */
+        書く(0, 読む(0) + Math.round((目標 - 読む(0)) / 12) * 12);
+        /* 前から順に折り返す */
+        let 前 = 読む(0);
+        for(let j = 1; j < 位置.length; j++){
+          let m = 読む(j);
+          while(m - 前 > 上限) m -= 12;
+          while(前 - m > 上限) m += 12;
+          書く(j, m); 前 = m;
+        }
+        /* 終わりも目標へ寄せる。1音だけ動かして届かないことがあるので
+           （フレーズの中で1オクターブ以上のぼっていく形）、最後の音を
+           目標に置いてから**後ろ向きに**折り返し直す。1音目は動かさない
+           約束なので、1音目との跳躍が上限に収まるときだけ採用する。 */
+        const 末 = 位置.length - 1;
+        if(末 > 0){
+          const 元 = []; for(let j = 0; j <= 末; j++) 元.push(読む(j));
+          const 新 = 元.slice();
+          let 後 = 元[末] + Math.round((目標 - 元[末]) / 12) * 12;
+          新[末] = 後;
+          for(let j = 末 - 1; j >= 1; j--){
+            let m = 元[j];
+            while(m - 後 > 上限) m -= 12;
+            while(後 - m > 上限) m += 12;
+            新[j] = m; 後 = m;
+          }
+          if(Math.abs(新[1] - 元[0]) <= 上限){
+            for(let j = 1; j <= 末; j++) 書く(j, 新[j]);
+          }
+        }
+      });
+    });
+    return 直した;
+  }
+
   /* 【和音が飛びすぎるのを抑える】
      ------------------------------------------------------------
      和音は「度数」で持っていて、鳴らす直前に音名へ組み立てている。
@@ -14828,8 +14984,14 @@ boot();
   makeSong = function(){
     const song = prev.apply(this, arguments);
     try{ zcTameLeaps(song); }catch(e){ console.warn('ZCNOVA: 跳躍を抑えられません', e); }
+    try{ zcAlignPhraseOctaves(song); }catch(e){ console.warn('ZCNOVA: フレーズの高さをそろえられません', e); }
+    try{ zcSeamGuard(song); }catch(e){ console.warn('ZCNOVA: つなぎ目をそろえられません', e); }
     try{ zcSmoothChords(song); }catch(e){ console.warn('ZCNOVA: 和音を寄せられません', e); }
     try{ zcFitRangesToInstruments(song); }catch(e){ console.warn('ZCNOVA: 音域合わせに失敗', e); }
+    /* 音域合わせの中に「天井を超えた音だけ1オクターブ下ろす」処理があり、
+       そこだけ跳躍が生まれる。最後にもう一度ならしておく。 */
+    try{ zcTameLeaps(song); }catch(e){}
+    try{ zcSeamGuard(song); }catch(e){}
     return song;
   };
   zcLog('ZCNOVA: 楽器の音域合わせを適用しました');

@@ -155,7 +155,34 @@ async function 跳びすぎ(page){
         });
       });
     }
-    return { 音数, 超過, 最大, 例, ベース音数, ベース超過, ベース最大,
+    /* 【つなぎ目】フレーズとフレーズの境目で跳ばないか。
+       曲は同じフレーズを何度も並べて作るので、フレーズの中だけ
+       ならしても、境目が野放しだと「オクターブ跳ぶ」と聞こえる。
+       ここは並べた順に音を追って、境目の1歩だけを見る。 */
+    const 継 = { 数:0, 十二以上:0, 最大:0, 例:[] };
+    const 継対象 = ['mel1','mel2','sub','wind1','wind2','bass'];
+    for(let i = 0; i < 60; i++){
+      const sg = makeSong(MOODS[i % MOODS.length].key, 4, PM[i % PM.length], 100, 7000 + i * 131);
+      継対象.forEach(k => {
+        const t = sg.tracks[k]; if(!t || !t.on) return;
+        let 前 = null;
+        sg.arrangement.forEach(pi => {
+          const ph = sg.phrases[pi]; if(!ph) return;
+          let 最初 = true;
+          (ph[k] || []).forEach(nm => {
+            if(!nm) return; const m = noteToMidi(nm); if(m === null) return;
+            if(前 !== null && 最初){
+              const d = Math.abs(m - 前);
+              継.数++;
+              if(d > 継.最大) 継.最大 = d;
+              if(d >= 12){ 継.十二以上++; if(継.例.length < 3) 継.例.push(`${k} ${d}半音`); }
+            }
+            前 = m; 最初 = false;
+          });
+        });
+      });
+    }
+    return { 音数, 超過, 最大, 例, ベース音数, ベース超過, ベース最大, 継,
              和音: { 平均: +(和.跳躍 / Math.max(1, 和.数)).toFixed(1),
                      最大: +和.最大.toFixed(1),
                      大跳躍: +(和.大 / Math.max(1, 和.数) * 100).toFixed(1) } };
@@ -169,6 +196,11 @@ async function 跳びすぎ(page){
       label: `低音が跳びすぎない（いちばん大きい跳躍 ${r.ベース最大}半音）`,
       info: r.ベース超過 ? `12半音を超えた跳躍が${r.ベース超過}回`
                         : '直す前は最大22半音（約2オクターブ）跳んでいた' },
+    { ok: r.継.十二以上 === 0 && r.継.最大 <= 14,
+      label: `フレーズのつなぎ目で跳ばない（いちばん大きい跳躍 ${r.継.最大}半音／${r.継.数}箇所を確認）`,
+      info: r.継.十二以上
+        ? `12半音以上のつなぎ目が${r.継.十二以上}回: ` + r.継.例.join(' / ')
+        : '直す前は 21.9%（1953箇所中427箇所）が12半音以上・最大37半音（3オクターブ）だった' },
     { ok: r.和音.平均 <= 2.2 && r.和音.大跳躍 <= 3,
       label: `和音が前の和音から飛ばない（重心の平均跳躍 ${r.和音.平均}半音／7半音以上は ${r.和音.大跳躍}%）`,
       info: r.和音.平均 <= 2.2 && r.和音.大跳躍 <= 3
