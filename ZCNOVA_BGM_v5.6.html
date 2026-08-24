@@ -494,6 +494,16 @@ footer b{ color:var(--brass); }
               title="選んだ範囲を流しながらつまみを動かせます。もう一度押すと止まります">▶ 聴きながら調整</button>
       <span class="hint" style="margin:0;">つまみは動かした瞬間に音へ反映されます</span>
     </div>
+    <!-- 【2026-08-24 追加】再生が重い端末向けの逃げ道。書き出しには影響しない。 -->
+    <div class="fx-row" style="margin-top:-6px;">
+      <span class="t-label">再生の重さ</span>
+      <div class="pat-btns" id="litePick">
+        <button class="pat-btn" data-lite="auto">自動</button>
+        <button class="pat-btn" data-lite="light">軽くする</button>
+        <button class="pat-btn" data-lite="full">そのまま</button>
+      </div>
+      <span class="hint" style="margin:0;" id="liteNote"></span>
+    </div>
 
     <div class="mixer" id="mixer"></div>
 
@@ -6460,7 +6470,67 @@ function autoArrange(song){
      ・renderSong（書き出し・繋ぎ目確認・フェード試聴の入口）
      ・renderAll（曲の作成・読み込み・undo の後）
    よってここからは外す。 */
+/* ============================================================
+   【2026-08-24 追加】再生が間に合っているかを見て、自動で軽くする
+   ------------------------------------------------------------
+   【なぜ要るか】
+   「音が乱れる／崩れて鳴らなくなる」は、音源側で音を落としているのでは
+   なかった（実測：伸びる音の多い曲を14秒鳴らして最大同時6・欠落0）。
+   ブラウザがその場で音を計算しているため、**その端末の余力しだい**で
+   音声の計算が間に合わなくなるのが原因。これは環境ごとに違うので、
+   固定のしきい値では当てられない。
+
+   そこで「予約の余裕が無くなった音」の割合を数え、詰まってきたら
+   自動で簡易版（部品11個→4個）へ落とす。落ち着いたら戻す。
+   ・数えるのは再生中だけ。書き出しには一切かかわらない
+   ・つまみ（下の zcLiteSetting）で「軽く固定」「そのまま固定」も選べる
+   ============================================================ */
+let zcLiteAuto = false;          // 自動で軽くしている最中か
+let zcLiteSetting = 'auto';      // 'auto' | 'light' | 'full'
+try{
+  const v = zcLSGet('zbs-lite');
+  if(v === 'auto' || v === 'light' || v === 'full') zcLiteSetting = v;
+}catch(e){}
+function zcLiteOn(){
+  return zcLiteSetting === 'light' || (zcLiteSetting === 'auto' && zcLiteAuto);
+}
+/* 【何を数えているか】
+   予約は「いま鳴っている時刻」より先へ入れる。その先行ぶん（余裕）が
+   無くなると、音は過去へ予約されることになり、ぶつ切れ・雑音になる。
+   だから見るのは「遅れ」ではなく **予約の余裕** ＝ 予約時刻 − 今の時刻。
+
+   ⚠️ ここで Tone.now() を使ってはいけない。Tone.now() は先読み
+      （lookAhead 0.3秒）を足した値を返すので、正常なときでも
+      「予約より先」になり、**ずっと遅れている**ように見える。
+      実測（4小節・戦闘・16秒）: Tone.now() 基準だと 83% が「遅れ」判定。
+      生の時計（getContext().currentTime）で測り直すと、
+      余裕は 0.15〜0.30秒、20ms を切った音は 0件だった。 */
+let zcLateN = 0, zcLateHit = 0, zcLateAt = 0;
+function zcWatchLateness(time){
+  const now = Tone.getContext().currentTime;
+  zcLateN++;
+  if(time - now < 0.03) zcLateHit++;      // 予約の余裕が 30ms を切った
+  if(!zcLateAt) zcLateAt = now;
+  if(now - zcLateAt < 2) return;          // 2秒ごとに見直す
+  zcLateAt = now;
+  if(zcLateN >= 20){
+    const r = zcLateHit / zcLateN;
+    if(!zcLiteAuto && r > 0.15){
+      zcLiteAuto = true;
+      if(zcLiteSetting === 'auto'){
+        try{ status('makeStatus',
+          '再生が重くなってきたので、音を軽くしました（書き出したファイルには影響しません）', 'ok'); }catch(e){}
+      }
+    } else if(zcLiteAuto && r < 0.03){
+      zcLiteAuto = false;
+    }
+  }
+  zcLateN = 0; zcLateHit = 0;
+}
+
 function playStep(eng, song, ph, s, time){
+  /* 再生のときだけ、遅れ具合を見る（書き出しは実時間で動かないので除く） */
+  if(eng && eng.isLive){ try{ zcWatchLateness(time); }catch(e){} }
   /* 効果音レーン。曲データに置いてあるので、再生でも書き出しでも
      まったく同じ位置・同じ音で鳴る。
      ⚠️ 後片付けは「作ったときの文脈」を見てから行うこと。
@@ -8261,6 +8331,7 @@ function markPicked(){
   try{ buildOneStemPick(); }catch(e){}
   try{ buildSectionPick(); }catch(e){}
   try{ buildMixRangePick(); }catch(e){}
+  try{ zcSyncLiteBtns(); }catch(e){}
   /* 【UI整理②】曲に焼き込まれているつまみを画面へ戻す。
      保存した曲や .json を開いたとき、画面と曲の中身がずれないようにする。 */
   if(song){
@@ -9635,6 +9706,22 @@ function zcSyncMixPlayBtn(){
   /* ①の再生ボタンも同じ状態に合わせる（別々に持つと必ず食い違う） */
   try{ zcSyncMakePlayBtn(); }catch(e){}
 }
+function zcSyncLiteBtns(){
+  document.querySelectorAll('#litePick button').forEach(b =>
+    b.classList.toggle('active', b.dataset.lite === zcLiteSetting));
+  const e = $('liteNote');
+  if(e) e.textContent = zcLiteSetting === 'auto'
+    ? '再生が間に合わないときだけ自動で軽くします（書き出しには影響しません）'
+    : (zcLiteSetting === 'light' ? 'いつも軽い音で鳴らします' : '常に本来の音で鳴らします（重い端末では乱れることがあります）');
+}
+$('litePick').addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if(!b) return;
+  zcLiteSetting = b.dataset.lite;
+  zcLiteAuto = false;
+  try{ zcLSSet('zbs-lite', zcLiteSetting); }catch(err){}
+  zcSyncLiteBtns();
+  if(playing){ try{ await restartPlayback(); }catch(err){} }
+});
 $('mixRangePick').addEventListener('change', async () => {
   zcApplyMixRange();
   /* 鳴らしている最中に変えたら、その場で切り替える */
@@ -13683,6 +13770,17 @@ boot();
     return curve;
   }
 
+  /* 【2026-08-24】再生中の「全楽器あわせた」同時発音数。
+     ------------------------------------------------------------
+     これまで数を見ていたのは this.active ＝ **楽器1つぶん**だけだった。
+     ところが音が崩れる原因は端末ぜんたいの計算量なので、楽器が増えるほど
+     取りこぼす。6つの楽器がそれぞれ4音ずつ鳴らせば24音ぶんの部品が
+     同時に居るのに、どの楽器も「自分は4音だから余裕」と判断してしまう。
+     楽器をまたいで1つの数で数えれば、そこが正しく効く。
+     ⚠️ 数えるのは再生中だけ。書き出しは実時間で動かないので混ぜない。 */
+  var LIVE = 0;
+  window.ZC_LIVE_VOICES = function(){ return LIVE; };
+
   /* ============================================================
      ZCnovaAcoustic — 管楽器・弦楽器の音源
      ============================================================ */
@@ -13891,13 +13989,25 @@ boot();
          長い音は本当に混んだときだけ落とす。CPUを食うのは数の多い
          短い音のほうなので、守りは効いたまま、伸びる音の音色は安定する。 */
       var longNote = sec >= 0.45;
-      var lean = !!chord
-        || (!longNote && (busy >= 3 || (this.live && this.active >= 5)))
-        || ( longNote && (busy >= 8 || (this.live && this.active >= 12)));
+      /* 【2026-08-24】再生が間に合っていないと分かったら、迷わず軽くする。
+         音色の違いより、音が途切れないことのほうが大事。 */
+      var lite = false;
+      try{ lite = this.live && typeof zcLiteOn === 'function' && zcLiteOn(); }catch(e){}
+      /* 【2026-08-24】楽器をまたいだ同時発音数でも落とす。
+         実測（4小節・戦闘・160回サンプリング）:
+           オーケストラ 中央8 / 上位10%12 / 最大15
+           フルバンド   中央5 / 上位10%15 / 最大20
+         ふだん鳴っている数（5〜8）には掛からず、山のところだけ削る値に
+         する。ここを下げると音色が安定しなくなる（伸びる音が本来↔簡易で
+         行き来して「乱れ」に聞こえる）ので、山だけに当てるのが肝心。 */
+      var lean = !!chord || lite
+        || (!longNote && (busy >= 3 || (this.live && (this.active >= 5  || LIVE >= 12))))
+        || ( longNote && (busy >= 8 || (this.live && (this.active >= 12 || LIVE >= 18))));
 
       var dis = [];
       var nOut = null;
       this.active++;
+      if(this.live) LIVE++;
 
       /* --- 倍音表から作ったカスタム波形を2本、わずかにデチューン --- */
       var sum = new Tone.Gain({gain:0.5, context:C}); dis.push(sum);
@@ -14071,8 +14181,10 @@ boot();
          ⚠️ active の増減は文脈に関係なく必ず戻すこと。ここを return の
             後ろへ置くと、再生中の同時発音数が減らないまま詰まる。 */
       var ctx = C;
+      var wasLive = this.live;
       setTimeout(function(){
         self.active = Math.max(0, self.active - 1);
+        if(wasLive) LIVE = Math.max(0, LIVE - 1);
         if(ctx !== Tone.getContext()) return;   // 別の文脈へ移っていたら触らない
         dis.forEach(function(n){ try{ n.dispose(); }catch(e){} });
       }, delayMs);
