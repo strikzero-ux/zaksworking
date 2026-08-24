@@ -119,6 +119,31 @@ export async function run({ page, errors, notes }){
   add(alive, '再生ボタンを6連打しても曲が残っている');
   await page.evaluate(() => { try{ Tone.Transport.stop(); }catch(e){} });
 
+  /* --- 8.3 折りたたみは必ず全部閉じた状態から始まること ---
+     以前は開閉を覚えていたので、一度全部開くとその状態が残り続け、
+     次に開いたときに②〜⑥が全部開いた長い画面から始まっていた。
+     file:// では保存先が端末共通なので、別の版のファイルにも波及する。 */
+  const fold = await page.evaluate(async () => {
+    const IDS = ['card2','card3','card4','card5','card6','card7'];
+    const openNow = () => [...document.querySelectorAll('.fold.open')].map(e => e.id);
+    const 起動時 = openNow();
+    /* 昔の記録が残っている状態を作って読み直す */
+    IDS.forEach(id => { try{ localStorage.setItem('zbs-fold-' + id, '1'); }catch(e){} });
+    if(typeof setupFolds === 'function') setupFolds();
+    await new Promise(r => setTimeout(r, 150));
+    const 記録あり = openNow();
+    const 残った記録 = IDS.filter(id => { try{ return localStorage.getItem('zbs-fold-' + id) !== null; }catch(e){ return false; } });
+    /* 押せばちゃんと開くこと */
+    document.querySelector('#card3 .fold-head').click();
+    await new Promise(r => setTimeout(r, 200));
+    const 押したら開く = document.getElementById('card3').classList.contains('open');
+    document.querySelector('#card3 .fold-head').click();
+    return { 起動時, 記録あり, 残った記録, 押したら開く };
+  });
+  add(fold.起動時.length === 0 && fold.記録あり.length === 0 && fold.残った記録.length === 0 && fold.押したら開く,
+      '折りたたみは全部閉じた状態から始まる（昔の記録があっても）',
+      JSON.stringify(fold));
+
   /* --- 8.4 上部に出る「伴奏◯◯」が、実際に鳴る型と合っていること ---
      伴奏はフレーズごとに持ち替えるので、曲の型ひとつでは言い表せない。
      以前はここが 67% のフレーズで食い違っていた。 */

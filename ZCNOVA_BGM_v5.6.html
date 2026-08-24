@@ -8502,15 +8502,29 @@ function renderAll(){
   buildTrackArea(); buildMixer(); syncControls();
 }
 /* ②以降の折りたたみ。開閉はブラウザに覚えさせる。 */
+/* 【2026-08-23 修正】折りたたみは必ず「全部閉じた状態」から始める。
+   ------------------------------------------------------------
+   以前は開閉を zbs-fold-* に覚えさせて次回も開いていた。
+   ところが一度でも全部開くとその状態が残り続け、次に開いたときに
+   ②〜⑥のカードが全部開いた長い画面から始まってしまう。
+   とくに file:// で開くと保存先がその端末のローカルファイル共通なので、
+   **別の版のファイルを開いても開きっぱなしの状態を引き継ぐ**（実測）。
+   初めての人にも久しぶりの人にも、①「曲を作る」だけが見えている
+   状態から始まるほうが迷わないので、覚えるのをやめた。
+   すでに残っている古い記録もここで消す。 */
 function setupFolds(){
   ['card2','card3','card4','card5','card6','card7'].forEach(id => {
     const el = $(id); if(!el) return;
-    if(zcLSGet('zbs-fold-' + id) === '1') el.classList.add('open');
+    el.classList.remove('open');
+    try{ if(window.localStorage) window.localStorage.removeItem('zbs-fold-' + id); }catch(e){}
     const head = el.querySelector('.fold-head');
-    head.addEventListener('click', () => {
-      el.classList.toggle('open');
-      zcLSSet('zbs-fold-' + id, el.classList.contains('open') ? '1' : '0');
-    });
+    /* 二重登録よけ。いまは boot から1回しか呼ばないが、付け忘れると
+       「1回押したのに2回切り替わって開かない」という形で出る。
+       このアプリでは効果音レーンで実際に同じ踏み方をしている。 */
+    if(!head._zcFoldBound){
+      head._zcFoldBound = true;
+      head.addEventListener('click', () => { el.classList.toggle('open'); });
+    }
   });
 }
 function syncControls(){
