@@ -125,20 +125,20 @@ async function 高い音の使いすぎ(page){
   ];
 }
 
-/* 【旋律を担う楽器が、耳で聞いて同じくらいの大きさか】
+/* 【管楽器・弦楽器が、耳で聞いて同じくらいの大きさか】
    ------------------------------------------------------------
-   ⚠️ そろえる物差しは必ず A特性（人の耳の感じ方に近い重み付け）で。
-   以前ここは **素の音量（linear RMS）** でそろえてあった。人の耳は
-   2〜5kHz にいちばん敏感で、金管・リードのエネルギーはちょうどそこに
-   集まっているので、素の音量が同じでも耳では桁違いに大きく感じる。
-   その結果 トランペットは **ピアノより 11dB 大きく、2〜5kHz は約90倍**
-   という状態で、「かなりきつい」と言われていた。
-
-   直す前（それぞれの音域の真ん中の音）:
-     オーボエ 64.2 / トランペット 63.1 / ブラス 62.1 / サックス 61.3 /
-     クラリネット 60.1 / トロンボーン 59.6 / ホルン 58.3 dB
-   直したあとは 55〜59dB に収まる。ここが再び広がったら、
-   物差しを間違えて合わせ直した可能性が高い。 */
+   ⚠️ 守るべきことが2つある。どちらか片方だけだと必ず狂う。
+      (1) **A特性**（人の耳の感じ方に近い重み付け）で測ること。
+          素の音量で合わせると、2〜5kHzにエネルギーが集まる金管・リードを
+          実際よりずっと小さく見積もる。
+      (2) **全部を同じ高さの音で**測ること。← ここで一度やらかした。
+          「その楽器の音域の真ん中」で測ると、高い楽器ほどA特性で大きく
+          出るので、比べたことにならない。その状態で一部だけ下げた結果:
+            ホルン 63.4dB / トランペット 57.8dB … 5.6dB も離れた
+            （素の音では 63.4 と 63.3 で、元は 0.1dB 差だった）
+            フルートはホルンより 9dB 下に埋もれ、「吹奏楽なのに笛が
+            聞こえない・ただのシンセに聞こえる」状態になった。
+   だからこの検査は **G4 でそろえて**測る（音域外の楽器はその上限）。 */
 async function 耳で聞いた音量のそろい(page){
   const r = await page.evaluate(async () => {
     function A(f){ const f2 = f*f, f4 = f2*f2;
@@ -157,7 +157,8 @@ async function 耳で聞いた音量のそろい(page){
     const 名 = m => ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][m%12] + (Math.floor(m/12)-1);
     async function 測る(inst){
       const rg = zcInstRange(inst); if(!rg) return null;
-      const note = 名(Math.round((rg[0] + rg[1]) / 2));
+      /* ★ 全部そろえて G4(67)。音域の外なら、その楽器のいちばん近い端で。 */
+      const note = 名(Math.max(rg[0], Math.min(rg[1], 67)));
       const buf = await Tone.Offline(() => {
         const v = makeVoice(inst, {}, false);
         const t = new Tone.Gain(zcInstTrim(inst));   /* 実際に通る出力そろえ */
@@ -174,7 +175,8 @@ async function 耳で聞いた音量のそろい(page){
       return aw > 1e-12 ? +(10*Math.log10(aw)).toFixed(1) : null;
     }
     const out = {};
-    for(const k of ['trumpet','sax','brass','oboe','clarinet','trombone','horn','strings','violin']){
+    for(const k of ['trumpet','sax','brass','oboe','clarinet','trombone','horn','bassoon','tuba',
+                    'flute','piccolo','violin','cello']){
       const v = await 測る(k); if(v !== null) out[(INSTRUMENTS[k]||{}).label || k] = v;
     }
     return out;
@@ -183,8 +185,9 @@ async function 耳で聞いた音量のそろい(page){
   const 幅 = 値.length ? +(Math.max(...値) - Math.min(...値)).toFixed(1) : 99;
   const 一覧 = Object.entries(r).map(([k,v]) => `${k} ${v}dB`).join(' / ');
   return [
-    { ok: 幅 <= 5.0,
-      label: `旋律を担う楽器が耳で同じくらいの大きさ（いちばん大きいのと小さいので ${幅}dB 差）`,
-      info: 一覧 },
+    { ok: 幅 <= 2.5,
+      label: `管楽器・弦楽器が耳で同じ大きさにそろっている（いちばん大きいのと小さいので ${幅}dB 差）`,
+      info: 幅 <= 2.5 ? 一覧
+                      : 一覧 + '  ※物差し（A特性・同じ高さ）を間違えて合わせ直していないか' },
   ];
 }
