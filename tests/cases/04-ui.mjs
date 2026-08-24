@@ -174,10 +174,15 @@ export async function run({ page, errors, notes }){
   const save = await page.evaluate(async () => {
     const KEY = 'zcnova-bgm-studio-songs-v1';
     const top = document.getElementById('topSaveBtn');
-    const exp = document.getElementById('topExportBtn');
-    if(!top || !exp) return { ok:false, why:'上部に保存ボタンが無い' };
+    if(!top) return { ok:false, why:'上部に保存ボタンが無い' };
+    /* 【2026-08-24】.json の書き出し／読み込みは撤去したので、
+       上部にあるのは「💾 この曲を保存」だけ。外から曲データを
+       取り込む入口が復活していないことも、ここで一緒に見張る。 */
+    const 取り込み口 = ['importJsonBtn','importFile','exportJsonBtn','topExportBtn']
+      .filter(id => document.getElementById(id));
+    if(取り込み口.length) return { ok:false, why:'外部ファイルの入口が残っている: ' + 取り込み口.join(',') };
     const bar = document.querySelector('.transport');
-    const 上部にある = bar.contains(top) && bar.contains(exp);
+    const 上部にある = bar.contains(top);
     const 見えている = top.offsetParent !== null;
     const name = document.getElementById('songName');
     name.value = '';                                  // 名前を入れ忘れた状態

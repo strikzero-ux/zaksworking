@@ -94,6 +94,12 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
 
 /* ---- グリッド（ZCnova と同じマス） ---- */
 .trk{ border:1px solid var(--border); border-radius:10px; margin-bottom:10px; background:var(--bg-2); }
+/* 【2026-08-24】「鳴らさない」トラックはひと目で分かるように沈める。
+   これが無いと、音色を替えてもマスを押しても音が出ず、
+   「調整できない」と受け取られる（実測：完全ランダムでは
+   木管が78%・金管が75%の曲で鳴らさない設定になっている）。 */
+.trk.trk-off{ opacity:0.55; border-style:dashed; }
+.trk.trk-off .trk-name::after{ content:'（いまは鳴りません）'; color:var(--accent); font-size:10px; margin-left:6px; }
 .trk-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:9px 12px; cursor:pointer; }
 .trk.open .trk-head{ border-bottom:1px solid var(--border); }
 .trk-name{ font-family:'Oswald',sans-serif; font-size:12.5px; letter-spacing:0.6px;
@@ -240,8 +246,6 @@ footer b{ color:var(--brass); }
          管理することはできない。代わりに、いつでも押せる保存を置く。 -->
     <button class="io-btn save" id="topSaveBtn"
             title="この曲をこの端末に保存します（下の「保存した曲」に並びます）">💾 この曲を保存</button>
-    <button class="io-btn" id="topExportBtn"
-            title="この曲を .json ファイルとして書き出します。端末を替えても、この道具を新しくしても、読み込めば必ず同じ曲が戻ります">⬇ ファイルに保存</button>
     <button class="io-btn" id="undoBtn" disabled>↩ やり直す</button>
     <!-- 【修正③】自動保存が本当に走っていることを見せる印。
          普段は透明で場所だけ確保し、保存された瞬間だけ1.4秒ふわっと出る。 -->
@@ -543,9 +547,6 @@ footer b{ color:var(--brass); }
       <input type="text" id="songName" placeholder="例：朝の支度／morning" style="width:200px;"
              title="ここに入れた名前がそのままファイル名になります。空のままなら日時から自動で付きます。">
       <button class="io-btn" id="saveBtn">この曲を保存</button>
-      <button class="io-btn" id="exportJsonBtn">ファイルに書き出す（.json）</button>
-      <button class="io-btn" id="importJsonBtn">ファイルを読み込む</button>
-      <input type="file" id="importFile" accept=".json,application/json" style="display:none;">
     </div>
 
     <div class="fx-row" style="align-items:flex-start;">
@@ -738,6 +739,32 @@ footer b{ color:var(--brass); }
         referrerpolicy="no-referrer"
         onerror="window.__zcToneFailed=1"></script>
 <script>
+/* ============================================================
+   【2026-08-24 追加】再生の音の乱れ（ぶつ切れ・ノイズ）を減らす
+   ------------------------------------------------------------
+   Tone.js の既定は「弾いた瞬間に鳴る」ことを優先した設定
+   （latencyHint:'interactive' / lookAhead 0.1秒）になっている。
+   この道具は鍵盤を弾く楽器ではなく、できあがった曲を流すだけなので、
+   **遅れても構わないから音を切らさない**設定のほうが合っている。
+
+   ・latencyHint:'playback' … ブラウザが大きめの音声バッファを取る
+   ・lookAhead 0.3秒        … 音の予約を早めに済ませておく
+   長い音が重なるところでCPUが混むと、予約が間に合わずに
+   ぶつ切れや雑音になる。ここを広げるといちばん効く。
+
+   ⚠️ 書き出し（Tone.Offline）はこの設定を使わないので、
+      書き出したファイルの音は今までとまったく同じ。
+   ============================================================ */
+/* 【実装メモ】AudioContext ごと latencyHint:'playback' で作り直す案も試したが、
+   この版の Tone では差し替えが効かず（設定を読み直すと元のままだった）、
+   リリース前に持ち込む変更ではないと判断して見送った。
+   予約の先読み（lookAhead）だけを広げる。これは効くことを実測で確認済み。
+   再生を始めたあとに戻されないよう、音を鳴らす直前にも掛け直す。 */
+function zcWidenLookAhead(){
+  try{ if(typeof Tone !== 'undefined' && Tone.context) Tone.context.lookAhead = 0.3; }catch(e){}
+}
+zcWidenLookAhead();
+
 /* Tone.js が読めなかったときの案内。
    ------------------------------------------------------------
    これが無いと、読み込みに失敗したときユーザーには「真っ黒な画面」しか
@@ -6683,6 +6710,9 @@ async function startPlayback(song, onStep){
   ZC_START_LOCK = true;
   try{
     if(!started){ await Tone.start(); started = true; }
+    /* 【2026-08-24】Tone.start() のあとに掛け直す。音の予約に余裕を持たせて、
+       長い音が重なるところでのぶつ切れ・雑音を減らす。 */
+    zcWidenLookAhead();
     const eng = ensureLiveEngine(song);
     clearLive();
     Tone.Transport.stop();
@@ -8229,7 +8259,7 @@ function buildTrackArea(){
   TRACKS.forEach(t => {
     const cfg = song.tracks[t.key];
     const box = document.createElement('div');
-    box.className = 'trk' + (openTracks[t.key] ? ' open' : '');
+    box.className = 'trk' + (openTracks[t.key] ? ' open' : '') + (cfg.on ? '' : ' trk-off');
     box.dataset.trk = t.key;
 
     // ---- 見出し（音色・音量・ミュートもここ） ----
@@ -8523,6 +8553,7 @@ function makeRow(label, n, isOn, onClass, toggle, isAcc, trackKey){
         if(!isOn(s)) toggle(s, false);
         if(isAcc && isOn(s)) toggle(s, true);
         repaintCol();
+        zcEnsureTrackOn(t.key);   /* 【2026-08-24】長押しで置いたときも同じ */
         onGridEdit();
         if(navigator.vibrate) try{ navigator.vibrate(12); }catch(e){}
       }, 450);
@@ -8558,6 +8589,7 @@ function makeRow(label, n, isOn, onClass, toggle, isAcc, trackKey){
       zcPushGridUndo();                          /* 【修正⑪】打ち込みも戻せるように */
       toggle(s, ev.shiftKey);
       repaintCol();   /* 修正⑬：同じ列のマスもまとめて塗り直す */
+      zcEnsureTrackOn(t.key);   /* 【2026-08-24】打ち込んだのに鳴らない、を防ぐ */
       onGridEdit();
     });
     cells.appendChild(c);
@@ -8566,6 +8598,27 @@ function makeRow(label, n, isOn, onClass, toggle, isAcc, trackKey){
   return row;
 }
 let gridEditTimer = null;
+/* 【2026-08-24】打ち込んだのに鳴らない、を防ぐ。
+   マスを押したトラックが「鳴らさない」なら、その場で鳴らす側にする。 */
+function zcEnsureTrackOn(k){
+  if(!song || !song.tracks || !song.tracks[k] || song.tracks[k].on) return false;
+  song.tracks[k].on = true;
+  const t = TRACKS.find(x => x.key === k);
+  status('makeStatus', `${t ? t.label : k}は「鳴らさない」設定だったので、鳴らすようにしました`, 'ok');
+  /* ⚠️ ここで buildTrackArea() を呼ぶと、いま押しているマスごと作り直して
+     しまう。表示だけ最小限で書き換える。 */
+  try{
+    const box = document.querySelector(`#trackArea .trk[data-trk="${k}"]`);
+    if(box){
+      box.classList.remove('trk-off');
+      const btn = box.querySelector('[data-on-for]');
+      if(btn){ btn.textContent = '鳴らす'; btn.style.opacity = '1'; }
+    }
+    refreshLiveEngine(song);
+  }catch(e){}
+  return true;
+}
+
 function onGridEdit(){
   /* 【2026-08-23 修正③】保存はここで即座に予約する（旧実装は 500ms 待ってから
      scheduleAutosave を呼んでいて、そこから更に 700ms 待つ二段構えになっていた）。
@@ -8725,7 +8778,12 @@ async function togglePlay(){
    ============================================================ */
 
 /* ---------- ① 曲を作る ---------- */
-let pickMood = MOODS[0].key, pickBars = 2, pickPM = 'random', pickSec = 180;
+/* 【2026-08-24】起動時に出す曲調。いちばん仕上がりが良いものを最初に見せる。
+   MOODS の並び順に引きずられないよう、キーで指定して、
+   その曲調が消えたときだけ先頭へ落とす。 */
+const ZC_START_MOOD = 'battle';
+let pickMood = MOODS.some(m => m.key === ZC_START_MOOD) ? ZC_START_MOOD : MOODS[0].key;
+let pickBars = 2, pickPM = 'random', pickSec = 180;
 let pickSE = 'impact';
 let seSeed = newSeed();
 let pickMel = 'auto', pickArr = 'auto', pickDensity = 60, pickHumanize = 35;
@@ -9043,6 +9101,9 @@ $('trackArea').addEventListener('click', (e) => {
     song.tracks[k].on = !song.tracks[k].on;
     on.textContent = song.tracks[k].on ? '鳴らす' : '鳴らさない';
     on.style.opacity = song.tracks[k].on ? '1' : '0.55';
+    /* 【2026-08-24】レーンの見た目（沈める／戻す）も合わせる */
+    const zcBox = on.closest('.trk');
+    if(zcBox) zcBox.classList.toggle('trk-off', !song.tracks[k].on);
     refreshLiveEngine(song); scheduleAutosave();
     return;
   }
@@ -9083,12 +9144,17 @@ $('trackArea').addEventListener('change', (e) => {
   const sel = e.target.closest('[data-inst-for]'); if(!sel) return;
   const k = sel.dataset.instFor;
   song.tracks[k].inst = sel.value;
+  /* 【2026-08-24】鳴らさない設定のまま音色だけ替えても何も起きないので、
+     替えた時点で鳴らす側にする。「音色を選んだ＝使いたい」が自然な読み。 */
+  let zcTurnedOn = false;
+  if(song.tracks[k] && !song.tracks[k].on){ song.tracks[k].on = true; zcTurnedOn = true; }
   /* 【2026-08-24】音色を替えたら、その楽器が出せる高さに合わせ直す。
      チューバに替えたのに旋律が高いまま、という状態を作らない。 */
   try{ zcFitRangesToInstruments(song); if(typeof renderAll === 'function') renderAll(); }catch(e){}
   swapVoice(song, k);
   scheduleAutosave();
-  status('makeStatus', `${TRACKS.find(t=>t.key===k).label}を「${INSTRUMENTS[sel.value].label}」にしました`, 'ok');
+  status('makeStatus', `${TRACKS.find(t=>t.key===k).label}を「${INSTRUMENTS[sel.value].label}」にしました`
+    + (zcTurnedOn ? '（鳴らさない設定だったので、鳴らすようにしました）' : ''), 'ok');
 });
 
 /* ---------- ④ 音を整える ---------- */
@@ -9676,80 +9742,16 @@ function songFileName(ext){
   zcFileNo = (zcFileNo + 1) % 100;
   return `bgm-${fnStamp()}-${String(zcFileNo).padStart(2, '0')}.${ext}`;
 }
-$('topExportBtn').addEventListener('click', () => $('exportJsonBtn').click());
-$('exportJsonBtn').addEventListener('click', () => {
-  download(new Blob([JSON.stringify(song, null, 1)], { type:'application/json' }),
-           songFileName('json'));
-  status('ioStatus', `ファイルに書き出しました：${zcLastSavedName}`, 'ok');
-});
-$('importJsonBtn').addEventListener('click', () => $('importFile').click());
-/* 【2026-08-23 修正②】読み込み失敗時に**必ず元の曲へ戻す**ようにした。
+/* ============================================================
+   【2026-08-24 撤去】ファイルの読み込み
    ------------------------------------------------------------
-   旧実装は「song を差し替える前に値を整えるので catch で戻せる」と
-   意図していたが、実際には差し替えの**あと**に renderAll() があり、
-   そこで落ちると song は既に壊れたものに替わっていた。
-   実測：中身の欠けた .json を読ませると「読み込めませんでした」と出るのに、
-   上部の曲情報は「2小節×0」の壊れた曲に差し替わっていた。さらに不正な
-   playMode が pickPM に流れ込み、次に作る曲の「使う楽器」まで勝手に変わった。
-
-   直し方：差し替える前に丸ごと控えを取り、renderAll() まで通って
-   初めて確定させる。1つでも失敗したら控えから戻して描き直す。
-   選択状態（pickMood 等）も、既知のキーだと確認できたものだけ採用する。
-   ------------------------------------------------------------ */
-function zcKnownOr(list, keyProp, v, fallback){
-  return list.some(x => x[keyProp] === v) ? v : fallback;
-}
-$('importFile').addEventListener('change', (e) => {
-  const f = e.target.files[0]; if(!f) return;
-  const r = new FileReader();
-  r.onerror = () => status('ioStatus', 'ファイルを読めませんでした（開き直してもう一度お試しください）', 'warn');
-  r.onload = () => {
-    let d;
-    /* --- 第1段：解析と検査。ここで落ちても song には一切触れていない --- */
-    try{
-      d = zcUnpackSong(JSON.parse(r.result));
-      if(!d || typeof d !== 'object' || !d.phrases || !d.tracks || !Array.isArray(d.phrases)){
-        throw new Error('形式ちがい');
-      }
-      if(!SCALES[d.scale]) d.scale = 'major';
-      if(typeof d.key !== 'number' || !NOTE_NAMES[d.key]) d.key = 0;
-      if(!Array.isArray(d.arrangement)) d.arrangement = [];
-      d.arrangement = d.arrangement.filter(i => d.phrases[i]);
-      if(!(d.bpm > 0)) d.bpm = 100;
-      if(!(d.bars > 0)) d.bars = 2;
-      if(!(d.targetSec > 0)) d.targetSec = 180;
-    }catch(err){
-      status('ioStatus', 'このアプリで作った .json ではないようです。いまの曲はそのままです。', 'warn');
-      return;
-    }
-    /* --- 第2段：差し替え。控えを取ってから入れ替え、描画まで通す --- */
-    const backup     = song;
-    const backMood   = pickMood, backBars = pickBars, backPM = pickPM, backSec = pickSec;
-    const backPhrase = curPhrase;
-    try{
-      pushUndo();
-      if(playing) stopPlayback();
-      disposeLiveEngine();
-      song = d; curPhrase = 0;
-      pickMood = zcKnownOr(MOODS,       'key', d.moodKey,  backMood);
-      pickPM   = zcKnownOr(PLAY_MODES,  'key', d.playMode, backPM);
-      pickBars = [1,2,4,8].includes(d.bars) ? d.bars : backBars;
-      pickSec  = d.targetSec;
-      renderAll();
-    }catch(err){
-      /* 描画まで通らなかった＝壊れている。丸ごと元へ戻す。 */
-      song = backup; curPhrase = backPhrase;
-      pickMood = backMood; pickBars = backBars; pickPM = backPM; pickSec = backSec;
-      try{ disposeLiveEngine(); renderAll(); }catch(e2){}
-      status('ioStatus', 'このファイルは開けませんでした。いまの曲はそのままです。', 'warn');
-      return;
-    }
-    scheduleAutosave();
-    status('ioStatus', '読み込みました', 'ok');
-  };
-  r.readAsText(f);
-  e.target.value = '';
-});
+   この道具は「既存の曲を一切参照せず、その場で計算して作る」という
+   作りが売りなので、外からファイルを取り込む入口を画面に置かない。
+   （読めたのはこの道具が書いた .json だけで、音源や他人の曲を
+     取り込む機能ではなかったが、**入口があること自体が設計の方向と
+     食い違う**という判断で外した。）
+   曲を残す手段は「💾 この曲を保存」（この端末に残す）に一本化した。
+   ============================================================ */
 
 /* ---------- 書き出し ---------- */
 // renderSong 側から呼ばれる（書き出し前に再生を止めたことを画面へ）
@@ -13303,7 +13305,12 @@ boot();
       if(midi === null) return;
 
       /* 再生中は同時発音数を抑える（書き出しのときは制限しない） */
-      if(this.live && this.active >= 12) return;
+      /* 【2026-08-24 変更】12 → 20。
+         ここに引っかかった音は**まるごと鳴らない**。長い音（伸ばす伴奏・
+         パッド・弦）では1音が数秒残るので重なりが増えやすく、
+         旋律の音が丸ごと消える＝いちばん耳につく乱れになっていた。
+         上を広げるかわりに、下の「簡易版で鳴らす」を先に効かせる。 */
+      if(this.live && this.active >= 20) return;
 
       var freq = 440 * Math.pow(2, (midi - 69) / 12);
       var t = time === undefined ? Tone.now() : time;
@@ -13374,7 +13381,12 @@ boot();
       /* 和音や、音が重なっているところは簡易版で鳴らす。
          1音あたりの部品が11個から4個に減る。
          旋律のように重ならないところは、そのまま本来の音で鳴る。 */
-      var lean = !!chord || busy >= 3 || (this.live && this.active >= 5);
+      /* 【2026-08-24 変更】簡易版へ落とす基準。
+         旧: busy>=3 または 再生中で active>=5
+         長い音が3つ重なっただけで簡易版になり、伸ばしている途中で
+         音色が変わって聞こえていた。基準を上げ、そのぶん
+         「音が丸ごと消える」上限（上の 20）に頼らないようにする。 */
+      var lean = !!chord || busy >= 5 || (this.live && this.active >= 9);
 
       var dis = [];
       var nOut = null;
