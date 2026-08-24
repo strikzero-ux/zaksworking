@@ -642,12 +642,12 @@ footer b{ color:var(--brass); }
     <!-- 【移設】上部バーにあった効果音レーンの設定をここへ。
          起動直後にいちばん目立つ場所を占めていたが、ふだんは使わないため。
          機能はそのまま（曲データに焼き込まれるので書き出しにも入る）。 -->
+    <!-- 行の見出し（左の「効果音レーン」）が、この一群が何の設定なのかを表す。
+         これが無いと「自動で置く」「裏」だけでは何の話か伝わらない。 -->
     <div class="fx-row">
-      <span class="t-label">レーン</span>
-    <span class="sfx-loop" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-      <!-- この一群が何の設定なのか、見出しが無いと「自動で置く」「裏」だけでは伝わらない。 -->
-      <span class="badge" style="border-color:var(--border);color:var(--brass);">🔊 効果音レーン</span>
-      <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);cursor:pointer;">
+      <span class="t-label">効果音レーン</span>
+      <span class="sfx-loop" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);cursor:pointer;">
         <input type="checkbox" id="seLoopOn" title="拍に合わせて自動で置きます。切っても手で置いた効果音は残ります"> 自動で置く
       </label>
       <select id="seLoopEvery" title="何小節ごとに鳴らすか" style="background:#1d1710;border:1px solid #4a3d2a;color:var(--text);border-radius:6px;padding:4px 5px;font-size:11px;font-family:inherit;">
