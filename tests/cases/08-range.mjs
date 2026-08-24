@@ -76,6 +76,7 @@ export async function run({ page }){
     { ok: r.音域が引けない音色 === 0,
       label: '全部の音色で音域が引ける', info: r.音域が引けない音色 ? `${r.音域が引けない音色}種で引けない` : '' },
     ...(await 高い音の使いすぎ(page)),
+    ...(await 耳で聞いた音量のそろい(page)),
   ] };
 }
 
@@ -121,5 +122,69 @@ async function 高い音の使いすぎ(page){
     { ok: r.sub <= 42,
       label: `刻み・装飾（sub）が高いところに寄りすぎない（G5超 ${r.sub}%）`,
       info: '直す前は 56% で全パート中いちばん高かった' },
+  ];
+}
+
+/* 【旋律を担う楽器が、耳で聞いて同じくらいの大きさか】
+   ------------------------------------------------------------
+   ⚠️ そろえる物差しは必ず A特性（人の耳の感じ方に近い重み付け）で。
+   以前ここは **素の音量（linear RMS）** でそろえてあった。人の耳は
+   2〜5kHz にいちばん敏感で、金管・リードのエネルギーはちょうどそこに
+   集まっているので、素の音量が同じでも耳では桁違いに大きく感じる。
+   その結果 トランペットは **ピアノより 11dB 大きく、2〜5kHz は約90倍**
+   という状態で、「かなりきつい」と言われていた。
+
+   直す前（それぞれの音域の真ん中の音）:
+     オーボエ 64.2 / トランペット 63.1 / ブラス 62.1 / サックス 61.3 /
+     クラリネット 60.1 / トロンボーン 59.6 / ホルン 58.3 dB
+   直したあとは 55〜59dB に収まる。ここが再び広がったら、
+   物差しを間違えて合わせ直した可能性が高い。 */
+async function 耳で聞いた音量のそろい(page){
+  const r = await page.evaluate(async () => {
+    function A(f){ const f2 = f*f, f4 = f2*f2;
+      return (12194*12194*f4) /
+        ((f2+20.6*20.6) * Math.sqrt((f2+107.7*107.7)*(f2+737.9*737.9)) * (f2+12194*12194))
+        * Math.pow(10, 0.1); }
+    function fft(re, im){ const n = re.length;
+      for(let i=1,j=0;i<n;i++){ let b=n>>1; for(; j&b; b>>=1) j^=b; j^=b;
+        if(i<j){ let t=re[i];re[i]=re[j];re[j]=t; t=im[i];im[i]=im[j];im[j]=t; } }
+      for(let len=2;len<=n;len<<=1){ const a=-2*Math.PI/len, wr=Math.cos(a), wi=Math.sin(a);
+        for(let i=0;i<n;i+=len){ let cr=1, ci=0;
+          for(let k=0;k<len/2;k++){ const ur=re[i+k], ui=im[i+k];
+            const vr=re[i+k+len/2]*cr - im[i+k+len/2]*ci, vi=re[i+k+len/2]*ci + im[i+k+len/2]*cr;
+            re[i+k]=ur+vr; im[i+k]=ui+vi; re[i+k+len/2]=ur-vr; im[i+k+len/2]=ui-vi;
+            const nc=cr*wr-ci*wi; ci=cr*wi+ci*wr; cr=nc; } } } }
+    const 名 = m => ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][m%12] + (Math.floor(m/12)-1);
+    async function 測る(inst){
+      const rg = zcInstRange(inst); if(!rg) return null;
+      const note = 名(Math.round((rg[0] + rg[1]) / 2));
+      const buf = await Tone.Offline(() => {
+        const v = makeVoice(inst, {}, false);
+        const t = new Tone.Gain(zcInstTrim(inst));   /* 実際に通る出力そろえ */
+        const g = new Tone.Gain(1); t.connect(g); g.toDestination();
+        (v.connect ? v.connect(t) : v.output.connect(t));
+        v.triggerAttackRelease(note, 1.0, 0.05, 0.8 * pitchTilt(note));
+      }, 2.0);
+      const d = buf.getChannelData(0), sr = buf.sampleRate, N = 16384, off = Math.floor(sr*0.28);
+      const re = new Float64Array(N), im = new Float64Array(N);
+      for(let i=0;i<N;i++){ const w = 0.5 - 0.5*Math.cos(2*Math.PI*i/(N-1)); re[i] = (d[off+i]||0)*w; }
+      fft(re, im);
+      let aw = 0;
+      for(let k=1;k<N/2;k++){ const f = k*sr/N, p = re[k]*re[k] + im[k]*im[k]; aw += p*A(f)*A(f); }
+      return aw > 1e-12 ? +(10*Math.log10(aw)).toFixed(1) : null;
+    }
+    const out = {};
+    for(const k of ['trumpet','sax','brass','oboe','clarinet','trombone','horn','strings','violin']){
+      const v = await 測る(k); if(v !== null) out[(INSTRUMENTS[k]||{}).label || k] = v;
+    }
+    return out;
+  });
+  const 値 = Object.values(r);
+  const 幅 = 値.length ? +(Math.max(...値) - Math.min(...値)).toFixed(1) : 99;
+  const 一覧 = Object.entries(r).map(([k,v]) => `${k} ${v}dB`).join(' / ');
+  return [
+    { ok: 幅 <= 5.0,
+      label: `旋律を担う楽器が耳で同じくらいの大きさ（いちばん大きいのと小さいので ${幅}dB 差）`,
+      info: 一覧 },
   ];
 }
