@@ -13480,6 +13480,29 @@ boot();
     return C.createPeriodicWave(real, imag);
   }
 
+  /* 息／弓のノイズのもとになる「ざらざらの音」を1本だけ作り置きする。
+     ------------------------------------------------------------
+     Tone.Noise は1音ごとに本物の部品を7個（Gain5・音源1・波形1）作る。
+     中身はただの白色ノイズなので、自分で持てば**音源1個**で済む。
+     ・2チャンネル（左右で別のざらざら）… Tone と同じにする。
+       1チャンネルにすると息の音が真ん中に張り付いて広がりが消える。
+     ・くり返して使うので、鳴らし始める場所を毎回ずらす。
+       同じ場所から始めると、どの音も同じ息づかいになってしまう。
+     ・音の高さや曲の中身には一切関係しない（rnd() は使わない）。 */
+  var noiseBufs = {};
+  function zcNoiseBuffer(C){
+    var sr = C.sampleRate || 44100;
+    if(noiseBufs[sr]) return noiseBufs[sr];
+    var len = Math.floor(sr * 2);
+    var b = C.createBuffer(2, len, sr);
+    for(var ch = 0; ch < 2; ch++){
+      var d = b.getChannelData(ch);
+      for(var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    noiseBufs[sr] = b;
+    return b;
+  }
+
   function driveCurve(amount, bias){
     var k = amount + '/' + bias;
     if(curveCache[k]) return curveCache[k];
@@ -13636,6 +13659,14 @@ boot();
          旋律の音が丸ごと消える＝いちばん耳につく乱れになっていた。
          上を広げるかわりに、下の「簡易版で鳴らす」を先に効かせる。 */
       if(this.live && this.active >= 20) return;
+      /* 【最後の安全弁 2026-08-24】楽器をまたいだ同時発音数の上限。
+         上の 20 は「楽器1つぶん」なので、7パートが同時に鳴る吹奏楽では
+         どの楽器も余裕だと判断したまま全体が膨らむ。
+         実測でいちばん重い編成（吹奏楽・戦闘）でも同時28だったので、
+         40 はふだん絶対に当たらない。端末や設定が想定外に重くなったとき
+         だけ効く「これ以上は増やさない」線。ここに当たった音は鳴らない
+         （音が1つ欠けるのは、全部が割れて止まるよりましなので）。 */
+      if(this.live && LIVE >= 40) return;
 
       var freq = 440 * Math.pow(2, (midi - 69) / 12);
       var t = time === undefined ? Tone.now() : time;
@@ -13772,14 +13803,42 @@ boot();
       if(this.live) LIVE++;
 
       /* --- 倍音表から作ったカスタム波形を2本、わずかにデチューン --- */
-      var sum = new Tone.Gain({gain:0.5, context:C}); dis.push(sum);
+      /* 【重さの修正 2026-08-24】ここから下の部品を Tone の包みから
+         **生の Web Audio** に替える。
+         ------------------------------------------------------------
+         【なぜ】「サックス・トランペットが絡むと音が割れて止まる」という
+         報告の原因。Tone の部品は1個が中でいくつもの本物の部品に化ける。
+         実測（この端末で1個作って数えた）:
+             Tone.Filter      → 15個（Gain10・ConstantSource4・Biquad1）
+             Tone.Oscillator  →  8個（Gain5・ConstantSource2・波1）
+             Tone.Gain / Noise / WaveShaper → 1個（そのまま）
+         ConstantSource は「鳴りっぱなしの音源」なので、置いてあるだけで
+         計算を食う。1音ぶんの本物の部品は **62個**にもなっていた。
+         実測（吹奏楽・4小節・12秒の再生）:
+             毎秒つくる部品 852個 ／ 同時に鳴る音 最大31
+         これは端末の音の計算が間に合わなくなる量で、間に合わないと
+         ブラウザは音を「ブツッ」と欠かす＝**割れて聞こえて、やがて止まる**。
+         しかもこの詰まりは音の計算の側で起きるので、こちらの
+         「予約の余裕」（zcWatchLateness）には映らない。だから
+         自動で軽くする仕組みも働かないままだった。
+
+         【何を替えたか】発振器とフィルタだけを生の部品にする。
+         Tone の便利さ（時間の書き方など）はここでは使っていないので、
+         音の作りは1つも変わらない。倍音表から作る波は楽器ごとに
+         作り置きする（Tone も中で同じことをしている）。
+             1音ぶんの部品 62個 → 14個（簡易版は 26個 → 5個）
+         ⚠️ 生の部品は dispose() を持たない。後片付けは disconnect()。
+         ⚠️ 生の部品から Tone の部品へは直接つなげない。Tone.connect() を使う。 */
+      var sum = C.createGain(); sum.gain.value = 0.5; dis.push(sum);
       var oscs = [];
       var count = lean ? 1 : 2;
       var self0 = this;
       for(var i = 0; i < count; i++){
-        var o = new Tone.Oscillator({ frequency:freq, type:'custom',
-          partials:self0.parts3[velStep], context:C });
-        var g = new Tone.Gain({gain:(count === 1 ? 1 : (i === 0 ? 1 - p.detuneMix : p.detuneMix)), context:C});
+        var o = C.createOscillator();
+        o.frequency.value = freq;
+        o.setPeriodicWave(self0._wave(C, velStep));
+        var g = C.createGain();
+        g.gain.value = (count === 1 ? 1 : (i === 0 ? 1 - p.detuneMix : p.detuneMix));
         o.detune.value = count === 1 ? 0 : (i === 0 ? -p.detuneCents / 2 : p.detuneCents / 2);
         /* 発音時のピッチのしゃくり（金管・リードの立ち上がり） */
         if(hit) o.detune.value += hit * 14;      // ③ ±14セント。同じ音でも毎回わずかに違う
@@ -13795,14 +13854,15 @@ boot();
           o.detune.setValueAtTime(b2 + slurFrom, t);
           o.detune.linearRampToValueAtTime(b2, t + 0.045);
         }
-        o.chain(g, sum);
+        o.connect(g); g.connect(sum);
         o.start(t); o.stop(stopAt);
         oscs.push(o); dis.push(o, g);
       }
       if(p.subMix > 0 && !lean){
-        var sub = new Tone.Oscillator({ frequency:freq, type:'sine', context:C });
-        var sg = new Tone.Gain({gain:p.subMix, context:C});
-        sub.chain(sg, sum); sub.start(t); sub.stop(stopAt);
+        var sub = C.createOscillator();
+        sub.type = 'sine'; sub.frequency.value = freq;
+        var sg = C.createGain(); sg.gain.value = p.subMix;
+        sub.connect(sg); sg.connect(sum); sub.start(t); sub.stop(stopAt);
         dis.push(sub, sg);
       }
 
@@ -13811,7 +13871,7 @@ boot();
       /* 【追加】スラーのときは弓が動き続けているので、短い音にも乗る。
          0.34秒の足切りを下げ、掛かり始めも早くする。 */
       if(!lean && sec > (slur ? 0.16 : 0.34) && this.vib){
-        var vg = new Tone.Gain({ gain:0, context:C });
+        var vg = C.createGain(); vg.gain.value = 0;
         var vibDelay = slur ? p.vibrato.delay * 0.30 : p.vibrato.delay;
         this.vib.connect(vg);
         vg.gain.setValueAtTime(0, t + vibDelay);
@@ -13822,10 +13882,14 @@ boot();
 
       /* --- 息／弓のノイズ。発音の瞬間だけ強く出る --- */
       if(!lean && p.noise.amount > 0){
-        var nz = new Tone.Noise({type:'white', context:C});
-        var nf = new Tone.Filter({ type:'bandpass',
-          frequency:Math.max(p.noise.hp, freq * p.noise.track), Q:p.noise.q, context:C });
-        var ng = new Tone.Gain({gain:0, context:C});
+        var nz = C.createBufferSource();
+        nz.buffer = zcNoiseBuffer(C);
+        nz.loop = true;
+        var nf = C.createBiquadFilter();
+        nf.type = 'bandpass';
+        nf.frequency.value = Math.max(p.noise.hp, freq * p.noise.track);
+        nf.Q.value = p.noise.q;
+        var ng = C.createGain(); ng.gain.value = 0;
         /* ノイズは音量エンベロープも通るので、そのままだと強さに正比例して
            息／弓の音と楽音の比が一定になってしまう。弱奏ほど息が目立つのが
            実楽器なので、比率を弱奏側へ持ち上げる。 */
@@ -13836,13 +13900,16 @@ boot();
                      効果を打ち消していた（実測で明るさが逆に上がった）。 */
                   * (1 + Math.abs(hit) * 0.20)      // ③ 端を叩くほど撥の音が目立つ
                   * (1 + shortness * 0.40);          // ④ 短い音はタンギング／撥が強い
-        nz.chain(nf, ng);
+        nz.connect(nf); nf.connect(ng);
         /* 【追加】スラーは弓を当て直さないので、頭の「ザッ」を大きく減らす。
            ここがいちばん効く（打ち込み臭さの主因）。 */
         var burst = slur ? (1 + (p.noise.burst - 1) * 0.25) : p.noise.burst;
         ng.gain.setValueAtTime(nBase * burst, t);
         ng.gain.linearRampToValueAtTime(nBase, t + p.noise.burstMs / 1000);
-        nz.start(t); nz.stop(stopAt);
+        /* 始める場所をずらす。Tone.Noise も同じことをしていた。
+           ここの乱数は曲づくりの乱数（rnd）とは別物で、音の並びには影響しない。 */
+        nz.start(t, Math.random() * Math.max(0.001, nz.buffer.duration - 0.001));
+        nz.stop(stopAt);
         dis.push(nz, nf, ng);
         nOut = ng;
       }
@@ -13852,7 +13919,7 @@ boot();
          WaveShaper は1音ごとに作ると重いため。 */
       var preFilt = sum;
       if(!lean){
-        var shaper = new Tone.WaveShaper({context:C});
+        var shaper = C.createWaveShaper();
         /* 強奏ほど歪む（金管の張った音・リードの鳴り）。
            カーブは楽器ごとに作り置きしてあるので、ここでは選ぶだけ。 */
         shaper.curve = this.curves[velStep];
@@ -13875,7 +13942,8 @@ boot();
          フィルタを閉じた所から開き直さない（「ワウ」に聞こえてしまう）。 */
       var filtStart = cut * (slur ? 0.90 : 0.55);
       var filtOpen  = slur ? cut * Math.pow(2, p.tone.envOct * 0.35) : open;
-      var filt = new Tone.Filter({ type:'lowpass', Q:p.tone.q, frequency:filtStart, context:C });
+      var filt = C.createBiquadFilter();
+      filt.type = 'lowpass'; filt.Q.value = p.tone.q; filt.frequency.value = filtStart;
       filt.frequency.setValueAtTime(filtStart, t);
       filt.frequency.linearRampToValueAtTime(filtOpen, t + atk * 0.8);
       filt.frequency.linearRampToValueAtTime(cut, t + atk + p.tone.envMs / 1000);
@@ -13884,7 +13952,7 @@ boot();
       dis.push(filt);
 
       /* --- 音量エンベロープ（少し行き過ぎてからサステインへ） --- */
-      var env = new Tone.Gain({gain:0, context:C});
+      var env = C.createGain(); env.gain.value = 0;
       filt.connect(env);
       /* 【追加】スラーは弓を当て直さないので、頭で音量が跳ねない。 */
       var peak = vel * (slur ? 1 : p.ampOvershoot);
@@ -13911,7 +13979,7 @@ boot();
         }
         env.gain.linearRampToValueAtTime(0.0001, releaseAt + p.env.release);
       }
-      env.connect(this.bus);
+      Tone.connect(env, this.bus);        /* 生 → Tone はこの形でつなぐ */
       dis.push(env);
 
       /* 後片付け。放っておくとノードが積み上がって、
@@ -13948,7 +14016,11 @@ boot();
         self.active = Math.max(0, self.active - 1);
         if(wasLive) LIVE = Math.max(0, LIVE - 1);
         if(ctx !== Tone.getContext()) return;   // 別の文脈へ移っていたら触らない
-        dis.forEach(function(n){ try{ n.dispose(); }catch(e){} });
+        /* 生の部品は dispose() を持たないので disconnect() で外す。
+           Tone の部品（ノイズ）は dispose() を持つのでそちらを呼ぶ。 */
+        dis.forEach(function(n){
+          try{ if(typeof n.dispose === 'function') n.dispose(); else n.disconnect(); }catch(e){}
+        });
       }, delayMs);
     }
 
