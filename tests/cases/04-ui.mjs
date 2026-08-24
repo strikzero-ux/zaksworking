@@ -119,6 +119,38 @@ export async function run({ page, errors, notes }){
   add(alive, '再生ボタンを6連打しても曲が残っている');
   await page.evaluate(() => { try{ Tone.Transport.stop(); }catch(e){} });
 
+  /* --- 8.2 マスを打ち込んでもJSエラーが出ないこと ---
+     「鳴らさないパートは自動で鳴らす」を足したとき、変数の取り違えで
+     マスを押すたびに例外が出て、自動保存・フレーズ一覧の更新・再生の
+     かけ直し（onGridEdit）が丸ごと飛んでいた。音は出るので気づきにくい。
+     木管・金管まで含めて、実際に押して確かめる。 */
+  const grid = await page.evaluate(async () => {
+    const c3 = document.getElementById('card3');
+    if(!c3.classList.contains('open')) c3.querySelector('.fold-head').click();
+    await new Promise(r => setTimeout(r, 300));
+    const out = [];
+    for(const k of ['mel1','mel2','sub','bass','wind1','wind2']){
+      const box = [...document.querySelectorAll('#trackArea .trk')].find(x => x.dataset.trk === k);
+      if(!box){ out.push({ k, ng:'レーンが無い' }); continue; }
+      if(!box.classList.contains('open')){ box.querySelector('.trk-head').click(); await new Promise(r => setTimeout(r, 250)); }
+      const cells = [...box.querySelectorAll('.cell')];
+      if(!cells.length){ out.push({ k, ng:'マスが作られない' }); continue; }
+      /* 数ではなく中身で比べる。同じ位置に別の高さの音があるとき、
+         押すと置き換わって数が変わらないため。 */
+      const before = JSON.stringify(song.phrases[curPhrase][k] || []);
+      cells[Math.floor(cells.length / 2)].click();
+      await new Promise(r => setTimeout(r, 200));
+      const after = JSON.stringify(song.phrases[curPhrase][k] || []);
+      if(after === before) out.push({ k, ng:'押しても中身が変わらない' });
+      if(!song.tracks[k].on) out.push({ k, ng:'押したのに鳴らさないまま' });
+    }
+    c3.querySelector('.fold-head').click();
+    return out;
+  });
+  const gridErr = errors.length;
+  add(grid.length === 0, 'すべてのパートでマスを打ち込める（木管・金管を含む）',
+      grid.map(x => `${x.k}: ${x.ng}`).join(' / '));
+
   /* --- 8.3 折りたたみは必ず全部閉じた状態から始まること ---
      以前は開閉を覚えていたので、一度全部開くとその状態が残り続け、
      次に開いたときに②〜⑥が全部開いた長い画面から始まっていた。

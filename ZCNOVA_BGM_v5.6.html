@@ -255,35 +255,6 @@ footer b{ color:var(--brass); }
          効果音レーン（トラック編集で好きな所に置ける／曲データに焼き込まれる
          ので書き出しにも入る）へ移行したため。
          試聴と効果音単体の書き出しは「効果音」カードに残っている。 -->
-    <!-- 効果音レーン：1回だけでなく、拍に合わせて鳴らし続ける -->
-    <span class="sfx-loop" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
-      <!-- 【修正⑲】この一群が何の設定なのか画面のどこにも書いていなかった。
-           起動直後に目に入る位置なのに「自動で置く」「裏」だけでは伝わらない。 -->
-      <span class="badge" style="border-color:var(--border);color:var(--brass);">🔊 効果音レーン</span>
-      <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);cursor:pointer;">
-        <input type="checkbox" id="seLoopOn" title="拍に合わせて自動で置きます。切っても手で置いた効果音は残ります"> 自動で置く
-      </label>
-      <select id="seLoopEvery" title="何小節ごとに鳴らすか" style="background:#1d1710;border:1px solid #4a3d2a;color:var(--text);border-radius:6px;padding:4px 5px;font-size:11px;font-family:inherit;">
-        <option value="1">毎小節</option>
-        <option value="2" selected>2小節ごと</option>
-        <option value="4">4小節ごと</option>
-        <option value="8">8小節ごと</option>
-      </select>
-      <select id="seLoopBeat" title="小節のどこで鳴らすか" style="background:#1d1710;border:1px solid #4a3d2a;color:var(--text);border-radius:6px;padding:4px 5px;font-size:11px;font-family:inherit;">
-        <option value="-1" selected>最後の拍</option>
-        <option value="0">1拍目</option>
-        <option value="1">2拍目</option>
-        <option value="2">3拍目</option>
-        <option value="3">4拍目</option>
-      </select>
-      <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);cursor:pointer;"
-             title="拍の真上ではなく、その半分ずらした位置（裏拍）で鳴らします">
-        <input type="checkbox" id="seLoopOff"> 裏拍にずらす
-      </label>
-      <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);">音量
-        <input type="range" id="seLoopVol" min="0" max="100" value="55" title="効果音レーンの音量" style="width:70px;">
-      </label>
-    </span>
   </div>
 
   <!-- 【修正⑦】再生できない理由は、押した指のすぐ近くに出す -->
@@ -553,6 +524,16 @@ footer b{ color:var(--brass); }
       <span class="t-label">保存した曲</span>
       <div class="song-list" id="songList" style="flex:1;"></div>
     </div>
+    <!-- 【2026-08-24】保存の行き先がどこなのか、画面のどこにも書いていなかった。
+         .json の書き出し／読み込みを外して保存を一本化したので、なおさら
+         「どこに残るのか／どうすると消えるのか」を先に見せておく。 -->
+    <p class="hint" style="margin-top:-6px;">
+      保存先は<b>この端末のブラウザの中</b>です。ページを更新しても、タブを閉じても、
+      パソコンを再起動しても残ります。<br>
+      消えるのは<b>ブラウザの「サイトデータを削除」をしたとき</b>と、
+      <b>プライベートウィンドウで使ったとき</b>だけです。
+      <b>長く残したい曲は、MP3かWAVで書き出しておいてください。</b>
+    </p>
 
     <div class="fx-row">
       <span class="t-label">書き出し</span>
@@ -600,6 +581,41 @@ footer b{ color:var(--brass); }
       <div class="card-title"><span class="stage-no">6</span>効果音（SE）を作る<small>1発だけ鳴らして書き出します</small></div>
     </div>
     <div class="fold-body">
+
+    <!-- 【2026-08-24 移設】上部バーにあった効果音レーンの設定をここへ。
+         起動直後にいちばん目立つ場所を占めていたが、ふだんは使わないため。
+         機能はそのまま（曲データに焼き込まれるので書き出しにも入る）。 -->
+    <div class="fx-row">
+      <span class="t-label">レーン</span>
+    <span class="sfx-loop" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+      <!-- 【修正⑲】この一群が何の設定なのか画面のどこにも書いていなかった。
+           起動直後に目に入る位置なのに「自動で置く」「裏」だけでは伝わらない。 -->
+      <span class="badge" style="border-color:var(--border);color:var(--brass);">🔊 効果音レーン</span>
+      <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);cursor:pointer;">
+        <input type="checkbox" id="seLoopOn" title="拍に合わせて自動で置きます。切っても手で置いた効果音は残ります"> 自動で置く
+      </label>
+      <select id="seLoopEvery" title="何小節ごとに鳴らすか" style="background:#1d1710;border:1px solid #4a3d2a;color:var(--text);border-radius:6px;padding:4px 5px;font-size:11px;font-family:inherit;">
+        <option value="1">毎小節</option>
+        <option value="2" selected>2小節ごと</option>
+        <option value="4">4小節ごと</option>
+        <option value="8">8小節ごと</option>
+      </select>
+      <select id="seLoopBeat" title="小節のどこで鳴らすか" style="background:#1d1710;border:1px solid #4a3d2a;color:var(--text);border-radius:6px;padding:4px 5px;font-size:11px;font-family:inherit;">
+        <option value="-1" selected>最後の拍</option>
+        <option value="0">1拍目</option>
+        <option value="1">2拍目</option>
+        <option value="2">3拍目</option>
+        <option value="3">4拍目</option>
+      </select>
+      <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);cursor:pointer;"
+             title="拍の真上ではなく、その半分ずらした位置（裏拍）で鳴らします">
+        <input type="checkbox" id="seLoopOff"> 裏拍にずらす
+      </label>
+      <label style="display:flex;gap:4px;align-items:center;font-size:11px;color:var(--text-dim);">音量
+        <input type="range" id="seLoopVol" min="0" max="100" value="55" title="効果音レーンの音量" style="width:70px;">
+      </label>
+    </span>
+    </div>
 
     <div class="fx-row">
       <span class="t-label">種類</span>
@@ -8672,7 +8688,7 @@ function makeRow(label, n, isOn, onClass, toggle, isAcc, trackKey){
         if(!isOn(s)) toggle(s, false);
         if(isAcc && isOn(s)) toggle(s, true);
         repaintCol();
-        zcEnsureTrackOn(t.key);   /* 【2026-08-24】長押しで置いたときも同じ */
+        zcEnsureTrackOn(trackKey);   /* 【2026-08-24】長押しで置いたときも同じ */
         onGridEdit();
         if(navigator.vibrate) try{ navigator.vibrate(12); }catch(e){}
       }, 450);
@@ -8708,7 +8724,7 @@ function makeRow(label, n, isOn, onClass, toggle, isAcc, trackKey){
       zcPushGridUndo();                          /* 【修正⑪】打ち込みも戻せるように */
       toggle(s, ev.shiftKey);
       repaintCol();   /* 修正⑬：同じ列のマスもまとめて塗り直す */
-      zcEnsureTrackOn(t.key);   /* 【2026-08-24】打ち込んだのに鳴らない、を防ぐ */
+      zcEnsureTrackOn(trackKey);   /* 【2026-08-24】打ち込んだのに鳴らない、を防ぐ */
       onGridEdit();
     });
     cells.appendChild(c);
@@ -8720,7 +8736,10 @@ let gridEditTimer = null;
 /* 【2026-08-24】打ち込んだのに鳴らない、を防ぐ。
    マスを押したトラックが「鳴らさない」なら、その場で鳴らす側にする。 */
 function zcEnsureTrackOn(k){
-  if(!song || !song.tracks || !song.tracks[k] || song.tracks[k].on) return false;
+  /* 効果音レーンなど song.tracks に無い行から呼ばれても落ちないこと。
+     ⚠️ ここが例外を投げると、呼び出し元の onGridEdit()（自動保存・
+     フレーズ一覧の更新・再生のかけ直し）まで丸ごと飛ぶ。 */
+  if(!k || !song || !song.tracks || !song.tracks[k] || song.tracks[k].on) return false;
   song.tracks[k].on = true;
   const t = TRACKS.find(x => x.key === k);
   status('makeStatus', `${t ? t.label : k}は「鳴らさない」設定だったので、鳴らすようにしました`, 'ok');
@@ -10084,23 +10103,31 @@ $('sePick').addEventListener('click', (e) => {
 function zcSyncSELaneUI(){
   if(!song || !song.se) return;
   const c = song.se;
-  $('seLoopOn').checked   = !!c.auto;
-  $('seLoopEvery').value  = String(c.every || 2);
-  $('seLoopBeat').value   = String(c.beat === undefined ? -1 : c.beat);
-  $('seLoopOff').checked  = !!c.off;
-  $('seLoopVol').value    = String(c.vol === undefined ? 55 : c.vol);
+  /* 【2026-08-24】この一群は⑥のカードへ移した。カードを畳んでいても要素は
+     あるが、将来まるごと外しても落ちないよう存在を確かめてから触る。
+     ここで落ちると markPicked → renderAll が止まり、画面全体が更新されない。 */
+  const set = (id, fn) => { const e = $(id); if(e) fn(e); };
+  set('seLoopOn',    e => { e.checked = !!c.auto; });
+  set('seLoopEvery', e => { e.value = String(c.every || 2); });
+  set('seLoopBeat',  e => { e.value = String(c.beat === undefined ? -1 : c.beat); });
+  set('seLoopOff',   e => { e.checked = !!c.off; });
+  set('seLoopVol',   e => { e.value = String(c.vol === undefined ? 55 : c.vol); });
 }
 function zcApplySELane(rebuild){
   if(!song){ return; }
   if(!song.se) song.se = { type:'coin', pitch:72, dur:0.35, wobble:50, seed:1,
                            skipRoles:['intro','outro'] };
   const c = song.se;
-  c.auto  = $('seLoopOn').checked;
+  /* 【2026-08-24】要素が無くてもいまの値を保つ（⑥へ移設したため） */
+  const get = (id, d) => { const e = $(id); return e ? e : null; };
+  const on = get('seLoopOn'), ev = get('seLoopEvery'), bt = get('seLoopBeat'),
+        of = get('seLoopOff'), vo = get('seLoopVol');
+  if(on) c.auto = on.checked;
   if(c.auto) c.on = true;              // 自動で置くなら鳴る状態にする
-  c.every = parseInt($('seLoopEvery').value, 10) || 2;
-  c.beat  = parseInt($('seLoopBeat').value, 10);
-  c.off   = $('seLoopOff').checked;
-  c.vol   = parseInt($('seLoopVol').value, 10);
+  if(ev) c.every = parseInt(ev.value, 10) || 2;
+  if(bt) c.beat  = parseInt(bt.value, 10);
+  if(of) c.off   = of.checked;
+  if(vo) c.vol   = parseInt(vo.value, 10);
   /* 種類はレーン側（トラック編集の効果音レーンで選んだもの）を使う。
      ⚠️ ここで pickSE を代入しないこと。撤去前はそうしていたが、その名残で
         上書きすると「レーンで種類を選んでから“自動で置く”を入れた瞬間に
