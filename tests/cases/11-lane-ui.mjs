@@ -52,6 +52,28 @@ export async function run({ page, errors }){
     await new Promise(r => setTimeout(r, 400));
     out.試聴.止まった = (zcTrackPreview === null && Tone.Transport.state === 'stopped');
 
+    /* 2-b. 音色を替えてもレーンが開いたまま・選択欄が作り直されないこと。
+       以前は替えるたびに画面を丸ごと組み直していたので、続けて別の音色を
+       選ぼうとすると開き直しになっていた。 */
+    {
+      const k = 'mel1';
+      let bx = [...document.querySelectorAll('#trackArea .trk')].find(x => x.dataset.trk === k);
+      if(!bx.classList.contains('open')){ bx.querySelector('.trk-head').click(); await new Promise(r => setTimeout(r, 250)); }
+      bx = [...document.querySelectorAll('#trackArea .trk')].find(x => x.dataset.trk === k);
+      const sel0 = bx.querySelector('[data-inst-for]');
+      const cand = [...sel0.options].map(o => o.value).filter(v => v !== sel0.value).slice(0, 3);
+      const 結果 = [];
+      for(const v of cand){
+        const bxN = [...document.querySelectorAll('#trackArea .trk')].find(x => x.dataset.trk === k);
+        const sel = bxN.querySelector('[data-inst-for]');
+        sel.value = v; sel.dispatchEvent(new Event('change', { bubbles:true }));
+        await new Promise(r => setTimeout(r, 350));
+        const bx2 = [...document.querySelectorAll('#trackArea .trk')].find(x => x.dataset.trk === k);
+        結果.push(bx2.classList.contains('open') && song.tracks[k].inst === v);
+      }
+      out.音色を替えても開いたまま = 結果.every(Boolean) + '（' + 結果.length + '回試した）';
+    }
+
     /* 3. 効果音レーンの言い方がほかとそろっている */
     const se = [...document.querySelectorAll('#trackArea .trk')].find(x => x.dataset.trk === 'se');
     out.効果音のボタン = se ? [...se.querySelectorAll('button')].map(x => x.textContent.trim()).filter(Boolean) : [];
@@ -83,6 +105,8 @@ export async function run({ page, errors }){
   checks.push({ ok: r.試聴.始まった && r.試聴.開閉が変わっていない && r.試聴.止まった,
     label: `「▶ 試聴」で鳴り、もう一度押すと止まる（レーンの開閉に吸われない）`,
     info: JSON.stringify(r.試聴) });
+  checks.push({ ok: String(r.音色を替えても開いたまま).startsWith('true'),
+    label: `音色を替えてもレーンが開いたまま（${r.音色を替えても開いたまま}）` });
   checks.push({ ok: r.効果音のボタン.includes('鳴らす') || r.効果音のボタン.includes('鳴らさない'),
     label: `効果音レーンの言い方がほかのパートとそろっている（${r.効果音のボタン.join(' / ')}）` });
   const e = r.書き出し中;

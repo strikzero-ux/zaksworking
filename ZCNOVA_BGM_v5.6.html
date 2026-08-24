@@ -380,6 +380,11 @@ footer b{ color:var(--brass); }
            名前だけ違うため「片方は同じ曲が出る」等と誤解されていた。
            役割を分け、こちらは**設定を変えずに中身だけ作り直す**と明示する。 -->
       <button class="io-btn" id="againBtn" title="曲調などの設定はそのまま、中身だけ作り直します">🎲 もう1曲つくる</button>
+      <!-- 【2026-08-24 追加】作ったらその場で聴ける場所に置く。
+           上部バーにも再生はあるが、作る操作をしている手の近くに無いと
+           いちいち視線と手を戻すことになる。中身は上部バーと同じもの。 -->
+      <button class="io-btn save" id="makePlayBtn"
+              title="いまの曲を鳴らします。もう一度押すと止まります">▶ 聴く</button>
     </div>
 
     <!-- 【2026-08-23 UI整理⑥】この説明はスマホで224px（カード①の6分の1）を
@@ -4325,15 +4330,17 @@ function zcBestOctShift(arr, lo, hi){
   return best;
 }
 const ZC_FIT_TRACKS = ['mel1','mel2','sub','bass','wind1','wind2'];
+/* 戻り値：実際に動かした音の数（0 なら何も変えていない＝画面を組み直す必要が無い） */
 function zcFitRangesToInstruments(song){
-  if(!song || !song.phrases || !song.tracks) return song;
+  if(!song || !song.phrases || !song.tracks) return 0;
+  let moved = 0;
   ZC_FIT_TRACKS.forEach(k => {
     const t = song.tracks[k]; if(!t) return;
     const r = zcInstRange(t.inst); if(!r) return;
     song.phrases.forEach(ph => {
       const arr = ph && ph[k]; if(!arr) return;
       const sh = zcBestOctShift(arr, r[0], r[1]);
-      if(sh) for(let i = 0; i < arr.length; i++) if(arr[i]) arr[i] = zcTranspose(arr[i], sh * 12);
+      if(sh) for(let i = 0; i < arr.length; i++) if(arr[i]){ arr[i] = zcTranspose(arr[i], sh * 12); moved++; }
       /* まるごと動かしても収まらないフレーズ（音の幅が楽器の音域より広い）が
          わずかに残る。実測で 0.7%。そこに E8（約5.3kHz）のような音が
          混じると1音でも耳に刺さるので、**上にはみ出した音だけ**
@@ -4344,11 +4351,11 @@ function zcFitRangesToInstruments(song){
         let m = noteToMidi(arr[i]); if(m === null) continue;
         let d = 0;
         while(m > ZC_PITCH_CEIL){ m -= 12; d -= 12; }
-        if(d) arr[i] = zcTranspose(arr[i], d);
+        if(d){ arr[i] = zcTranspose(arr[i], d); moved++; }
       }
     });
   });
-  return song;
+  return moved;
 }
 
 function pitchTilt(note){
@@ -9396,8 +9403,25 @@ $('trackArea').addEventListener('change', (e) => {
   let zcTurnedOn = false;
   if(song.tracks[k] && !song.tracks[k].on){ song.tracks[k].on = true; zcTurnedOn = true; }
   /* 【2026-08-24】音色を替えたら、その楽器が出せる高さに合わせ直す。
-     チューバに替えたのに旋律が高いまま、という状態を作らない。 */
-  try{ zcFitRangesToInstruments(song); if(typeof renderAll === 'function') renderAll(); }catch(e){}
+     チューバに替えたのに旋律が高いまま、という状態を作らない。
+     ------------------------------------------------------------
+     ⚠️ ここで無条件に renderAll() を呼ぶと、レーンも音色の選択欄も
+     作り直されるため、続けて別の音色を選ぼうとすると開き直しになる。
+     ほとんどの持ち替えは音の高さが動かないので、**動いたときだけ**
+     打ち込み画面を組み直し、そのときも見ている位置を保つ。 */
+  try{
+    const moved = zcFitRangesToInstruments(song);
+    if(moved){
+      const area = $('trackArea');
+      const sx = area ? area.scrollLeft : 0, sy = area ? area.scrollTop : 0;
+      const wy = window.scrollY;
+      buildTrackArea();
+      const a2 = $('trackArea');
+      if(a2){ a2.scrollLeft = sx; a2.scrollTop = sy; }
+      window.scrollTo(0, wy);
+      status('makeStatus', 'この楽器が出せる高さに合わせて、オクターブを直しました', 'ok');
+    }
+  }catch(e){}
   swapVoice(song, k);
   scheduleAutosave();
   status('makeStatus', `${TRACKS.find(t=>t.key===k).label}を「${INSTRUMENTS[sel.value].label}」にしました`
@@ -9513,13 +9537,25 @@ document.querySelectorAll('.adj-play').forEach(b => {
    だけで**止める手段がどこにも無かった**。1つにまとめて、押すたびに
    始める／止めるが入れ替わる形にする。 */
 function zcSyncMixPlayBtn(){
-  const b = $('mixPlayBtn'); if(!b) return;
-  b.textContent = playing ? '■ 止める' : '▶ 聴きながら調整';
-  b.style.opacity = '1';
+  const b = $('mixPlayBtn');
+  if(b){ b.textContent = playing ? '■ 止める' : '▶ 聴きながら調整'; b.style.opacity = '1'; }
+  /* ①の再生ボタンも同じ状態に合わせる（別々に持つと必ず食い違う） */
+  try{ zcSyncMakePlayBtn(); }catch(e){}
 }
 $('mixPlayBtn').addEventListener('click', async () => {
   try{ await togglePlay(); }catch(e){}
   zcSyncMixPlayBtn();
+});
+
+/* 【2026-08-24】①「曲を作る」のそばの再生／停止。中身は上部バーと同じ。
+   作ってすぐ聴く、が同じ場所で完結するようにする。 */
+function zcSyncMakePlayBtn(){
+  const b = $('makePlayBtn'); if(!b) return;
+  b.textContent = playing ? '■ 止める' : '▶ 聴く';
+}
+$('makePlayBtn').addEventListener('click', async () => {
+  try{ await togglePlay(); }catch(e){}
+  zcSyncMakePlayBtn();
 });
 
 /* 【2026-08-23 ⑯ 見送り・理由あり】
@@ -13739,12 +13775,16 @@ boot();
       /* 和音や、音が重なっているところは簡易版で鳴らす。
          1音あたりの部品が11個から4個に減る。
          旋律のように重ならないところは、そのまま本来の音で鳴る。 */
-      /* 【2026-08-24 変更】簡易版へ落とす基準。
-         旧: busy>=3 または 再生中で active>=5
-         長い音が3つ重なっただけで簡易版になり、伸ばしている途中で
-         音色が変わって聞こえていた。基準を上げ、そのぶん
-         「音が丸ごと消える」上限（上の 20）に頼らないようにする。 */
-      var lean = !!chord || busy >= 5 || (this.live && this.active >= 9);
+      /* 【2026-08-24 いったん戻す】簡易版へ落とす基準。
+         ------------------------------------------------------------
+         「長い音が3つ重なっただけで音色が変わる」のを避けようと
+         busy>=5 / active>=9 まで緩めたが、そのぶん**同時に本来の音で
+         鳴らす数が倍近くに増え、再生の音が乱れるようになった**という
+         報告を受けて元へ戻す。簡易版はCPUを守るための仕組みで、
+         ここを緩めると重い所で予約が間に合わなくなる。
+         「音が丸ごと消える」上限（上の 20）と、予約の先読み（0.3秒）は
+         そのまま残す。この2つは音を増やさずに効くため。 */
+      var lean = !!chord || busy >= 3 || (this.live && this.active >= 5);
 
       var dis = [];
       var nOut = null;
