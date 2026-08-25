@@ -231,7 +231,19 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
 .mixer{ display:grid; grid-template-columns:repeat(auto-fill,minmax(176px,1fr)); gap:8px; }
 .mix{ border:1px solid var(--border); border-radius:9px; padding:8px 10px; background:var(--bg-2); }
 .mix .mname{ font-family:'Oswald',sans-serif; font-size:11.5px; color:var(--brass);
-  letter-spacing:0.5px; margin-bottom:5px; }
+  letter-spacing:0.5px; margin-bottom:2px; }
+/* 【修正 2026-08-25】いま何の楽器が鳴っているか／そもそも鳴っているかを出す。
+   ------------------------------------------------------------
+   ここは音量を決める場所なのに、パート名しか出ていなかった。
+   ・どのパートがどの楽器か分からない（③まで見に行かないと分からない）
+   ・**鳴らさない設定のパートも、鳴っているパートと見た目が同じ**
+   実測：完全ランダムほかの編成48曲で、鳴らさない設定のパートは
+   140/384＝36%。つまり3つに1つは、つまみを動かしても音が変わらないのに
+   画面からはそれが分からなかった（「押せば点灯するけど元の点灯がない」）。 */
+.mix .minst{ font-size:10.5px; color:var(--text-dim); margin-bottom:5px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mix .mwhy{ font-size:10px; color:#c08a6a; margin-top:4px; }
+.mix.mix-off{ opacity:0.62; border-style:dashed; }
 .mix .mrow{ display:flex; align-items:center; gap:5px; }
 .mix input[type=range]{ width:66px; }
 .mix button{ padding:3px 7px; font-size:10px; border-radius:5px; cursor:pointer;
@@ -9235,7 +9247,21 @@ function buildTrackArea(){
       const famGroups = new Map();
       Object.keys(INSTRUMENTS).forEach(k => {
         const sp = INSTRUMENTS[k];
-        if(t.key === 'bass' ? !sp.bassOnly : sp.bassOnly) return;
+        /* 【修正 2026-08-25】いま使っている音色は、絞り込みに引っかかっても必ず出す。
+           ------------------------------------------------------------
+           低音レーンは bassOnly の音色しか並べていなかったが、編成のほうは
+           そうでない楽器も低音に割り当てる（オーケストラのチューバ、
+           吹奏楽のファゴットなど）。すると一致する <option> が1つも無く、
+           select は**先頭の項目**を選んだ状態で表示される。
+           実測（14編成×140曲・980パート）：一覧に出ない音色が選ばれていたのは
+           15件（1.5%）で、**全部が低音レーン**だった
+           （ティンパニ6・チューバ6・ファゴット3）。
+           オーケストラでチューバが鳴っているのに、③には「シンセベース」と
+           出ていた。しかも触っていないのに、ほかの操作で change が飛べば
+           その名前のほうが本当になってしまう。
+           soloOnly / hidden を「選択中なら出す」で通しているのと同じ扱いにそろえる。
+           ※ 見張り：検査㉒が③の表示と④の楽器名を突き合わせる。 */
+        if((t.key === 'bass' ? !sp.bassOnly : sp.bassOnly) && k !== cfg.inst) return;
         if((sp.soloOnly || sp.hidden) && k !== cfg.inst) return;
         const fam = sp.soloOnly ? '単体演奏専用' : (sp.fam || 'その他');
         if(!famGroups.has(fam)) famGroups.set(fam, []);
@@ -9596,13 +9622,55 @@ function onGridEdit(){
 }
 
 /* ---------- ミキサー ---------- */
+/* いまそのパートが実際に聞こえるか。
+   鳴らす／ミュート／ソロの3つで決まる（音を出す側 zcTrackGain と同じ式）。
+   ここを別々に書くと画面と音がずれるので、判定は1か所にまとめる。 */
+function zcMixAudible(k){
+  const c = song.tracks[k]; if(!c) return false;
+  const anySolo = TRACKS.some(t => song.tracks[t.key] && song.tracks[t.key].solo);
+  return !!(c.on && !c.mute && (!anySolo || c.solo));
+}
+/* 聞こえないときの理由。ここを直せば、それが直ると分かる言い方にする。 */
+function zcMixWhy(k){
+  const c = song.tracks[k]; if(!c) return '';
+  if(!c.on)   return 'いまは鳴りません（③で「鳴らす」に）';
+  if(c.mute)  return 'ミュート中';
+  const anySolo = TRACKS.some(t => song.tracks[t.key] && song.tracks[t.key].solo);
+  if(anySolo && !c.solo) return 'ソロ中の他パートだけ鳴ります';
+  return '';
+}
+/* パートの楽器名。ドラムは音色を持たないので固定の言い方にする。 */
+function zcMixInstLabel(t){
+  if(t.kind === 'drum') return 'ドラムセット';
+  const c = song.tracks[t.key];
+  const sp = c && INSTRUMENTS[c.inst];
+  return sp ? sp.label : (c && c.inst ? c.inst : '—');
+}
+/* 組み直さずに「鳴っているか」の表示だけ合わせる。
+   ミュート／ソロを押すたびに作り直すと、つまみを掴んだ指が離れてしまう。 */
+function zcSyncMixState(){
+  if(!song) return;
+  TRACKS.forEach(t => {
+    const box = document.querySelector(`#mixer .mix[data-mix="${t.key}"]`);
+    if(!box) return;
+    const c = song.tracks[t.key]; if(!c) return;
+    box.classList.toggle('mix-off', !zcMixAudible(t.key));
+    const inst = box.querySelector('.minst'); if(inst) inst.textContent = zcMixInstLabel(t);
+    const why = box.querySelector('.mwhy');
+    if(why){ const txt = zcMixWhy(t.key); why.textContent = txt; why.style.display = txt ? '' : 'none'; }
+    const m = box.querySelector('[data-mute]'); if(m) m.classList.toggle('on', !!c.mute);
+    const s = box.querySelector('[data-solo]'); if(s) s.classList.toggle('on', !!c.solo);
+  });
+}
 function buildMixer(){
   const w = $('mixer'); w.innerHTML = '';
   TRACKS.forEach(t => {
     const c = song.tracks[t.key];
     const d = document.createElement('div');
     d.className = 'mix';
-    d.innerHTML = `<div class="mname">${t.label}</div>`;
+    d.dataset.mix = t.key;
+    d.innerHTML = `<div class="mname">${t.label}</div>` +
+      `<div class="minst"></div>`;
     const r1 = document.createElement('div'); r1.className = 'mrow';
     const m = document.createElement('button');
     m.className = 'mute' + (c.mute ? ' on' : ''); m.textContent = 'ミュート'; m.dataset.mute = t.key;
@@ -9617,8 +9685,11 @@ function buildMixer(){
     lab.dataset.volLabel = t.key;
     r2.appendChild(v); r2.appendChild(lab);
     d.appendChild(r1); d.appendChild(r2);
+    const why = document.createElement('div'); why.className = 'mwhy';
+    d.appendChild(why);
     w.appendChild(d);
   });
+  zcSyncMixState();
 }
 
 /* ---------- まとめて描き直す ---------- */
@@ -10092,6 +10163,8 @@ $('trackArea').addEventListener('click', (e) => {
     /* レーンの見た目（沈める／戻す）も合わせる */
     const zcBox = on.closest('.trk');
     if(zcBox) zcBox.classList.toggle('trk-off', !song.tracks[k].on);
+    /* ④の同じパートの見え方も合わせる（片方だけ直すと画面が食い違う） */
+    try{ zcSyncMixState(); }catch(e){}
     refreshLiveEngine(song); scheduleAutosave();
     return;
   }
@@ -10165,6 +10238,8 @@ $('trackArea').addEventListener('change', (e) => {
   }catch(e){}
   swapVoice(song, k);
   scheduleAutosave();
+  /* ④に出している楽器名も合わせる（③で替えたのに④が前の名前のままになる） */
+  try{ zcSyncMixState(); }catch(e){}
   status('makeStatus', `${TRACKS.find(t=>t.key===k).label}を「${INSTRUMENTS[sel.value].label}」にしました`
     + (zcTurnedOn ? '（鳴らさない設定だったので、鳴らすようにしました）' : ''), 'ok');
 });
@@ -10173,10 +10248,11 @@ $('trackArea').addEventListener('change', (e) => {
 $('mixer').addEventListener('click', (e) => {
   const m = e.target.closest('[data-mute]');
   if(m){ const k = m.dataset.mute; song.tracks[k].mute = !song.tracks[k].mute;
-    m.classList.toggle('on', song.tracks[k].mute); refreshLiveEngine(song); scheduleAutosave(); return; }
+    /* ソロを外した／掛けたときは他のパートの見え方も変わるので、まとめて合わせる */
+    zcSyncMixState(); refreshLiveEngine(song); scheduleAutosave(); return; }
   const s = e.target.closest('[data-solo]');
   if(s){ const k = s.dataset.solo; song.tracks[k].solo = !song.tracks[k].solo;
-    s.classList.toggle('on', song.tracks[k].solo); refreshLiveEngine(song); scheduleAutosave(); }
+    zcSyncMixState(); refreshLiveEngine(song); scheduleAutosave(); }
 });
 $('mixer').addEventListener('input', (e) => {
   const v = e.target.closest('[data-vol]'); if(!v) return;

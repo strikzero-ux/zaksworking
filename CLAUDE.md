@@ -127,7 +127,7 @@ re.search(r'(\n    NAME: \{(?:.|\n)*?detuneMix:)([0-9.]+)', s)
 ## 作業の進め方
 
 ```bash
-npm test                    # 検査一式（135件・およそ3.5分）
+npm test                    # 検査一式（142件・およそ3.5分）
 node tests/run.mjs 08       # 番号の合うものだけ
 npm run build               # dist/ と public/ を組み立て直す
 ```
