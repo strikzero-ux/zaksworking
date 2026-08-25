@@ -976,7 +976,30 @@ footer b{ color:var(--brass); }
          「必ず鳴らす」対象として拾い、空のはずのパートに音が足される。
          控えるのは 'chord' だけでよい（上書きしてくる処理が伴奏にしか無い）。
 
-     ── 13. 直したら必ず測り直す ────────────────────
+     ── 13. 独奏の伴奏 ── どこ: zcFitSoloAccomp / applyPlayMode の solo /
+                        zcSoloNoChord / 画面①の「伴奏」──
+       「◯◯だけ」に**ピアノっぽい伴奏が入る**と言われて調べたら、
+       ピアノは1音も混ざっていなかった（40曲すべて伴奏もその楽器）。
+       原因は音色ではなく**置き場所と書き方**。和音は
+       degreeNotes(deg, song, 3, …) とオクターブ3で作られていて、
+       楽器を一度も見ていなかった。
+           サックス 旋律65.4／伴奏62.0　フルート 旋律74.4／伴奏62.0
+           大太鼓   旋律45.9／伴奏62.0（そもそも音程が無い）
+       旋律は上・和音は真ん中に固定＝**「右手でメロディ・左手で和音」**。
+       鍵盤の書き方そのものなので、音色が何であれ鍵盤に聞こえる。
+       ★ 音色を合わせても、**譜面が鍵盤のままなら鍵盤に聞こえる**。
+         11章（奏法）と同じ形の間違いが、和音の側で起きていた。
+       直し方は3つ：
+         ① 高さ … 楽器の音域に入るようオクターブで動かす。旋律の7半音下を
+                  狙う（狙いを5半音下にすると、12半音刻みのせいで
+                  伴奏が旋律の上に出た＝主役が埋もれた）
+         ② 音数 … 息・弓は1人1音。3〜4声だと1台の鍵盤に聞こえるので2声＝二重奏
+         ③ 打楽器 … 大太鼓・小太鼓・シンバルには和音を鳴らさない
+       伴奏の高さの幅 0半音（全楽器62.0）→ 7.7半音。
+       画面①に「伴奏」（その楽器で伴奏／旋律だけ）を出し、曲へ焼き込む。
+       ⚠️ ph.chordOct へ足すのは zcSmoothChords の**あと**。先に書くと消される。
+
+     ── 14. 直したら必ず測り直す ────────────────────
        ここの数字はすべて tests/ の自動検査が見張っている。
        聴かないと分からないものは、聴かないと壊れたことにも気づけない。
      ============================================================ -->
@@ -6570,6 +6593,40 @@ function defaultTrackCfg(mood){
   return cfg;
 }
 
+/* ============================================================
+   【追加 2026-08-25】「楽器1つ」のときの伴奏をどうするか
+   ------------------------------------------------------------
+   「◯◯だけ」を選ぶと、旋律(mel1)と伴奏(chord)の2つが鳴り、
+   どちらも同じ楽器で鳴っていた（実測：40曲すべてでピアノは0）。
+   ところが**伴奏の高さだけがどの楽器でも同じ**（MIDI 62 ＝ D4付近）
+   だったため、耳には「右手でメロディ・左手で和音」という
+   **鍵盤の譜面**に聞こえていた。使う人の言葉では
+   「各楽器だけの項目にピアノっぽい伴奏が入る」。
+
+       楽器          旋律の高さ  伴奏の高さ
+       サックスだけ     65.4       62.0
+       フルートだけ     74.4       62.0   ← 12半音も下
+       大太鼓だけ       45.9       62.0   ← 逆に上
+
+   ここは3つから選べるようにする（画面①「伴奏」）。
+     'inst' … その楽器で伴奏（既定）。高さと音数を楽器に合わせる
+     'off'  … 旋律だけ。本当の独奏
+   曲へ焼き込むので、保存・読み込み・書き出しでも同じになる。
+   ============================================================ */
+const ZC_SOLO_ACCOMP = ['inst', 'off'];
+let pickSoloAccomp = 'inst';
+try{
+  const v = zcLSGet('zbs-solo-accomp');
+  if(ZC_SOLO_ACCOMP.indexOf(v) >= 0) pickSoloAccomp = v;
+}catch(e){}
+
+/* ほぼ音程を持たない打楽器。和音を鳴らしても意味が無いので、
+   「◯◯だけ」では必ず旋律だけにする。 */
+function zcSoloNoChord(inst){
+  const sp = INSTRUMENTS[inst];
+  return !!(sp && sp.noRandom && sp.fam === '打楽器');
+}
+
 // 演奏（フルバンド／楽器1つ）を、鳴らすトラックと音色に落とす
 function applyPlayMode(song, modeKey){
   const pm = PLAY_MODES.find(p => p.key === modeKey) || PLAY_MODES[0];
@@ -6586,8 +6643,12 @@ function applyPlayMode(song, modeKey){
     return pm;
   }
   if(pm.solo){
-    // 楽器1つ：旋律と伴奏だけを、その楽器で鳴らす
-    all.forEach(k => song.tracks[k].on = (k === 'mel1' || k === 'chord'));
+    /* 楽器1つ：旋律と伴奏だけを、その楽器で鳴らす。
+       伴奏を鳴らすかは①の「伴奏」で決まる（曲へ焼き込む）。
+       大太鼓・小太鼓・シンバルは音程がほぼ無いので、和音は鳴らさない。 */
+    if(song.soloAccomp === undefined) song.soloAccomp = pickSoloAccomp;
+    const 伴奏する = (song.soloAccomp !== 'off') && !zcSoloNoChord(pm.solo);
+    all.forEach(k => song.tracks[k].on = (k === 'mel1' || (k === 'chord' && 伴奏する)));
     song.tracks.mel1.inst = pm.solo;
     song.tracks.chord.inst = pm.solo;
   } else if(pm.drumOnly){
@@ -14890,6 +14951,60 @@ boot();
   soloRow.innerHTML = '<span class="t-label">この楽器だけ</span><div class="pat-btns" id="familySoloPick"></div>';
   pmRow.parentNode.insertBefore(soloRow, pmRow);
 
+  /* 【2026-08-25 追加】「◯◯だけ」のときの伴奏を選ぶ。
+     選んでいるときだけ出す（ほかの編成には関係が無いので）。 */
+  const saRow = document.createElement('div');
+  saRow.className = 'fx-row'; saRow.id = 'soloAccompRow';
+  saRow.style.marginTop = '-4px';
+  saRow.innerHTML =
+    '<span class="t-label">伴奏</span>' +
+    '<div class="pat-btns" id="soloAccompPick">' +
+      '<button class="pat-btn" data-sa="inst">その楽器で伴奏</button>' +
+      '<button class="pat-btn" data-sa="off">旋律だけ</button>' +
+    '</div>' +
+    '<span class="hint" style="margin:0;" id="soloAccompNote"></span>';
+  pmRow.parentNode.insertBefore(saRow, pmRow);
+
+  function soloModeNow(){
+    const pm = PLAY_MODES.find(p => p.key === (song ? song.playMode : pickPM));
+    return (pm && pm.solo) ? pm.solo : null;
+  }
+  function syncSoloAccomp(){
+    const solo = soloModeNow();
+    saRow.style.display = solo ? '' : 'none';
+    if(!solo) return;
+    const いま = (song && song.soloAccomp) || pickSoloAccomp;
+    document.querySelectorAll('#soloAccompPick button').forEach(b =>
+      b.classList.toggle('active', b.dataset.sa === いま));
+    const n = document.getElementById('soloAccompNote');
+    if(!n) return;
+    if(zcSoloNoChord(solo)){
+      n.textContent = 'この楽器は音程がほとんど無いので、和音は鳴らしません。';
+      return;
+    }
+    n.textContent = (いま === 'off')
+      ? '旋律だけを鳴らします（本当の独奏）'
+      : 'その楽器がもう1人いる形で伴奏します（高さも音数もその楽器に合わせます）';
+  }
+  document.getElementById('soloAccompPick').addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b || !b.dataset.sa) return;
+    pickSoloAccomp = b.dataset.sa;
+    try{ zcLSSet('zbs-solo-accomp', pickSoloAccomp); }catch(err){}
+    if(song && soloModeNow()){
+      if(typeof pushUndo === 'function') pushUndo();
+      song.soloAccomp = pickSoloAccomp;
+      applyPlayMode(song, song.playMode);
+      if(typeof renderAll === 'function') renderAll();
+      try{ if(typeof refreshLiveEngine === 'function') refreshLiveEngine(song); }catch(err){}
+      try{ if(typeof scheduleAutosave === 'function') scheduleAutosave(); }catch(err){}
+      if(typeof status === 'function')
+        status('makeStatus', pickSoloAccomp === 'off'
+          ? '旋律だけにしました（曲そのものは変わりません）'
+          : 'その楽器で伴奏を鳴らします（曲そのものは変わりません）', 'ok');
+    }
+    syncSoloAccomp();
+  });
+
   const noteRow = document.createElement('div');
   noteRow.className = 'fx-row';
   noteRow.innerHTML = '<span class="t-label"></span><div id="familyNote"></div>';
@@ -14999,7 +15114,8 @@ boot();
       prevMarkPicked.apply(this, arguments);
       /* syncOpenFam で openFam が変わることがあるので、印を付ける前に
          ボタンを作り直す（畳んだままでも選択中のものは出る）。 */
-      try{ syncOpenFam(); buildFamilyButtons(); buildSoloButtons(); updateNote(); markFamily(); }catch(e){}
+      try{ syncOpenFam(); buildFamilyButtons(); buildSoloButtons(); updateNote(); markFamily();
+           syncSoloAccomp(); }catch(e){}
     };
   }
 
@@ -15020,7 +15136,7 @@ boot();
       if(typeof status === 'function')
         status('makeStatus', '使う楽器を「' + (song.playModeLabel || pmKey) + '」にしました（曲そのものは変わりません）', 'ok');
     }
-    buildSoloButtons(); updateNote(); markFamily();
+    buildSoloButtons(); updateNote(); markFamily(); syncSoloAccomp();
   }
 
   famPick.addEventListener('click', e => {
@@ -15612,6 +15728,116 @@ boot();
     return 直した;
   }
 
+  /* ============================================================
+     「楽器1つ」の伴奏を、その楽器に合わせる（2026-08-25）
+     ------------------------------------------------------------
+     【なにが起きていたか】
+     「◯◯だけ」では旋律も伴奏も同じ楽器で鳴っている（実測40曲すべて。
+     ピアノは1音も混ざっていない）。それなのに **伴奏の高さだけが
+     どの楽器でも同じ**だった。和音は degreeNotes(deg, song, 3, ...) と
+     オクターブ3で作られていて、楽器を一度も見ていなかったため。
+
+         楽器          旋律の高さ  伴奏の高さ
+         サックスだけ     65.4       62.0
+         フルートだけ     74.4       62.0   ← 12半音も下
+         チューバだけ     …         62.0   ← 出ない高さ
+         大太鼓だけ       45.9       62.0   ← 逆に上
+
+     旋律は上、和音は真ん中に固定 ＝ **「右手でメロディ・左手で和音」**。
+     これは鍵盤の書き方そのものなので、音色が何であれ耳は
+     「ピアノの譜面だ」と判断する。使う人の言葉では
+     「各楽器だけの項目にピアノっぽい伴奏が入る」。
+
+     【どう直すか】
+     ① 高さ … その楽器の音域に入るよう、和音をまるごとオクターブで動かす。
+              旋律より少し下（3〜7半音）に置くと「もう1人が下でハモる」形。
+     ② 音数 … 息・弓の楽器は1人1音しか出せない。3〜4声だと
+              「1台の鍵盤」に聞こえるので2声に減らす＝二重奏。
+              叩く・はじく楽器（鉄琴・木琴・ハープ）は今までどおり。
+
+     ★ 乱数は1つも使わない。曲データへ焼き込むので再生と書き出しは一致する。
+     ★ 効くのは「◯◯だけ」のときだけ。ほかの編成には一切触らない。
+     ★ zcSmoothChords が ph.chordOct を書いたあとに足すこと
+       （先に書くと上書きされる）。
+     ============================================================ */
+  function zcFitSoloAccomp(song){
+    if(!song || !song.phrases || !song.tracks) return 0;
+    const pm = PLAY_MODES.find(p => p.key === song.playMode);
+    if(!pm || !pm.solo) return 0;                       /* 「楽器1つ」だけ */
+    const t = song.tracks.chord;
+    if(!t || !t.on || !t.inst) return 0;
+
+    /* ② 音数。1人1音の楽器は二重奏にする */
+    const sp = INSTRUMENTS[t.inst] || {};
+    const 単音の楽器 = (sp.fam === '木管' || sp.fam === '金管' || sp.fam === 'リード'
+                     || sp.fam === '弦（擦る）' || sp.fam === '弦（のばす）');
+    if(単音の楽器 && (song.chordTones || 3) > 2) song.chordTones = 2;
+
+    /* ① 高さ。まず「いま和音がどこに置かれているか」を実際に測る */
+    const rg = zcInstRange(t.inst); if(!rg) return 0;
+    const 素直 = (song.moodKey === 'fantasy' || song.moodKey === 'transparent');
+    const 重心 = [];
+    song.phrases.forEach(ph => {
+      if(!ph || !ph.chord) return;
+      for(let b = 0; b < ph.chord.length; b++){
+        const deg = ph.chord[b];
+        if(deg === null || deg === undefined) continue;
+        let ns;
+        try{ ns = degreeNotes(deg, song, 3, song.chordTones || 3); }catch(e){ continue; }
+        if(!ns || !ns.length) continue;
+        if(ph.keyShift) ns = ns.map(nm => zcTranspose(nm, ph.keyShift));
+        if(ph.inv && !素直){ try{ ns = zcInvertNotes(ns, ph.inv[b] || 0); }catch(e){} }
+        const ms = ns.map(noteToMidi).filter(x => x !== null);
+        if(!ms.length) continue;
+        重心.push({ ph, b, lo:Math.min(...ms), hi:Math.max(...ms),
+                    mid:ms.reduce((a, x) => a + x, 0) / ms.length,
+                    oct:(ph.chordOct && ph.chordOct[b]) || 0 });
+      }
+    });
+    if(!重心.length) return 0;
+
+    /* 旋律の高さ（実際に鳴っている音から）。伴奏はこの少し下を狙う。 */
+    const 旋律 = [];
+    song.phrases.forEach(ph => { const a = ph && ph.mel1; if(!a) return;
+      for(let i = 0; i < a.length; i++) if(a[i]){ const m = noteToMidi(a[i]); if(m !== null) 旋律.push(m); } });
+    const 旋律の中心 = 旋律.length ? 旋律.reduce((a, x) => a + x, 0) / 旋律.length
+                                  : (rg[0] + rg[1]) / 2;
+    /* 狙い：旋律の7半音下。動かせるのはオクターブ単位なので、狙いを
+       少し低めに置かないと、いちばん近い候補が旋律の**上**に来てしまう
+       （実測：狙いを5半音下にしたら、サックスもフルートも伴奏が旋律より
+         上に出た）。伴奏が上に出ると主役が埋もれる。 */
+    const 狙い = Math.max(rg[0] + 4, Math.min(rg[1] - 4, 旋律の中心 - 7));
+
+    /* -24〜+24 の中から選ぶ。優先順位は
+         ① 楽器の音域からはみ出さない（出せない音は出せない）
+         ② 旋律より上に行かない（主役を埋めない）
+         ③ 狙いに近い                                        */
+    let 最良 = 0, 最小 = Infinity;
+    for(let sh = -24; sh <= 24; sh += 12){
+      let はみ = 0, ずれ = 0, 上に出た = 0;
+      重心.forEach(c => {
+        const lo = c.lo + c.oct + sh, hi = c.hi + c.oct + sh, mid = c.mid + c.oct + sh;
+        はみ += Math.max(0, rg[0] - lo) + Math.max(0, hi - rg[1]);
+        ずれ += Math.abs(mid - 狙い);
+        上に出た += Math.max(0, mid - 旋律の中心);
+      });
+      const 点 = はみ * 30 + 上に出た * 3 + ずれ;
+      if(点 < 最小 - 0.001){ 最小 = 点; 最良 = sh; }
+    }
+    if(!最良) return 0;
+
+    /* ph.chordOct へ足し込む（zcSmoothChords が書いた寄せは残す） */
+    let 動かした = 0;
+    song.phrases.forEach(ph => {
+      if(!ph || !ph.chord) return;
+      if(!ph.chordOct || ph.chordOct.length !== ph.chord.length){
+        ph.chordOct = new Array(ph.chord.length).fill(0);
+      }
+      for(let b = 0; b < ph.chordOct.length; b++){ ph.chordOct[b] += 最良; 動かした++; }
+    });
+    return 動かした;
+  }
+
   const prev = makeSong;
   makeSong = function(){
     const song = prev.apply(this, arguments);
@@ -15622,6 +15848,9 @@ boot();
     try{ zcAlignPhraseOctaves(song); }catch(e){ console.warn('ZCNOVA: フレーズの高さをそろえられません', e); }
     try{ zcSeamGuard(song); }catch(e){ console.warn('ZCNOVA: つなぎ目をそろえられません', e); }
     try{ zcSmoothChords(song); }catch(e){ console.warn('ZCNOVA: 和音を寄せられません', e); }
+    /* 「楽器1つ」の伴奏を、その楽器の高さ・音数に合わせる。
+       zcSmoothChords が ph.chordOct を書いたあとでないと上書きされる。 */
+    try{ zcFitSoloAccomp(song); }catch(e){ console.warn('ZCNOVA: 独奏の伴奏を合わせられません', e); }
     try{ zcFitRangesToInstruments(song); }catch(e){ console.warn('ZCNOVA: 音域合わせに失敗', e); }
     /* 音域合わせの中に「天井を超えた音だけ1オクターブ下ろす」処理があり、
        そこだけ跳躍が生まれる。最後にもう一度ならしておく。 */
