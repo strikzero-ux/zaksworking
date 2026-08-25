@@ -943,7 +943,40 @@ footer b{ color:var(--brass); }
        交響楽団の常設パートにピアノは無いので、オーケストラから外した
        （前は 40曲中25曲でピアノが鳴っていた → 0曲）。
 
-     ── 11. 直したら必ず測り直す ────────────────────
+     ── 11. 奏法 ── どこ: zcArticFamily / zcSlurAt / playStep の setSlur /
+                        ZCnovaAcoustic の slur 分岐 ──
+       **音源をどれだけ作り込んでも、鳴らし方が機械なら機械に聞こえる。**
+       参考にした単体アプリと ZCNOVA の楽器スペック（倍音・フォルマント・
+       しゃくり・息のノイズ）はほぼ同じ値だった。それでも「本物っぽくない」
+       のは音源のせいではなく、**全部の音を舌で切っていた**から。
+         実測：吹奏楽・サックス・トランペットのスラー率 0%
+       zcArticFamily は前から 'wind' を返していたのに、playStep が 'bow'
+       しか見ていなかった。弦について「1音ごとの当たりが打ち込み臭さの
+       いちばんの原因」と書いてあることが、管でもそのまま起きていた。
+         管は 7半音まで・6音でひと息（弦は4半音・4音で弓を返す）
+         管は音程を滑らせない（バルブ・キーは段で変わる）＝ fromCents 0
+         スラー率 0% → 管40%・弦23%
+       ★ スラーの音は**ゼロから立ち上げ直さない**。ここが要。
+         立ち上がりを緩めても息のノイズを削っても、音量が一度ゼロに
+         戻るかぎり「切って入れ直した音」のまま（実測で当たりが1割しか
+         減らなかった）。伸ばしている高さ(sus×0.75)から始めると、
+         前の音の余韻と重なって合計がほぼ一定になり、高さだけが変わる。
+
+     ── 12. 編成 ── どこ: FAMILIES / ZC_COMBO / ADD.rock / ADD.jazz ──
+       ジャンルは**編成そのものが音楽の一部**。ロックにエレキギターが
+       無ければ、どれだけ良い音でもロックにならない。
+         ロック … エレキギター（主役）／ベース／ドラム／キーボード／ピアノ
+         ジャズ … ピアノ／ウッドベース／ドラム ＋ サックス・トランペット
+                  ・ギター・トロンボーン
+       ★ 楽器を足すときは「完全ランダム」の候補に入れるかを必ず考える。
+         入れると全曲調の抽選がずれて、**既存の曲が別の曲になる**
+         （実測：62曲中47〜53箇所が変化）。ジャンル専用の楽器は noRandom。
+       ★ 編成が音色を決めたことを控える先（familyInstTracks）に
+         旋律側を入れてはいけない。zcEnsureAudibleNotes が
+         「必ず鳴らす」対象として拾い、空のはずのパートに音が足される。
+         控えるのは 'chord' だけでよい（上書きしてくる処理が伴奏にしか無い）。
+
+     ── 13. 直したら必ず測り直す ────────────────────
        ここの数字はすべて tests/ の自動検査が見張っている。
        聴かないと分からないものは、聴かないと壊れたことにも気づけない。
      ============================================================ -->
@@ -4284,6 +4317,13 @@ const ZC_INST_TRIM = {
   cello:                          1.35,   // 55.9dB
   flute:                          1.68,   // 54.0dB ← 埋もれていた
   piccolo:                        2.24,   // 51.5dB ← いちばん埋もれていた
+  /* 2026-08-25 追加ぶん。同じ物差し（G4・A特性）で測って線に合わせた。
+     エレキギターは他と同じ 58.5dB。ロックでは主役だが、主役ぶんの大きさは
+     パートの音量（旋律78・伴奏44）が持っているので、楽器側は線に合わせる。
+     キーボードは **鳴らしている間ずっと最大のまま**（オルガンは減衰しない）
+     ので、同じ数字だと他より大きく聞こえる。1.5dB 下の線に置く。 */
+  eguitar:                        1.31,   // 56.2dB → 58.5dB
+  organ:                          0.73,   // 59.7dB → 57.0dB
   /* 鉄琴は音量こそ小さいが、エネルギーの 39.7% が 2〜5kHz に集まっていて
      全楽器中で最も高い。金属の細い音なので、少し下げる。 */
   glockenspiel:                   0.75,
@@ -6173,8 +6213,13 @@ function zcPrevNoteAt(ph, k, s){
   return -1;
 }
 /* 戻り値: null（弓を返す）／ { fromCents: 直前の音との差 } */
-function zcSlurAt(ph, k, s, durSteps){
+function zcSlurAt(ph, k, s, durSteps, artic){
   if(!ph[k][s]) return null;
+  /* 繋げてよい音程の幅。管は指・バルブを変えるだけなので弦より広く取れる。
+     ここを広げすぎると句の切れ目が無くなって、のっぺりする。 */
+  const 幅 = (artic === 'wind') ? 7 : 4;
+  /* ひと息／ひと弓で続けられる音数。管は息が続くかぎり繋げるので少し長く。 */
+  const 息 = (artic === 'wind') ? 6 : 4;
   let run = 0, at = s;
   while(run < 32){
     const p = zcPrevNoteAt(ph, k, at);
@@ -6184,10 +6229,10 @@ function zcSlurAt(ph, k, s, durSteps){
     const a = noteToMidi(ph[k][at]), b = noteToMidi(ph[k][p]);
     if(a === null || b === null) break;
     const iv = Math.abs(a - b);
-    if(iv === 0 || iv > 4) break;                     // 同音・跳躍は弓を返す
+    if(iv === 0 || iv > 幅) break;                    // 同音・跳躍は当て直す
     run++; at = p;
   }
-  if(run === 0 || run % 4 === 0) return null;         // 4音ごとに弓を返す
+  if(run === 0 || run % 息 === 0) return null;        // 息継ぎ／弓の返し
   const p = zcPrevNoteAt(ph, k, s);
   if(p < 0) return null;
   return { fromCents: (noteToMidi(ph[k][p]) - noteToMidi(ph[k][s])) * 100 };
@@ -6936,12 +6981,27 @@ function playStep(eng, song, ph, s, time){
       const jump = prev ? Math.abs(noteToMidi(note) - noteToMidi(prev)) : 0;
       syn.setSlide(jump >= 3 ? Math.min(1, (jump - 2) / 10) : 0);
     }
-    /* 【追加】弓で擦る楽器だけ、なめらかに続く所で弓を返さない。
-       毎音必ず呼ぶこと（呼ばないと前の音の設定が残る）。 */
+    /* 【追加】なめらかに続く所で、弓を返さない／舌で切らない。
+       毎音必ず呼ぶこと（呼ばないと前の音の設定が残る）。
+       ------------------------------------------------------------
+       【2026-08-25 修正】管楽器にも掛ける。
+       zcArticFamily は前から 'wind' を返していたのに、ここが 'bow' しか
+       見ておらず、**管楽器は1音残らず舌で切っていた**。実測では
+       吹奏楽・サックス・トランペットのスラー率が 0%。
+       弦について書いてある「1音ごとに『ザッ』という当たりの音が入るのが
+       打ち込み臭さのいちばんの原因」は、管では「タ・タ・タ」と全部の音の
+       頭に舌が付くという形で、そっくり同じことが起きていた。
+       実際の奏者はひと息の中を指だけで動かし、舌は句の頭にしか使わない。
+       ※ 管は弦と違って**音程を滑らせない**（バルブ・キーは段で変わる）。
+         fromCents を渡さないので、なめらかになるのは息と舌だけ。
+       ※ 管は弦より広い音程までスラーで繋げる（4半音→7半音）。
+         指かバルブを変えるだけなので、弓の返しより負担が小さい。 */
     if(syn && syn.setSlur){
-      const sl = (zcArticFamily(song, k) === 'bow')
-        ? zcSlurAt(ph, k, s, zcDurSteps(dur)) : null;
-      syn.setSlur(!!sl, sl ? sl.fromCents : 0);
+      const artic = zcArticFamily(song, k);
+      const sl = (artic === 'bow' || artic === 'wind')
+        ? zcSlurAt(ph, k, s, zcDurSteps(dur), artic) : null;
+      /* 管は音程を滑らせない。弦だけ指を滑らせた音（ポルタメント）にする */
+      syn.setSlur(!!sl, (sl && artic === 'bow') ? sl.fromCents : 0);
     }
     try{ syn.triggerAttackRelease(note, dur, at, v); }catch(err){}
   });
@@ -11194,9 +11254,19 @@ boot();
       if(song.tracks.mel1) song.tracks.mel1.inst=combo.solo;
       if(song.tracks.chord) song.tracks.chord.inst=combo.solo;
     }else if(combo.inst){
+      /* 【修正 2026-08-25】編成が伴奏の音色まで決めたことを控える。
+         ここを書かないと、後段の「曲調別コード音色」と
+         zcRestoreCoherentChordInstrument が伴奏の音色を上書きしてしまい、
+         編成で楽器を指定した意味が無くなる（ロック・ジャズの楽器縛りで発覚）。
+         ⚠️ 控えるのは 'chord' だけにすること。ここに旋律側のトラックを
+            入れると zcEnsureAudibleNotes の①が「必ず鳴らす」対象として
+            拾い、**空のはずのパートに音が足されて曲が変わる**
+            （実測：既存62曲のうち47箇所が別の曲になった）。
+            伴奏以外の音色を上書きする処理はそもそも無いので、控える必要も無い。 */
       Object.keys(combo.inst).forEach(k=>{
         if(song.tracks[k]) song.tracks[k].inst=combo.inst[k];
       });
+      if(combo.inst.chord && song.tracks.chord) song.familyInstTracks=['chord'];
     }
 
     song.playMode=pm.key;
@@ -13369,6 +13439,60 @@ boot();
       scoopCents:0, scoopMs:0, ampOvershoot:1.10,
       formants:[[80,2.5,8],[280,3.0,5],[1800,4.0,2.5]], air:[4500,0.5],
       vibrato:{rate:0, depth:0, delay:0}, outGain:0.62
+    },
+
+    /* ---------------- エレキギター（2026-08-25 追加）----------------
+       ロックの主役なのに音色が無く、ギター（生）かシンセで代用していた。
+       エレキは「弦の音」ではなく **弦＋ピックアップ＋アンプの箱** の音なので、
+       ここのフォルマントは胴鳴りではなく**スピーカーの箱**を書いている。
+         ・120Hz  … 12インチキャビネットの箱鳴り（低音の重さ）
+         ・450Hz  … 箱の中域のふくらみ
+         ・2400Hz … プレゼンス。エレキの「抜け」はここ
+         ・4700Hz … これより上はスピーカーがほぼ出さない（air を負にして落とす）
+       生ギターと違って**倍音が上まで揃って残る**ので harmonics は緩やかに減る。
+       真空管は上下非対称に潰れる（＝2倍音が増える）ので driveBias を持たせる。
+       伸び：エレキは弾いたあとも鳴り続けるので sustain を 0 にしない。 */
+    eguitar: {
+      velBright:2.2,
+      breath:0.05,
+      range:[40,88],                       /* E2〜E6（6弦開放〜12フレット上） */
+      harmonics:[1,0.68,0.52,0.40,0.33,0.26,0.21,0.17,0.13,0.10,0.08,0.06],
+      detuneCents:5, detuneMix:0.24, subMix:0.05,
+      /* ピックが弦に当たる音。ごく短く・高いところだけ */
+      noise:{amount:0.10, track:5.0, q:1.1, hp:2000, burst:5.5, burstMs:14},
+      drive:0.62, driveBias:0.08,
+      tone:{cutoff:3400, q:0.9, envOct:1.4, envMs:70, keyTrack:0.45},
+      env:{attack:0.004, decay:0.85, sustain:0.30, release:0.35},
+      scoopCents:0, scoopMs:0, ampOvershoot:1.12,
+      formants:[[120,1.4,6],[450,1.1,2.5],[2400,1.2,5],[4700,0.9,-6]], air:[5200,-4],
+      /* 押さえた指で揺らすビブラート。弾いた直後ではなく、伸ばしてから掛かる */
+      vibrato:{rate:5.5, depth:12, delay:0.45}, outGain:0.50
+    },
+
+    /* ---------------- キーボード（ドローバーオルガン・2026-08-25 追加）----
+       ロックの「キーボード」。ピアノ・エレピとは別物で、
+       **鍵を押している間ずっと同じ大きさで鳴り続ける**のが最大の特徴
+       （だから sustain:1.0、decay もほぼ無し）。離すとすぐ止まる。
+       音色はドローバー＝倍音を足して作るので、倍音表がそのまま音になる。
+         1(8')・2(4')・3(2⅔')・4(2') を強く、5次は弱く
+       アタックのカチッという音（キークリック）は、ごく短い高いノイズ。
+       ロックのオルガンは真空管で軽く歪ませるのが定番なので drive を持たせる。
+       回転スピーカー（レスリー）のゆらぎを vibrato で近似する（遅れ0＝最初から）。 */
+    organ: {
+      velBright:1.3,
+      breath:0.02,
+      range:[36,96],                       /* C2〜C7 */
+      harmonics:[1,0.62,0.45,0.42,0.10,0.22,0.05,0.16,0.04,0.09],
+      detuneCents:4, detuneMix:0.20, subMix:0.28,
+      /* キークリック。8ミリ秒だけ鳴る */
+      noise:{amount:0.07, track:6.0, q:1.0, hp:3000, burst:6.0, burstMs:8},
+      drive:0.38, driveBias:0.05,
+      tone:{cutoff:4200, q:0.7, envOct:0.5, envMs:30, keyTrack:0.40},
+      /* ★ここがオルガンの要：立ち上がったら**減らない**。離すとすぐ切れる */
+      env:{attack:0.006, decay:0.03, sustain:1.0, release:0.06},
+      scoopCents:0, scoopMs:0, ampOvershoot:1.0,
+      formants:[[300,1.2,3],[1200,1.0,3.5],[2800,0.9,2]], air:[6000,0.5],
+      vibrato:{rate:6.2, depth:14, delay:0}, outGain:0.50
     }
   };
 
@@ -13544,6 +13668,22 @@ boot();
      noRandom は「完全ランダム」の候補から外す印（後方の楽器カテゴリUIで見る）。
      ほぼ無音程の3つが主旋律に来ると曲にならないため。 */
   Object.assign(INSTRUMENTS, {
+    /* 2026-08-25 追加。ロックに主役の楽器が無かった（ギター＝生ギターしか
+       なく、キーボードは存在しなかった）。fam は伴奏の形の判定にも使われる。
+       どちらも「はじく・叩く」側なので、刻む伴奏はそのまま残る。 */
+    /* noRandom＝「完全ランダム」の候補には入れない。
+       ------------------------------------------------------------
+       この2つはジャンルの楽器なので、和風にエレキギターが出たり、
+       子守唄にロックオルガンが出たりすると曲が壊れる。ロック・ジャズの
+       編成と、③の音色一覧から手で選ぶときには今までどおり使える。
+       （候補表に足すと全曲調の楽器の抽選がずれて、既存の曲が
+         別の曲になってしまうのを避ける意味もある。実測で62曲中53箇所が変化した） */
+    eguitar:      { label:'エレキギター', fam:'弦（はじく）', cls:'Synth', poly:true, noRandom:true,
+      opts:{ volume:-11, oscillator:{type:'sawtooth'},
+             envelope:{attack:0.004, decay:0.85, sustain:0.30, release:0.35} } },
+    organ:        { label:'キーボード', fam:'鍵盤', cls:'Synth', poly:true, noRandom:true,
+      opts:{ volume:-13, oscillator:{type:'square'},
+             envelope:{attack:0.006, decay:0.03, sustain:1.0, release:0.06} } },
     viola:        { label:'ヴィオラ', fam:'弦（擦る）', cls:'AMSynth', poly:true,
       opts:{ volume:-11, harmonicity:1.35, oscillator:{type:'sawtooth'},
              envelope:{attack:0.10, decay:0.20, sustain:0.81, release:0.75},
@@ -13600,6 +13740,8 @@ boot();
     violin:'violin', cello:'cello', strings:'strings', accordion:'accordion',
     /* 2026-08-23 追加ぶん */
     viola:'viola',
+    /* 2026-08-25 追加ぶん */
+    eguitar:'eguitar', organ:'organ',
     xylophone:'xylophone', glockenspiel:'glockenspiel', timpani:'timpani',
     bassDrum:'bassDrum', snareDrum:'snareDrum', cymbal:'cymbal',
 
@@ -14088,7 +14230,9 @@ boot();
         nz.connect(nf); nf.connect(ng);
         /* 【追加】スラーは弓を当て直さないので、頭の「ザッ」を大きく減らす。
            ここがいちばん効く（打ち込み臭さの主因）。 */
-        var burst = slur ? (1 + (p.noise.burst - 1) * 0.25) : p.noise.burst;
+        /* 2026-08-25: 0.25 → 0.10。スラーの音に舌は当たらないので、
+           頭の「タッ」はほとんど残らないのが本当。 */
+        var burst = slur ? (1 + (p.noise.burst - 1) * 0.10) : p.noise.burst;
         ng.gain.setValueAtTime(nBase * burst, t);
         ng.gain.linearRampToValueAtTime(nBase, t + p.noise.burstMs / 1000);
         /* 始める場所をずらす。Tone.Noise も同じことをしていた。
@@ -14142,7 +14286,16 @@ boot();
       /* 【追加】スラーは弓を当て直さないので、頭で音量が跳ねない。 */
       var peak = vel * (slur ? 1 : p.ampOvershoot);
       var sus = vel * p.env.sustain;
-      env.gain.setValueAtTime(0, t);
+      /* 【2026-08-25 追加】スラーの音は**ゼロから立ち上げ直さない**。
+         ------------------------------------------------------------
+         ここが残っていたせいで、立ち上がりを緩めても息のノイズを削っても
+         「切って入れ直した音」のままだった。実測（サックス単体・20秒）:
+             当たりの数 52 → 47（-10%）しか減らず、強さはほぼ同じ
+         音符ごとに別の声を作る作りなので、前の音の余韻と新しい音が
+         重なる。そこで新しい音を**伸ばしている高さから**始めれば、
+         合計はほぼ一定のまま高さだけが変わる＝本物のスラーになる。
+         0.75 は控えめな値。1.0 にすると重なった瞬間に音量が膨らむ。 */
+      env.gain.setValueAtTime(slur ? sus * 0.75 : 0, t);
       env.gain.linearRampToValueAtTime(peak, t + atk);
       if(p.percussive){
         /* 叩いた音：立ち上がったら、あとは離鍵と関係なく減衰しきる。
@@ -14435,6 +14588,33 @@ boot();
              bass: ['bassSynth','bassString'] }
     },
 
+    /* 【2026-08-25 追加】ロック ＝ エレキギター・ベース・ドラム・キーボード・ピアノ。
+       ------------------------------------------------------------
+       曲調「ロック」があるのに**エレキギターもキーボードも存在しなかった**。
+       「バンド」は生ギターとシンセの編成なので、ロックの音にはならない。
+       主役は必ずエレキギター。伴奏はキーボード（オルガン）かピアノ。 */
+    rock: {
+      label:'ロック', icon:'🎸',
+      note:'エレキギター・ベース・ドラムに、キーボードとピアノ。管楽器は入りません。',
+      on:['mel1','mel2','chord','bass','drum'],
+      pool:{ mel1:['eguitar'],                 /* 主役は必ずエレキギター */
+             mel2:['eguitar','organ','piano'],
+             chord:['organ','piano','organ'],
+             bass:['bassString','bassString','bassSynth'] }
+    },
+
+    /* 【2026-08-25 追加】ジャズ ＝ ピアノ・ドラム・ウッドベースが土台。
+       主役側にサックス／トランペット／ギター／トロンボーンが乗る。 */
+    jazz: {
+      label:'ジャズ', icon:'🎺',
+      note:'ピアノ・ウッドベース・ドラムの土台に、サックス／トランペット／ギター／トロンボーンが乗ります。',
+      on:['mel1','mel2','chord','bass','drum'],
+      pool:{ mel1:['sax','trumpet','piano','guitar','trombone'],
+             mel2:['trumpet','sax','guitar','trombone'],
+             chord:['piano'],                  /* 伴奏は必ずピアノ */
+             bass:['contrabassPizz'] }         /* 土台は必ずウッドベース */
+    },
+
     /* 【2026-08-24 作り直し】フルバンド ＝ ジャズコンボ寄り。
        ------------------------------------------------------------
        【なぜ直したか】
@@ -14491,7 +14671,7 @@ boot();
   const FAMILY_ORDER = [
     'random_all',
     'piano', 'guitar', 'drum', 'percussion', 'bowedStrings',
-    'brass', 'winds', 'concert', 'band', 'full', 'orchestra'
+    'brass', 'winds', 'concert', 'band', 'rock', 'jazz', 'full', 'orchestra'
   ];   /* 'band'（ギター＋ベース＋ドラム＋シンセ）は 2026-08-23 追加。
           管の入る 'full' の手前に置く。 */   // 'harp' は 2026-08-23 に弦楽器へ収納したので並びから外した（定義は残してある）
 
@@ -14979,6 +15159,67 @@ boot();
     odd:        ['guitar','synth','melodyBassDrum','melodyChordDrum',
                  'chordBassDrum','band','band','full']
   };
+
+  /* ============================================================
+     ロック・ジャズは「その音楽に居る楽器」で縛る（2026-08-25）
+     ------------------------------------------------------------
+     【なぜ】
+     ロックの候補は guitar（生ギター）／synth と、汎用の「旋律＋ベース＋
+     ドラム」しか無く、**エレキギターもキーボードも存在しなかった**。
+     ジャズも piano/ep と汎用編成だけで、ウッドベースやホーンが確実に
+     入る保証が無かった。ジャンルは「編成そのものが音楽の一部」なので、
+     ここだけは楽器を固定する。
+
+       ロック … エレキギター（主役）／ベース／ドラム／キーボード／ピアノ
+       ジャズ … ピアノ／ドラム／ウッドベース（土台）
+                ＋ サックス・トランペット・ギター・トロンボーン（主役側）
+
+     ★ 楽器を自分で選んでいるとき（使う楽器＝ピアノ 等）は、これまでどおり
+       その選択が優先される。ここが効くのは「完全ランダム」のときだけ。
+     ★ 厚みの違う編成を並べて、同じ曲ばかりにならないようにする。
+     ============================================================ */
+  const ROCK_BASS = 'bassString';      /* 弦をはじく低音＝エレキベースに近い */
+  const JAZZ_BASS = 'contrabassPizz';  /* 指ではじくウッドベース */
+  Object.assign(C, {
+    /* ---- ロック ---- */
+    rockTrio:{label:'ロック（ギター・ベース・ドラム）',on:['mel1','bass','drum'],
+      inst:{mel1:'eguitar', bass:ROCK_BASS}},
+    rockOrgan:{label:'ロック（＋キーボード）',on:['mel1','chord','bass','drum'],
+      inst:{mel1:'eguitar', chord:'organ', bass:ROCK_BASS}},
+    rockPiano:{label:'ロック（＋ピアノ）',on:['mel1','chord','bass','drum'],
+      inst:{mel1:'eguitar', chord:'piano', bass:ROCK_BASS}},
+    rockTwin:{label:'ロック（ツインギター）',on:['mel1','mel2','chord','bass','drum'],
+      inst:{mel1:'eguitar', mel2:'eguitar', chord:'organ', bass:ROCK_BASS}},
+    rockKey:{label:'ロック（キーボード主役）',on:['mel1','mel2','chord','bass','drum'],
+      inst:{mel1:'eguitar', mel2:'organ', chord:'piano', bass:ROCK_BASS}},
+    rockFull:{label:'ロック（全部入り）',on:['mel1','mel2','sub','chord','bass','drum'],
+      inst:{mel1:'eguitar', mel2:'organ', sub:'eguitar', chord:'piano', bass:ROCK_BASS}},
+    /* ---- ジャズ ---- */
+    jazzTrio:{label:'ジャズ（ピアノトリオ）',on:['mel1','chord','bass','drum'],
+      inst:{mel1:'piano', chord:'piano', bass:JAZZ_BASS}},
+    jazzSax:{label:'ジャズ（サックス）',on:['mel1','chord','bass','drum'],
+      inst:{mel1:'sax', chord:'piano', bass:JAZZ_BASS}},
+    jazzTp:{label:'ジャズ（トランペット）',on:['mel1','chord','bass','drum'],
+      inst:{mel1:'trumpet', chord:'piano', bass:JAZZ_BASS}},
+    jazzGtr:{label:'ジャズ（ギター）',on:['mel1','chord','bass','drum'],
+      inst:{mel1:'guitar', chord:'piano', bass:JAZZ_BASS}},
+    jazzBone:{label:'ジャズ（トロンボーン）',on:['mel1','chord','bass','drum'],
+      inst:{mel1:'trombone', chord:'piano', bass:JAZZ_BASS}},
+    jazzQuartet:{label:'ジャズ（サックス＋トランペット）',on:['mel1','mel2','chord','bass','drum'],
+      inst:{mel1:'sax', mel2:'trumpet', chord:'piano', bass:JAZZ_BASS}},
+    jazzCombo:{label:'ジャズ（コンボ）',on:['mel1','mel2','sub','chord','bass','drum'],
+      inst:{mel1:'trumpet', mel2:'sax', sub:'guitar', chord:'piano', bass:JAZZ_BASS}}
+  });
+  /* 上の ADD より優先させる（ADD は「まだ無い曲調」にしか入らないので、
+     ここで先に入れておけば ADD 側の汎用候補は使われない）。 */
+  ADD.rock = ['rockTrio','rockOrgan','rockOrgan','rockPiano','rockTwin','rockTwin',
+              'rockKey','rockFull','rockFull'];
+  ADD.jazz = ['jazzTrio','jazzTrio','jazzSax','jazzSax','jazzTp','jazzGtr','jazzBone',
+              'jazzQuartet','jazzQuartet','jazzCombo'];
+  /* ※ 8ビートは見送る。ロックの仲間ではあるが、頼まれたのは
+     「ロック」と「ジャズ」の2つで、ここを変えると既存の曲が変わる
+     （実測で eightbeat の2曲が別の曲になった）。必要になったら
+     上の2つと同じ形で ADD.eightbeat を足せばよい。 */
 
   let added = 0, skipped = [];
   Object.keys(ADD).forEach(moodKey => {
