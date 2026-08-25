@@ -387,6 +387,25 @@ footer b{ color:var(--brass); }
       <span class="hint" style="margin:0;">作ったらここで聴けます</span>
     </div>
 
+    <!-- 【追加 2026-08-25】再生が乱れたときの行き先を、聴く場所のすぐ下に置く。
+         ------------------------------------------------------------
+         同じ説明は④「音を整える」の中にもあるが、④は畳んであるので
+         **開くまで一度も目に入らない**（実測：起動直後は高さ0px）。
+         乱れに気づくのは「▶ 聴く」を押した直後なので、その場に1行だけ出す。
+         ・赤字にはしない。まだ何も起きていない人に「壊れているのでは」と
+           思わせるだけになる（以前これを画面の最上部に赤字で出して失敗した）
+         ・いちばん伝えたいのは「書き出したファイルには影響しない」ほう。
+           不安を打ち消す側を先に置く
+         ・くわしい話と「再生の重さ」のつまみは④にあるので、そこへ運ぶ -->
+    <div class="fx-row" style="margin-top:-6px;">
+      <span class="t-label"></span>
+      <span class="hint" style="margin:0;">
+        再生の音が乱れても<b>書き出したファイルには影響しません</b>（ブラウザがその場で計算しているため）。
+        <button class="clr-btn" id="goLiteBtn" type="button"
+                title="④ 音を整える の「再生の重さ」を開きます">再生の重さを調整する ▸</button>
+      </span>
+    </div>
+
     <!-- 使い方：読むのは最初の一度きりなので畳んでおく（中身は減らしていない）。 -->
     <div class="fx-row" style="margin-top:2px;">
       <span class="t-label"></span>
@@ -9598,6 +9617,15 @@ $('makeHelpBtn').addEventListener('click', () => {
   el.style.display = open ? 'block' : 'none';
   btn.textContent = (open ? '▾ 使い方をとじる' : '▸ 使い方をみる');
   btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+});
+/* 【追加 2026-08-25】①の「再生の重さを調整する」→ ④を開いてその行まで運ぶ。
+   つまみと説明は④の中にしかなく、④は畳んであるので、そこへ行く道が要る。 */
+$('goLiteBtn').addEventListener('click', () => {
+  const c = $('card4'); if(!c) return;
+  c.classList.add('open');
+  const row = $('litePick') || c;
+  try{ row.scrollIntoView({ behavior:'smooth', block:'center' }); }
+  catch(e){ row.scrollIntoView(); }
 });
 /* 【UI整理④】組み立て方の「もっと見る」 */
 $('arrMoreBtn').addEventListener('click', () => {

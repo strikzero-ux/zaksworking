@@ -76,8 +76,66 @@ export async function run({ page, errors }){
     { ok: errors.length === before, label: '画面のエラーが増えていない',
       info: errors.slice(before).join('\n') },
     ...(await 簡易版で鳴りすぎないか(page)),
+    ...(await 案内が目に入るか(page)),
   ];
   return { checks };
+}
+
+/* 「音が乱れても書き出しには影響しない」が、開かなくても読めるか
+   ------------------------------------------------------------
+   この説明は④「音を整える」の中に置いてあるが、④は畳んであるので
+   **開くまで一度も目に入らなかった**（実測：起動直後は高さ0px）。
+   使う人からは「以前は説明があったのに消えた」と見える。文があるだけでは
+   案内したことにならないので、「起動直後に本当に読めるか」を見る。
+
+   乱れに気づくのは「▶ 聴く」を押した直後なので、①のその場に1行だけ出し、
+   くわしい話とつまみのある④へ運ぶボタンを付けてある。 */
+async function 案内が目に入るか(page){
+  await page.reload({ waitUntil:'load' });
+  await page.waitForTimeout(600);
+  const 起動直後 = await page.evaluate(() => {
+    const 見える = el => { if(!el) return false; const r = el.getBoundingClientRect(); return r.height > 0 && r.width > 0; };
+    const b = document.getElementById('goLiteBtn');
+    const 行 = b ? b.closest('.fx-row') : null;
+    const 詳しい説明 = [...document.querySelectorAll('p.hint')]
+      .find(x => /ブラウザがその場で計算/.test(x.textContent));
+    return {
+      一行が読める: 見える(行),
+      文言: 行 ? 行.innerText.replace(/\s+/g, ' ').trim() : '(無い)',
+      四が畳んである: !document.getElementById('card4').classList.contains('open'),
+      四の説明はまだ見えない: !見える(詳しい説明),
+    };
+  });
+  let 運べた = { 四が開いた:false, 説明が読める:false, 画面の中:false, つまみが読める:false };
+  if(起動直後.一行が読める){
+    await page.click('#goLiteBtn');
+    await page.waitForTimeout(800);
+    運べた = await page.evaluate(() => {
+      const p = [...document.querySelectorAll('p.hint')]
+        .find(x => /ブラウザがその場で計算/.test(x.textContent));
+      const r = p ? p.getBoundingClientRect() : { height:0, top:-9999 };
+      const t = document.getElementById('litePick');
+      return {
+        四が開いた: document.getElementById('card4').classList.contains('open'),
+        説明が読める: r.height > 0,
+        画面の中: r.top > -80 && r.top < window.innerHeight,
+        つまみが読める: !!(t && t.getBoundingClientRect().height),
+      };
+    });
+  }
+  const 要点 = /書き出したファイルには影響しません/.test(起動直後.文言);
+  return [
+    { ok: 起動直後.一行が読める && 要点,
+      label: '「書き出したファイルには影響しません」が、④を開かなくても読める',
+      info: 起動直後.一行が読める ? 起動直後.文言
+                              : '④の中にしか無いと、畳んであるので誰も読めない（実測 高さ0px）' },
+    { ok: 起動直後.四が畳んである && 起動直後.四の説明はまだ見えない,
+      label: '④は畳んだまま（最上部に出しっぱなしにして怖がらせない）',
+      info: '以前これを画面のいちばん上に赤字で出していて、まだ何も聴いていない人に「壊れているのでは」と思わせていた' },
+    { ok: 運べた.四が開いた && 運べた.説明が読める && 運べた.画面の中 && 運べた.つまみが読める,
+      label: '「再生の重さを調整する」で④が開き、つまみと詳しい説明まで運ばれる',
+      info: JSON.stringify(運べた) },
+  ];
 }
 
 /* 【書き出しが簡易版で鳴っていないか】
