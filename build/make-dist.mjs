@@ -41,6 +41,37 @@ const ROOT = path.resolve(HERE, '..');
 const SRC  = path.join(ROOT, 'ZCNOVA_BGM_v5.6.html');
 const DIST = path.join(ROOT, 'dist');
 
+/* ---------- 日本語の説明書の書き出し ----------
+   ------------------------------------------------------------
+   【なぜ要るか】
+   zip を Windows で開いて説明書を読むと**文字化けしていた**。原因は2つ。
+
+     ① BOM が無い
+        UTF-8 で書いてあっても、先頭に印（EF BB BF）が無いと
+        Windows のメモ帳や多くの日本語エディタは **Shift-JIS だと
+        思い込んで**開く。日本語が全部化ける。
+        HTML は <meta charset="UTF-8"> で自分で名乗れるが、
+        .txt には名乗る場所が無いので BOM を付けるしかない。
+
+     ② 改行が LF だけ
+        Windows の古いメモ帳は LF だけの改行を改行と見なさない。
+        65行の説明書が**1行にべったり**表示される。
+
+   どちらも「Linux で作って Windows で読む」ときの定番の落とし穴。
+   ここを通したものだけを配ることで、二度と起きないようにする。
+   ★ HTML と robots.txt には付けないこと。
+     HTML は charset で名乗れるうえ、BOM があると先頭に見えない文字が
+     入って表示が崩れることがある。robots.txt は BOM があると
+     巡回側が1行目を読み損なう。 */
+const BOM = '\uFEFF';
+function 説明書を書く(あて先, 中身){
+  const crlf = String(中身).replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
+  fs.writeFileSync(あて先, BOM + crlf, 'utf8');
+}
+function 説明書を写す(もと, あて先){
+  説明書を書く(あて先, fs.readFileSync(もと, 'utf8'));
+}
+
 /* ---------- terser を探す ---------- */
 let minifyJs;
 try{
@@ -279,16 +310,16 @@ fs.mkdirSync(path.join(DIST, 'blogger'), { recursive: true });
 fs.writeFileSync(path.join(DIST, 'blogger', '_app.min.html'), min);
 fs.writeFileSync(path.join(DIST, 'blogger', 'zcnova-blogger.html'), bloggerFull);
 fs.writeFileSync(path.join(DIST, 'blogger', 'zcnova-blogger-外部ファイル版.html'), bloggerLite);
-fs.copyFileSync(path.join(HERE, 'Bloggerへの入れ方.txt'),
-                path.join(DIST, 'blogger', 'Bloggerへの入れ方.txt'));
+説明書を写す(path.join(HERE, 'Bloggerへの入れ方.txt'),
+             path.join(DIST, 'blogger', 'Bloggerへの入れ方.txt'));
 
 
 /* zip の中身 */
 const ZIPDIR = path.join(DIST, 'zip', 'ZCnova BGM Studio v5.6');
 fs.mkdirSync(ZIPDIR, { recursive: true });
 fs.copyFileSync(SRC, path.join(ZIPDIR, 'ZCNOVA_BGM_v5.6.html'));
-fs.copyFileSync(path.join(HERE, 'はじめにお読みください.txt'),
-                path.join(ZIPDIR, 'はじめにお読みください.txt'));
+説明書を写す(path.join(HERE, 'はじめにお読みください.txt'),
+             path.join(ZIPDIR, 'はじめにお読みください.txt'));
 
 const lic = await licenseText();
 if(lic){
@@ -304,8 +335,7 @@ if(lic){
     '',
     '',
   ].join('\n');
-  fs.writeFileSync(path.join(ZIPDIR, 'ライセンスと利用について.txt'),
-    見出し + lic.replace(/\n/g, '\r\n').replace(/^/, '').replace(/\r?\n/g, '\r\n') + '\r\n');
+  説明書を書く(path.join(ZIPDIR, 'ライセンスと利用について.txt'), 見出し + lic + '\n');
   console.log('権利表記        画面から書き出しました（' + lic.length + '文字）');
 }else{
   console.warn('⚠ 権利表記を書き出せませんでした（playwright が見つかりません）。');
@@ -317,7 +347,11 @@ const ZIPNAME = 'zcnova-bgm-studio-v5.6.zip';
 let zipped = false;
 try{
   const { execFileSync } = await import('node:child_process');
-  execFileSync('zip', ['-r', '-q', '-X', path.join(DIST, ZIPNAME), 'ZCnova BGM Studio v5.6'],
+  /* -UN=UTF8 … ファイル名を UTF-8 で入れ、その印を全部の項目に付ける。
+     付けないと、日本語のファイル名が Windows で化けることがある
+     （実測：フォルダと HTML には印が付かず、日本語txtにだけ付いていた）。 */
+  execFileSync('zip', ['-r', '-q', '-X', '-UN=UTF8',
+                       path.join(DIST, ZIPNAME), 'ZCnova BGM Studio v5.6'],
                { cwd: path.join(DIST, 'zip') });
   zipped = true;
 }catch(e){
@@ -352,12 +386,12 @@ fs.writeFileSync(path.join(PUB, '_headers'),
    ''].join('\n'));
 
 if(lic){
-  fs.writeFileSync(path.join(PUB, 'ライセンスと利用について.txt'),
-    fs.readFileSync(path.join(ZIPDIR, 'ライセンスと利用について.txt')));
+  fs.copyFileSync(path.join(ZIPDIR, 'ライセンスと利用について.txt'),
+                  path.join(PUB, 'ライセンスと利用について.txt'));
 }
 /* 置き方の手順書。組み立てで消えないよう、ここで置き直す */
-fs.copyFileSync(path.join(HERE, '公開のしかた.txt'),
-                path.join(PUB, '公開のしかた.txt'));
+説明書を写す(path.join(HERE, '公開のしかた.txt'),
+             path.join(PUB, '公開のしかた.txt'));
 
 const kb = n => (n / 1024).toFixed(0) + 'KB';
 console.log(`本体            ${kb(src.length)}`);

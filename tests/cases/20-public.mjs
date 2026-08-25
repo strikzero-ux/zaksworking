@@ -19,7 +19,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
 
-export const name = '⑳ 公開用フォルダ';
+export const name = '⑳ 公開用フォルダ・説明書';
 
 export async function run({ page, root }){
   const PUB = path.join(root, 'public');
@@ -114,5 +114,79 @@ export async function run({ page, root }){
     label: '公開用でJSエラーが出ない',
     info: errs.slice(0, 3).join('\n      ') });
 
+  checks.push(...説明書がWindowsで読めるか(root));
   return { checks };
+}
+
+/* 日本語の説明書が Windows で読めるか
+   ------------------------------------------------------------
+   zip を Windows で開いて説明書を読むと**文字化けしていた**。原因は2つ。
+
+     ① BOM が無い
+        UTF-8 で書いてあっても、先頭に印（EF BB BF）が無いと
+        Windows のメモ帳や多くの日本語エディタは **Shift-JIS だと
+        思い込んで**開く。日本語が全部化ける。
+        HTML は <meta charset> で自分で名乗れるが、.txt には
+        名乗る場所が無いので BOM を付けるしかない。
+
+     ② 改行が LF だけ
+        Windows の古いメモ帳は LF だけの改行を改行と見なさない。
+        65行の説明書が**1行にべったり**表示される。
+
+   「Linux で作って Windows で読む」ときの定番の落とし穴なので、
+   組み立てたものを機械で見張る。
+
+   ★ HTML と robots.txt には BOM を付けないこと。
+     HTML は charset で名乗れるうえ、BOM があると先頭に見えない文字が
+     入って表示が崩れることがある。robots.txt は BOM があると
+     巡回側が1行目を読み損なう。 */
+function 説明書がWindowsで読めるか(root){
+  const BOM = Buffer.from([0xEF, 0xBB, 0xBF]);
+  const 見る = [];
+  const 集める = (dir) => {
+    if(!fs.existsSync(dir)) return;
+    fs.readdirSync(dir, { withFileTypes:true }).forEach(e => {
+      const f = path.join(dir, e.name);
+      if(e.isDirectory()) return 集める(f);
+      if(e.name.endsWith('.txt')) 見る.push(f);
+    });
+  };
+  ['public', path.join('dist', 'blogger'), path.join('dist', 'zip')]
+    .forEach(d => 集める(path.join(root, d)));
+
+  if(!見る.length){
+    return [{ ok:true, label:'説明書は未組み立てのため飛ばした',
+              info:'確かめるには先に `node build/make-dist.mjs` を実行してください' }];
+  }
+  /* 日本語を含むものだけが対象。robots.txt のような英字だけのものは別扱い */
+  const 化ける = [], LFだけ = [], 一覧 = [];
+  見る.forEach(f => {
+    const b = fs.readFileSync(f);
+    const 名 = path.relative(root, f);
+    const bom = b.subarray(0, 3).equals(BOM);
+    const body = bom ? b.subarray(3) : b;
+    const t = body.toString('utf8');
+    const 日本語 = /[぀-ヿ一-鿿]/.test(t);
+    const crlf = (t.match(/\r\n/g) || []).length;
+    const 単独 = (t.match(/\n/g) || []).length - crlf;
+    if(!日本語){
+      /* robots.txt などは BOM を**付けない**のが正しい */
+      if(bom) 化ける.push(`${名}（英字だけなのに BOM が付いている）`);
+      return;
+    }
+    一覧.push(`${path.basename(名)} ${bom ? 'BOM✓' : 'BOM✗'} CRLF${crlf}/LF${単独}`);
+    if(!bom) 化ける.push(`${名}（BOM が無い → Shift-JIS と誤解されて化ける）`);
+    if(単独 > 0) LFだけ.push(`${名}（LF だけの改行が ${単独}箇所 → 1行に見える）`);
+  });
+
+  return [
+    { ok: 化ける.length === 0,
+      label: `日本語の説明書に UTF-8 の印（BOM）が付いている（${一覧.length}個）`,
+      info: 化ける.length ? 化ける.join('\n      ')
+                          : 一覧.join(' / ') + '　／ 直す前は全部 BOM 無しで、Windows のメモ帳で化けていた' },
+    { ok: LFだけ.length === 0,
+      label: '説明書の改行が Windows の形（CRLF）になっている',
+      info: LFだけ.length ? LFだけ.join('\n      ')
+                          : '直す前は「はじめにお読みください」が LF だけで、1行にべったり出ていた' },
+  ];
 }

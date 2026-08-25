@@ -128,6 +128,16 @@ export ZC_PLAYWRIGHT=/path/to/playwright/index.js
 export ZC_TERSER=/path/to/terser/main.js
 ```
 
+### 配るときの決めごと
+
+| | どう書き出すか | なぜ |
+|---|---|---|
+| 日本語の `.txt` | **BOM 付き・CRLF** | BOM が無いと Windows のメモ帳が Shift-JIS と誤解して化ける。LF だけだと改行されず 1 行に見える |
+| `.html` | BOM なし | `<meta charset>` で自分で名乗れる。BOM があると先頭に見えない文字が入る |
+| `robots.txt` | BOM なし | BOM があると巡回側が 1 行目を読み損なう |
+
+`build/make-dist.mjs` が全部そろえて書き出し、検査⑳が見張っています。
+
 ### 検査が守っているもの
 
 音は聴かないと分かりませんが、**聴かないと分からないものは、聴かないと
@@ -144,7 +154,7 @@ export ZC_TERSER=/path/to/terser/main.js
 | ⑫⑱ 重さ | 1 音あたりの部品数・毎秒の部品数・同時発音数の上限 |
 | ⑰ 書き出し | 音が割れない／動画に乗る音量 |
 | ⑲ 独奏 | 「◯◯だけ」の伴奏が鍵盤の書き方になっていない |
-| ⑳ 公開用 | `public/` を実際にサーバーへ置いて、曲ができて鳴る |
+| ⑳ 公開用・説明書 | `public/` を実際にサーバーへ置いて曲ができて鳴る／日本語の説明書が Windows で読める |
 
 くわしくは [`tests/README.md`](tests/README.md)。
 
@@ -166,6 +176,8 @@ export ZC_TERSER=/path/to/terser/main.js
 - **正規化のある系で「音量を下げる」は、何もしないのと同じ**。下げるべきは
   音の強さではなく、音の性質と比率
 - ボタンの絵を**文字で描いてはいけない**（字体に無いと番号が描かれる）
+- 日本語の `.txt` は **BOM 付き・CRLF** で配る（無いと Windows のメモ帳が
+  Shift-JIS と誤解して化ける。HTML と `robots.txt` には付けない）
 
 ---
 
