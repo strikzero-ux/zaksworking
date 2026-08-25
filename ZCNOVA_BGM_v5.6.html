@@ -894,8 +894,34 @@ footer b{ color:var(--brass); }
        5. 書き出しでも簡易版へ落とす（実時間で動かないので落とす理由が無い）
        6. 先読みを含む時計で遅れを測る（正常でも83%が「遅れ」判定になる）
        7. 予想の所要時間を画面に書く（必ず外れる。書いてよいのは経過時間だけ）
+       8. 伴奏の形を「誰が鳴らすか」を見ずに決める（→ 下の 10）
 
-     ── 10. 直したら必ず測り直す ────────────────────
+     ── 10. 伴奏の形 ── どこ: ZC_CHORD_CALM /
+                        zcFitChordPatternToInstrument / FAMILIES.orchestra ──
+       **音色を差し替えただけでは、その楽器の音にはならない。**
+       伴奏の型は曲調だけで決めていて、それを誰が鳴らすかを一度も
+       見ていなかった。実測（7編成×60曲）でどの編成でも型の出方は
+       まったく同じ・刻む形 80%。吹奏楽の伴奏はブラス／ホルンなのに
+       ジャカジャカかき鳴らし、16分でアルペジオを走らせていた。
+       人が吹けない形なので、音源が何であれ「ピアノの伴奏を別の音色で
+       鳴らしている」ようにしか聞こえない。
+
+       息で吹く楽器（木管・金管・リード）と弓で擦る楽器に**無理な形だけ**
+       を落ち着いた形へ置き換える（対象 0/2228 フレーズ・前 80%）:
+           16分で刻み続ける … 息が続かない／弓が返しきれない
+           かき鳴らし(strum) … 弦をはじく動作そのもの。管にも弓にも無い
+           走るアルペジオ     … 鍵盤・ハープの形
+       4分の刻み・裏打ち・ワルツ・アクセントは**残す**。管も弦もふつうに
+       吹く形で、ここまで消すと伴奏がのっぺりする。ピアノ・ギター系の
+       編成は据え置き（刻む形 710/1735 フレーズが残る）。
+       ついでに重さも下がった（音の頭が減るため）:
+           同時発音 最大25 → 22 ／ 毎秒の部品 305 → 308（横ばい）
+
+       編成の中身も「実際にその楽団に居る楽器か」で決める。
+       交響楽団の常設パートにピアノは無いので、オーケストラから外した
+       （前は 40曲中25曲でピアノが鳴っていた → 0曲）。
+
+     ── 11. 直したら必ず測り直す ────────────────────
        ここの数字はすべて tests/ の自動検査が見張っている。
        聴かないと分からないものは、聴かないと壊れたことにも気づけない。
      ============================================================ -->
@@ -5463,7 +5489,9 @@ function zcPartInOut(ph, song, skip){
   });
 }
 
-function zcBuildChordHits(ph, song, mood){
+/* forceCpat を渡すと、曲調から選ぶ代わりにその型で組み直す。
+   （後方の「伴奏の形を楽器に合わせる」がここを呼ぶ。省略時は従来どおり） */
+function zcBuildChordHits(ph, song, mood, forceCpat){
   const CP  = chordPatterns(song);
   /* 【追加】伴奏の型をフレーズごとに持ち替える。
      ------------------------------------------------------------
@@ -5487,6 +5515,7 @@ function zcBuildChordHits(ph, song, mood){
     const r = seedNoise(csd, 3);
     if(r >= 0.6) cpKey = cpPool[Math.floor(seedNoise(csd, 7) * cpPool.length) % cpPool.length];
   }
+  if(forceCpat && CP[forceCpat]) cpKey = forceCpat;
   ph.cpat = cpKey;
   const pat = CP[cpKey] || CP.quarter;
   const spb = stepsPerBar(song);
@@ -14360,21 +14389,26 @@ boot();
              wind2:['trumpet'] }     /* 必ずトランペット */
     },
 
-    /* 【2026-08-24 作り直し】オーケストラ ＝ ピアノ・吹奏楽（木管＋金管）・
-       打楽器・弦楽器の4つを合わせた編成。
+    /* 【2026-08-25 修正】オーケストラ ＝ 弦楽器・木管・金管・打楽器。
        ------------------------------------------------------------
-       以前はピアノが1つも入らず、打楽器も鍵盤打楽器（木琴・鉄琴・
-       ティンパニ）が入っていなかった。4つの柱がそろうように組み直す。
-       ドラムセットはこれまでどおり残してある（吹奏楽と違い、拍の芯が
-       無くなると動画BGMとして使いにくくなるため）。 */
+       前の版ではピアノを主役側（mel1）と伴奏（chord）に入れていたが、
+       **交響楽団の常設パートにピアノは無い**（曲が指定したときだけ
+       特別に加わる楽器で、いつも鳴っているものではない）。実測でも
+       40曲中25曲でピアノが鳴っており、聴くと「ピアノ入りの何か」に
+       なっていた。ピアノは編成「ピアノ」と「フルバンド」に任せ、
+       ここからは外す。
+         mel1  ピアノ → オーボエ（木管の歌う楽器）
+         chord ピアノ → ストリングス（弦の刻み・のばしは伴奏の定番）
+       打楽器（木琴・鉄琴・ティンパニ）とドラムセットは据え置き
+       （吹奏楽と違い、拍の芯が無くなると動画BGMとして使いにくい）。 */
     orchestra: {
       label:'オーケストラ', icon:'🎻',
-      note:'弦楽器・木管・金管・打楽器にピアノを加えた編成。',
+      note:'弦楽器・木管・金管・打楽器の編成。ピアノは入りません（ピアノが要るときは「ピアノ」か「フルバンド」へ）。',
       on:['mel1','mel2','sub','chord','bass','wind1','wind2','drum'],
-      pool:{ mel1:['violin','flute','piano'],
+      pool:{ mel1:['violin','flute','oboe'],
              mel2:['viola','cello','clarinet','horn'],
              sub:['glockenspiel','xylophone','harp'],
-             chord:['piano','harp','violin','viola'],
+             chord:['strings','harp','violin','viola'],
              bass:['contrabassArco','tuba','timpani'],
              wind1:['flute','clarinet','oboe','piccolo','bassoon'],
              wind2:['trumpet','horn','trombone','brass','tuba'] }
@@ -15138,9 +15172,122 @@ boot();
     return 寄せた;
   }
 
+  /* ============================================================
+     伴奏の形を、鳴らす楽器に合わせる（2026-08-25）
+     ------------------------------------------------------------
+     【なにが起きていたか】
+     伴奏の型（CHORD_PATTERNS）は曲調だけで決めていて、**それを誰が
+     鳴らすかを一度も見ていなかった**。実測（7編成×60曲）:
+
+         どの編成でも 伴奏の型の出方はまったく同じ
+         刻む形（アルペジオ・8分・ジャカジャカ等） 80%
+         例）吹奏楽 → 伴奏はブラス32/ホルン18/クラリネット10 なのに
+             型は arp 20% / eighth / strumF / arpFast …
+
+     つまり「金管セクションがギターのようにジャカジャカかき鳴らし、
+     16分でアルペジオを走らせる」譜面になっていた。これは人が吹ける
+     形ではないので、音源が何であれ**ピアノ（鍵盤）の伴奏を別の音色で
+     鳴らしているようにしか聞こえない**。使う人から出た
+     「後ろでピアノの伴奏みたいのが入る／ぜんぶピアノ」はこれ。
+
+     【どう直すか】
+     息で吹く楽器（木管・金管・リード）と弓で擦る楽器（弦）に
+     **無理な形だけ**を、落ち着いた形へ置き換える。
+
+       ・16分で刻み続ける形 … 息が続かない／弓が返しきれない
+       ・かき鳴らし(strum)  … 弦をはじく動作そのもの。管にも弓にも無い
+       ・走るアルペジオ      … 鍵盤・ハープの形
+
+     4分の刻み・裏打ち・ワルツ・アクセントは**そのまま残す**。
+     管も弦もふつうに演奏する形なので、ここまで消すと伴奏が
+     のっぺりしてしまう。
+
+     ★ 乱数（rnd）は1つも使わない。zcBuildChordHits の中身は
+       seedNoise だけなので、他のパートの音符は1つも動かない。
+     ★ 曲データへ焼き込むので、再生と書き出しは必ず一致する。
+     ★ 伴奏がピアノ・ギター・ハープ・鍵盤打楽器・シンセの編成
+       （ピアノ／ギター／打楽器／バンド／フルバンド）は対象外＝据え置き。
+     ============================================================ */
+
+  /* 息で吹く・弓で擦る楽器の一族。INSTRUMENTS[k].fam を見る。 */
+  const ZC_BREATH_FAM = { '木管':1, '金管':1, 'リード':1, '弦（擦る）':1, '弦（のばす）':1 };
+
+  /* 置き換え先の候補。前から順に、その曲の拍子の表にある型を採る。
+     （3/4・6/8・5/4・7/8 は型の表が小さいので、後ろの控えまで下りる） */
+  const ZC_CHORD_CALM = {
+    /* 刻み続ける形 → 音を長く、数を減らす */
+    eighth:     ['quarterLong','quarter','hold2','hold'],
+    eighthLong: ['quarterLong','quarter','hold2','hold'],
+    synco:      ['syncSoft','sparse','quarter','hold'],
+    synco2:     ['syncSoft','sparse','quarter','hold'],
+    skip:       ['syncSoft','sparse','quarter','hold'],
+    pulse:      ['pulseLong','sparse','quarter','hold'],
+    broken:     ['brokenSoft','sparse','quarter','hold'],
+    /* かき鳴らし → 和音をのばす */
+    strum:      ['hold2','hold'],
+    strumS:     ['hold2','hold'],
+    strumS2:    ['hold2','hold'],
+    strumF:     ['quarterLong','quarter','hold2','hold'],
+    strumF2:    ['quarterLong','quarter','hold2','hold'],
+    /* 走るアルペジオ → ゆっくりへ */
+    arp:        ['arpSlow','quarterLong','quarter','hold'],
+    arpFast:    ['arpSlow','quarterLong','quarter','hold'],
+  };
+  /* 上の表に無い型が「16分で刻む」だったとき用の共通の控え。
+     6/8 の quarter / oom は表の名前こそ違うが中身は16分刻みなので、
+     ここで拾わないと素通りしてしまう。 */
+  const ZC_CHORD_CALM_ANY = ['quarterLong','sparse','quarter','two','group','hold2','oom','hold'];
+
+  function zcFitChordPatternToInstrument(song){
+    if(!song || !song.phrases || !song.tracks || !song.tracks.chord) return 0;
+    const t = song.tracks.chord;
+    if(!t.on || !t.inst) return 0;
+    const sp = INSTRUMENTS[t.inst];
+    if(!sp || !ZC_BREATH_FAM[sp.fam]) return 0;
+
+    const CP = chordPatterns(song);
+    const mood = MOODS.find(m => m.key === song.moodKey);
+    /* その型が「息・弓では無理」かどうか。
+       16分の長さ＝刻み続ける形、strum＝かき鳴らし、arp*＝走るアルペジオ。 */
+    const 無理 = (key) => {
+      const p = CP[key];
+      if(!p) return false;
+      return p.dur === '16n' || p.style === 'strum'
+          || key === 'arp' || key === 'arpFast'
+          || !!ZC_CHORD_CALM[key];
+    };
+    /* 置き換え先。いまの型より落ち着いていて、その拍子の表にあるものだけ。 */
+    const 落ち着いた先 = (key) => {
+      const 候補 = (ZC_CHORD_CALM[key] || []).concat(ZC_CHORD_CALM_ANY);
+      for(let i = 0; i < 候補.length; i++){
+        const k = 候補[i];
+        if(k === key || !CP[k]) continue;
+        if(無理(k)) continue;            // 控えがまた16分では意味がない
+        return k;
+      }
+      return null;
+    };
+
+    let 直した = 0;
+    song.phrases.forEach(ph => {
+      if(!ph || !ph.cpat) return;
+      if(!無理(ph.cpat)) return;
+      const 次 = 落ち着いた先(ph.cpat);
+      if(!次) return;
+      /* 型だけ差し替えて、小節ごとの散らし方（抜き・足し・フィル）と
+         強弱は今までどおり組み直す＝曲の起伏はそのまま残る。 */
+      zcBuildChordHits(ph, song, mood, 次);
+      直した++;
+    });
+    return 直した;
+  }
+
   const prev = makeSong;
   makeSong = function(){
     const song = prev.apply(this, arguments);
+    /* 伴奏の形を先に決めてから音の高さをならす。
+       （順番を逆にすると、鳴らす拍が変わったのに寄せ方が古いままになる） */
+    try{ zcFitChordPatternToInstrument(song); }catch(e){ console.warn('ZCNOVA: 伴奏の形を合わせられません', e); }
     try{ zcTameLeaps(song); }catch(e){ console.warn('ZCNOVA: 跳躍を抑えられません', e); }
     try{ zcAlignPhraseOctaves(song); }catch(e){ console.warn('ZCNOVA: フレーズの高さをそろえられません', e); }
     try{ zcSeamGuard(song); }catch(e){ console.warn('ZCNOVA: つなぎ目をそろえられません', e); }
