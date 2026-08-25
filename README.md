@@ -95,7 +95,7 @@ dist/                   配布物。組み立て直せるので中身は git に
   zcnova-bgm-studio-v5.6.zip   手元で使う版一式
   blogger/                     ブログに貼り付ける版
 build/make-dist.mjs     配布物と public/ を組み立てる
-tests/                  検査一式（124件）
+tests/                  検査一式（135件）
 docs/心地よい音の実測メモ.md   音づくりの実測記録
 sri-hash-tool.html      CDN の SRI ハッシュを取り直す道具
 ```
@@ -115,7 +115,7 @@ sri-hash-tool.html      CDN の SRI ハッシュを取り直す道具
 npm install                    # playwright と terser
 npx playwright install chromium
 
-npm test                       # 検査一式（124件・およそ3分）
+npm test                       # 検査一式（135件・およそ3.5分）
 node tests/run.mjs 08          # 番号の合うものだけ
 
 npm run build                  # dist/ と public/ を組み立て直す
@@ -155,6 +155,7 @@ export ZC_TERSER=/path/to/terser/main.js
 | ⑰ 書き出し | 音が割れない／動画に乗る音量 |
 | ⑲ 独奏 | 「◯◯だけ」の伴奏が鍵盤の書き方になっていない |
 | ⑳ 公開用・説明書 | `public/` を実際にサーバーへ置いて曲ができて鳴る／日本語の説明書が Windows で読める |
+| ㉑ 音源スペック | 32楽器のパラメーター（音域・ユニゾン・歪み・包絡線・ビブラート）が控えと一致する |
 
 くわしくは [`tests/README.md`](tests/README.md)。
 

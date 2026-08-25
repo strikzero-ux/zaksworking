@@ -1,0 +1,610 @@
+{
+ "accordion": {
+  "fam": "リード",
+  "指紋": "ba06926a",
+  "range": [
+   41,
+   88
+  ],
+  "detuneCents": 12,
+  "detuneMix": 0.26,
+  "drive": 0.28,
+  "cutoff": 3200,
+  "sustain": 0.92,
+  "release": 0.26,
+  "vibrato": [
+   4.2,
+   10
+  ],
+  "outGain": 0.56
+ },
+ "accordion_solo": {
+  "fam": "リード",
+  "指紋": "bb41e19a",
+  "range": [
+   41,
+   88
+  ],
+  "detuneCents": 12,
+  "detuneMix": 0.26,
+  "drive": 0.28,
+  "cutoff": 3200,
+  "sustain": 0.92,
+  "release": 0.325,
+  "vibrato": [
+   4.83,
+   14
+  ],
+  "outGain": 0.6272000000000001
+ },
+ "bassDrum": {
+  "fam": "打楽器",
+  "指紋": "42e55e1e",
+  "range": [
+   28,
+   48
+  ],
+  "detuneCents": 0,
+  "detuneMix": 0,
+  "drive": 0.2,
+  "cutoff": 400,
+  "sustain": 0,
+  "release": 0.25,
+  "vibrato": [
+   0,
+   0
+  ],
+  "outGain": 0.47
+ },
+ "bassoon": {
+  "fam": "木管",
+  "指紋": "e52b822c",
+  "range": [
+   34,
+   74
+  ],
+  "detuneCents": 4,
+  "detuneMix": 0.22,
+  "drive": 0.32,
+  "cutoff": 1900,
+  "sustain": 0.86,
+  "release": 0.34,
+  "vibrato": [
+   4.8,
+   22
+  ],
+  "outGain": 0.59
+ },
+ "brass": {
+  "fam": "金管",
+  "指紋": "341bd234",
+  "range": [
+   40,
+   79
+  ],
+  "detuneCents": 12,
+  "detuneMix": 0.26,
+  "drive": 0.48,
+  "cutoff": 3400,
+  "sustain": 0.84,
+  "release": 0.34,
+  "vibrato": [
+   4.6,
+   14
+  ],
+  "outGain": 0.57
+ },
+ "cello": {
+  "fam": "弦（擦る）",
+  "指紋": "1d5d5b1a",
+  "range": [
+   36,
+   81
+  ],
+  "detuneCents": 5,
+  "detuneMix": 0.16,
+  "drive": 0.2,
+  "cutoff": 5200,
+  "sustain": 0.88,
+  "release": 0.46,
+  "vibrato": [
+   4.8,
+   22
+  ],
+  "outGain": 0.42
+ },
+ "cello_solo": {
+  "fam": "弦（擦る）",
+  "指紋": "b1be45e0",
+  "range": [
+   36,
+   81
+  ],
+  "detuneCents": 5,
+  "detuneMix": 0.16,
+  "drive": 0.2,
+  "cutoff": 5200,
+  "sustain": 0.88,
+  "release": 0.6900000000000001,
+  "vibrato": [
+   5.04,
+   33
+  ],
+  "outGain": 0.48719999999999997
+ },
+ "clarinet": {
+  "fam": "木管",
+  "指紋": "43da23c0",
+  "range": [
+   50,
+   94
+  ],
+  "detuneCents": 3,
+  "detuneMix": 0.18,
+  "drive": 0.15,
+  "cutoff": 2200,
+  "sustain": 0.88,
+  "release": 0.34,
+  "vibrato": [
+   1.2,
+   8
+  ],
+  "outGain": 0.48
+ },
+ "clarinet_solo": {
+  "fam": "木管",
+  "指紋": "77b47e51",
+  "range": [
+   50,
+   94
+  ],
+  "detuneCents": 3,
+  "detuneMix": 0.18,
+  "drive": 0.15,
+  "cutoff": 2200,
+  "sustain": 0.88,
+  "release": 0.44200000000000006,
+  "vibrato": [
+   1.2,
+   10
+  ],
+  "outGain": 0.5376000000000001
+ },
+ "contrabass": {
+  "fam": "",
+  "指紋": "eb23c2f9",
+  "range": [
+   28,
+   67
+  ],
+  "detuneCents": 3.5,
+  "detuneMix": 0.26,
+  "drive": 0.18,
+  "cutoff": 1800,
+  "sustain": 0.88,
+  "release": 0.45,
+  "vibrato": [
+   4.8,
+   18
+  ],
+  "outGain": 0.66
+ },
+ "contrabassPizz": {
+  "fam": "ベース",
+  "指紋": "d786c482",
+  "range": [
+   28,
+   67
+  ],
+  "detuneCents": 4,
+  "detuneMix": 0.22,
+  "drive": 0.16,
+  "cutoff": 2600,
+  "sustain": 0,
+  "release": 0.3,
+  "vibrato": [
+   0,
+   0
+  ],
+  "outGain": 0.62
+ },
+ "cymbal": {
+  "fam": "打楽器",
+  "指紋": "e74d7f00",
+  "range": [
+   60,
+   96
+  ],
+  "detuneCents": 9,
+  "detuneMix": 0.35,
+  "drive": 0.08,
+  "cutoff": 15000,
+  "sustain": 0.02,
+  "release": 1.8,
+  "vibrato": [
+   0,
+   0
+  ],
+  "outGain": 0.38
+ },
+ "eguitar": {
+  "fam": "弦（はじく）",
+  "指紋": "7564197a",
+  "range": [
+   40,
+   88
+  ],
+  "detuneCents": 5,
+  "detuneMix": 0.24,
+  "drive": 0.42,
+  "cutoff": 3100,
+  "sustain": 0.24,
+  "release": 0.32,
+  "vibrato": [
+   5.5,
+   12
+  ],
+  "outGain": 0.5
+ },
+ "flute": {
+  "fam": "木管",
+  "指紋": "4432182b",
+  "range": [
+   59,
+   96
+  ],
+  "detuneCents": 4,
+  "detuneMix": 0.13,
+  "drive": 0.05,
+  "cutoff": 3200,
+  "sustain": 0.86,
+  "release": 0.3,
+  "vibrato": [
+   5,
+   30
+  ],
+  "outGain": 0.64
+ },
+ "glockenspiel": {
+  "fam": "打楽器",
+  "指紋": "32d4e2b1",
+  "range": [
+   79,
+   110
+  ],
+  "detuneCents": 2,
+  "detuneMix": 0.15,
+  "drive": 0.04,
+  "cutoff": 14000,
+  "sustain": 0,
+  "release": 0.55,
+  "vibrato": [
+   0,
+   0
+  ],
+  "outGain": 0.52
+ },
+ "horn": {
+  "fam": "金管",
+  "指紋": "3ffa7a6d",
+  "range": [
+   34,
+   77
+  ],
+  "detuneCents": 5,
+  "detuneMix": 0.24,
+  "drive": 0.38,
+  "cutoff": 2600,
+  "sustain": 0.86,
+  "release": 0.42,
+  "vibrato": [
+   4.4,
+   16
+  ],
+  "outGain": 0.56
+ },
+ "oboe": {
+  "fam": "木管",
+  "指紋": "beee334a",
+  "range": [
+   58,
+   91
+  ],
+  "detuneCents": 4,
+  "detuneMix": 0.12,
+  "drive": 0.42,
+  "cutoff": 3400,
+  "sustain": 0.86,
+  "release": 0.26,
+  "vibrato": [
+   5.4,
+   28
+  ],
+  "outGain": 0.51
+ },
+ "organ": {
+  "fam": "鍵盤",
+  "指紋": "d80cf0b2",
+  "range": [
+   36,
+   96
+  ],
+  "detuneCents": 4,
+  "detuneMix": 0.12,
+  "drive": 0.24,
+  "cutoff": 3600,
+  "sustain": 1,
+  "release": 0.06,
+  "vibrato": [
+   6.2,
+   14
+  ],
+  "outGain": 0.5
+ },
+ "piccolo": {
+  "fam": "木管",
+  "指紋": "3bbb1400",
+  "range": [
+   74,
+   108
+  ],
+  "detuneCents": 3,
+  "detuneMix": 0.15,
+  "drive": 0.04,
+  "cutoff": 6000,
+  "sustain": 0.84,
+  "release": 0.18,
+  "vibrato": [
+   5.6,
+   26
+  ],
+  "outGain": 0.56
+ },
+ "sax": {
+  "fam": "木管",
+  "指紋": "562120e1",
+  "range": [
+   49,
+   80
+  ],
+  "detuneCents": 5,
+  "detuneMix": 0.15,
+  "drive": 0.55,
+  "cutoff": 2830,
+  "sustain": 0.84,
+  "release": 0.28,
+  "vibrato": [
+   5.2,
+   35
+  ],
+  "outGain": 0.5
+ },
+ "sax_solo": {
+  "fam": "木管",
+  "指紋": "27db43ac",
+  "range": [
+   49,
+   80
+  ],
+  "detuneCents": 5,
+  "detuneMix": 0.15,
+  "drive": 0.55,
+  "cutoff": 2830,
+  "sustain": 0.84,
+  "release": 0.37800000000000006,
+  "vibrato": [
+   5.720000000000001,
+   56
+  ],
+  "outGain": 0.57
+ },
+ "snareDrum": {
+  "fam": "打楽器",
+  "指紋": "3eb506a3",
+  "range": [
+   48,
+   72
+  ],
+  "detuneCents": 0,
+  "detuneMix": 0,
+  "drive": 0.12,
+  "cutoff": 6000,
+  "sustain": 0,
+  "release": 0.14,
+  "vibrato": [
+   0,
+   0
+  ],
+  "outGain": 0.44
+ },
+ "strings": {
+  "fam": "弦（のばす）",
+  "指紋": "8067538b",
+  "range": [
+   43,
+   93
+  ],
+  "detuneCents": 14,
+  "detuneMix": 0.22,
+  "drive": 0.16,
+  "cutoff": 6000,
+  "sustain": 0.88,
+  "release": 0.38,
+  "vibrato": [
+   5,
+   16
+  ],
+  "outGain": 0.48
+ },
+ "timpani": {
+  "fam": "打楽器",
+  "指紋": "9b01218d",
+  "range": [
+   36,
+   60
+  ],
+  "detuneCents": 4,
+  "detuneMix": 0.22,
+  "drive": 0.15,
+  "cutoff": 1400,
+  "sustain": 0.02,
+  "release": 0.8,
+  "vibrato": [
+   0,
+   0
+  ],
+  "outGain": 0.46
+ },
+ "trombone": {
+  "fam": "金管",
+  "指紋": "b65ab6ce",
+  "range": [
+   40,
+   72
+  ],
+  "detuneCents": 4,
+  "detuneMix": 0.22,
+  "drive": 0.55,
+  "cutoff": 3800,
+  "sustain": 0.84,
+  "release": 0.24,
+  "vibrato": [
+   4.6,
+   20
+  ],
+  "outGain": 0.56
+ },
+ "trumpet": {
+  "fam": "金管",
+  "指紋": "945a1f11",
+  "range": [
+   52,
+   84
+  ],
+  "detuneCents": 3.5,
+  "detuneMix": 0.12,
+  "drive": 0.6,
+  "cutoff": 5820,
+  "sustain": 0.8,
+  "release": 0.16,
+  "vibrato": [
+   5,
+   25
+  ],
+  "outGain": 0.5
+ },
+ "trumpet_solo": {
+  "fam": "金管",
+  "指紋": "2aba5396",
+  "range": [
+   52,
+   84
+  ],
+  "detuneCents": 3.5,
+  "detuneMix": 0.12,
+  "drive": 0.6,
+  "cutoff": 5820,
+  "sustain": 0.8,
+  "release": 0.20800000000000002,
+  "vibrato": [
+   5.5,
+   36.25
+  ],
+  "outGain": 0.56
+ },
+ "tuba": {
+  "fam": "金管",
+  "指紋": "ccf315dd",
+  "range": [
+   28,
+   65
+  ],
+  "detuneCents": 3.5,
+  "detuneMix": 0.2,
+  "drive": 0.4,
+  "cutoff": 1600,
+  "sustain": 0.86,
+  "release": 0.4,
+  "vibrato": [
+   4.2,
+   12
+  ],
+  "outGain": 0.46
+ },
+ "viola": {
+  "fam": "弦（擦る）",
+  "指紋": "1cc47f3d",
+  "range": [
+   48,
+   93
+  ],
+  "detuneCents": 5,
+  "detuneMix": 0.17,
+  "drive": 0.21,
+  "cutoff": 6600,
+  "sustain": 0.85,
+  "release": 0.4,
+  "vibrato": [
+   5.2,
+   24
+  ],
+  "outGain": 0.375
+ },
+ "violin": {
+  "fam": "弦（擦る）",
+  "指紋": "df7794ad",
+  "range": [
+   55,
+   100
+  ],
+  "detuneCents": 6,
+  "detuneMix": 0.17,
+  "drive": 0.22,
+  "cutoff": 8000,
+  "sustain": 0.86,
+  "release": 0.32,
+  "vibrato": [
+   5.5,
+   25
+  ],
+  "outGain": 0.41
+ },
+ "violin_solo": {
+  "fam": "弦（擦る）",
+  "指紋": "6b06832e",
+  "range": [
+   55,
+   100
+  ],
+  "detuneCents": 6,
+  "detuneMix": 0.17,
+  "drive": 0.22,
+  "cutoff": 8000,
+  "sustain": 0.86,
+  "release": 0.48,
+  "vibrato": [
+   5.94,
+   38.75
+  ],
+  "outGain": 0.4755999999999999
+ },
+ "xylophone": {
+  "fam": "打楽器",
+  "指紋": "a3ed7766",
+  "range": [
+   65,
+   108
+  ],
+  "detuneCents": 3,
+  "detuneMix": 0.11,
+  "drive": 0.06,
+  "cutoff": 9000,
+  "sustain": 0,
+  "release": 0.1,
+  "vibrato": [
+   0,
+   0
+  ],
+  "outGain": 0.61
+ }
+}
