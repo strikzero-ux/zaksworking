@@ -423,8 +423,11 @@ footer b{ color:var(--brass); }
       <b>くわしく決める</b>を開くと、形・リズム・ひびき・終わり方を自分で組み合わせられます。<br>
       <b>曲の組み立て方</b>はイントロ〜Aメロ〜Bメロ〜サビの並べ方です。どちらも「おまかせ」なら曲調に合うものが自動で選ばれます。<br>
       <b>音数</b>を下げても、1小節が薄くなりすぎないよう自動で下限を保ちます。<br>
-      <b>曲の長さ</b>は目安です。曲はフレーズ単位で並べるため、ぴったりの秒数にはなりません。
-      動画で使うぶんが足りなくならないよう<b>指定より少し長めに作ります</b>（実際の長さは上のバーに出ます）。
+      <b>曲の長さ</b>は目安です。曲は<b>フレーズ単位</b>で並べるので、ぴったりの秒数にはなりません。
+      <b>指定した長さの前後にずれます</b>（実際の長さは必ず上のバーに出るので、そちらを見てください）。<br>
+      ずれ方は「1かたまりの長さ」で決まります。<b>1〜2小節</b>ならほぼ指定どおり（数秒のずれ）。
+      <b>8小節</b>は1つが大きいぶん、長めに振れることがあります（実測で3分指定→最長3分30秒）。
+      秒数を合わせたいときは<b>1小節か2小節</b>を選んでください。
     </p>
     <div class="status" id="makeStatus"></div>
   </div>
@@ -6704,8 +6707,15 @@ function autoArrange(song){
        30秒指定・1フレーズ12秒 → 24秒では6秒足りないので 36秒にする
      ※ 割合（5%など）にすると10分の曲で30秒も許すことになり、
        長い曲ほど末尾の無音が目立ってしまう。だから秒数で頭打ちにする。
+     ------------------------------------------------------------
+     【2026-08-25 追記】秒数の頭打ちだけでは、短い曲で効きすぎていた。
+     15秒を指定して 10.0秒（-5秒＝3分の1不足）まで出ていた（実測1860曲）。
+     動画の15秒枠に当てる人にとっては、これは使える／使えないの差になる。
+     そこで「指定の1割」も上限に加える。
+       15秒指定 → 1.5秒まで ／ 30秒指定 → 3秒まで ／ 60秒以上 → 5秒のまま
+     長い曲（60秒以上）はこれまでどおりなので、3分・10分の曲は1つも変わらない。
      ------------------------------------------------------------ */
-  const lenTol = Math.min(5, per / 2);   // 許す不足の量（秒）
+  const lenTol = Math.min(5, per / 2, song.targetSec * 0.1);   // 許す不足の量（秒）
   let need = Math.max(1, Math.floor(song.targetSec / per));
   if(song.targetSec - need * per > lenTol) need += 1;
   // 役割名 → フレーズ番号
@@ -10328,6 +10338,18 @@ $('songList').addEventListener('click', (e) => {
     pickMood = song.moodKey; pickBars = song.bars; pickPM = song.playMode; pickSec = song.targetSec;
     renderAll(); scheduleAutosave();
     status('ioStatus', `「${it.name}」を開きました`, 'ok');
+    /* 【修正 2026-08-25】①の案内も書き替える。
+       ここを書かないと、①には**前に作った曲の説明**が残ったままになる。
+       実測：木管楽器の曲を開いたのに①は「編成：ピアノ」と出ていた。
+       ⑤の中で開いたときは目の前に ioStatus が出るが、①まで戻った人には
+       そちらしか見えないので、古い説明はそのまま嘘になる。
+       やり直す（undoBtn）は既に書き替えている。開くだけが抜けていた。 */
+    try{
+      const md = MOODS.find(m => m.key === song.moodKey);
+      status('makeStatus',
+        `「${it.name}」を開きました（曲調：${(md && md.label) || song.moodKey}`
+        + `・編成：${song.playModeLabel || ''}・${fmtTime(songSeconds(song))}）`, 'ok');
+    }catch(err){}
     return;
   }
   const D = e.target.closest('[data-del]');
@@ -13669,6 +13691,10 @@ boot();
      ⚠️ 数えるのは再生中だけ。書き出しは実時間で動かないので混ぜない。 */
   var LIVE = 0;
   window.ZC_LIVE_VOICES = function(){ return LIVE; };
+  /* 楽器をまたいだ同時発音数の上限。ここに当たった音は**まるごと鳴らない**。
+     値の根拠と実測は下の「最後の安全弁」を見よ。検査⑱が見張っている。 */
+  var ZC_LIVE_CAP = 56;
+  window.ZC_LIVE_CAP = function(v){ if(v !== undefined) ZC_LIVE_CAP = v; return ZC_LIVE_CAP; };
 
   /* ============================================================
      ZCnovaAcoustic — 管楽器・弦楽器の音源
@@ -13802,14 +13828,30 @@ boot();
          旋律の音が丸ごと消える＝いちばん耳につく乱れになっていた。
          上を広げるかわりに、下の「簡易版で鳴らす」を先に効かせる。 */
       if(this.live && this.active >= 20) return;
-      /* 【最後の安全弁 2026-08-24】楽器をまたいだ同時発音数の上限。
+      /* 【最後の安全弁 2026-08-24／2026-08-25 値を測り直し】
+         楽器をまたいだ同時発音数の上限。
          上の 20 は「楽器1つぶん」なので、7パートが同時に鳴る吹奏楽では
          どの楽器も余裕だと判断したまま全体が膨らむ。
-         実測でいちばん重い編成（吹奏楽・戦闘）でも同時28だったので、
-         40 はふだん絶対に当たらない。端末や設定が想定外に重くなったとき
-         だけ効く「これ以上は増やさない」線。ここに当たった音は鳴らない
-         （音が1つ欠けるのは、全部が割れて止まるよりましなので）。 */
-      if(this.live && LIVE >= 40) return;
+         ここに当たった音は**まるごと鳴らない**
+         （音が1つ欠けるのは、全部が割れて止まるよりましなので）。
+         ------------------------------------------------------------
+         【なぜ 40 から上げたか】
+         40 にした根拠は「実測でいちばん重い編成でも同時28」だったが、
+         これは4小節を短く見ただけの数字で、**実際の山を捉えられていなかった**。
+         上限を外して25秒鳴らし直すと:
+             吹奏楽×戦闘  中央35 ／ 上位1割40 ／ **最大45**
+         つまり 40 は山の中に食い込んでおり、「ふだん絶対に当たらない線」
+         ではなく**ふだん当たる線**になっていた。実測:
+             上限40 → 25秒で 48音（4.4%）がまるごと消える
+             上限56 → 消える音 0。毎秒の部品 301 → 316（上限420）
+             上限72 → 56 と同じ（実需要が45なので、これ以上上げても意味が無い）
+         自動で軽くする仕組みは、どの値でも一度も働かなかった＝
+         音の計算は間に合っている。**消えていたのは負荷のせいではなく、
+         この線が低すぎたせい**だった。
+         実需要45に対して 56 は約25%の余裕。ここが埋まるほど重い端末では、
+         先に「再生の重さ」の自動軽量化が働く。
+         ⚠️ 再生だけの話。書き出しはこの経路を通らないので影響しない。 */
+      if(this.live && LIVE >= ZC_LIVE_CAP) return;
 
       var freq = 440 * Math.pow(2, (midi - 69) / 12);
       var t = time === undefined ? Tone.now() : time;
@@ -14691,9 +14733,26 @@ boot();
     if(cur && list.indexOf(cur) < 0 && FAMILY_ORDER.indexOf(cur) >= 0) list.push(cur);
     return list;
   }
-  function buildFamilyButtons(){
+  /* 【修正 2026-08-25】畳んであるとき、いま選んでいる楽器のボタンが
+     そもそも作られていなかった。
+     ------------------------------------------------------------
+     familyShownKeys() は「いま選ばれているものは畳んでいても必ず出す」
+     つもりで書いてあるのに、下の markPicked 相乗りが
+     **buildFamilyButtons() を呼んでいなかった**。そのため
+     再読み込み・保存した曲を開く・やり直す のあとはボタンが作り直されず、
+     印を付ける相手が居ないままだった。
+     実測：木管楽器の曲を作って再読み込みすると、曲は木管楽器のままなのに
+     「使う楽器」はどれも光っていない＝何を選んでいるのか画面から分からない。
+     （曲調のほうは group が同じことを自動でやっている。そちらに合わせる）
+     ※ 毎回まるごと作り直すとちらつくので、並びが変わったときだけ作り直す。 */
+  let famBuiltKey = null;
+  function buildFamilyButtons(force){
+    const 並び = familyShownKeys();
+    const いまの形 = 並び.join(',') + '|' + famShowAll;
+    if(!force && いまの形 === famBuiltKey) return;
+    famBuiltKey = いまの形;
     famPick.innerHTML = '';
-    familyShownKeys().forEach(key => {
+    並び.forEach(key => {
       const isDrum = (key === DRUM_PM_KEY);
       const pm  = PLAY_MODES.find(p => p.key === pmKeyOf(key));
       if(!pm) return;
@@ -14758,7 +14817,9 @@ boot();
     const prevMarkPicked = markPicked;
     markPicked = function(){
       prevMarkPicked.apply(this, arguments);
-      try{ syncOpenFam(); buildSoloButtons(); updateNote(); markFamily(); }catch(e){}
+      /* syncOpenFam で openFam が変わることがあるので、印を付ける前に
+         ボタンを作り直す（畳んだままでも選択中のものは出る）。 */
+      try{ syncOpenFam(); buildFamilyButtons(); buildSoloButtons(); updateNote(); markFamily(); }catch(e){}
     };
   }
 

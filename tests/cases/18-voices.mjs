@@ -96,5 +96,67 @@ export async function run({ page }){
       label: `吹奏楽の再生が重すぎない（毎秒 ${r.毎秒}個の部品／420個まで）`,
       info: r.毎秒 <= 420 ? '直す前は毎秒852個で、端末の計算が間に合わず音が割れて止まっていた'
                           : '1音あたりの部品か、同時に鳴らす数が増えていないか' },
+    ...(await 音がまるごと消えていないか(page)),
   ] };
+}
+
+/* 安全弁で音がまるごと消えていないか
+   ------------------------------------------------------------
+   楽器をまたいだ同時発音数には上限があり、そこに当たった音は
+   **まるごと鳴らない**（全部が割れて止まるよりまし、という判断）。
+   その線は「ふだん絶対に当たらない」つもりで 40 に置いてあったが、
+   根拠にした「最大28」は4小節を短く見ただけの数字で、山を捉えて
+   いなかった。上限を外して25秒鳴らすと 吹奏楽×戦闘 の実需要は
+   中央35／上位1割40／**最大45**。40 は山の中に食い込んでいて、
+   25秒で 48音（4.4%）がまるごと消えていた。
+
+   自動で軽くする仕組みは一度も働いていない＝音の計算は間に合って
+   いたので、**消えていたのは負荷のせいではなく線が低すぎたせい**。
+   いまは 56（実需要45に対して約25%の余裕）。
+
+   ⚠️ ここを下げると、いちばん重い編成で音が虫食いになる。
+      上げすぎても意味は無い（実需要が45なので72でも結果は同じ）。 */
+async function 音がまるごと消えていないか(page){
+  const r = await page.evaluate(async () => {
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+    const out = { 上限: window.ZC_LIVE_CAP ? window.ZC_LIVE_CAP() : null, 編成: {} };
+    for(const [pm, mood, 名] of [['fam_concert','battle','吹奏楽×戦闘'],
+                                 ['fam_orchestra','battle','オーケストラ×戦闘']]){
+      pickPM = pm; pickMood = mood; pickBars = 2; pickSec = 20;
+      makeNewSong(20260825); await wait(500);
+      zcLiteSetting = 'full';           /* 自動の助けを切って素の重なりを見る */
+      let 全 = 0, 消えた = 0; const 声 = [];
+      const 元 = window.ZCnovaAcoustic.prototype._one;
+      window.ZCnovaAcoustic.prototype._one = function(){
+        if(this.live){
+          全++;
+          if(window.ZC_LIVE_VOICES() >= window.ZC_LIVE_CAP()) 消えた++;
+        }
+        return 元.apply(this, arguments);
+      };
+      await ensurePlaying();
+      const t = setInterval(() => 声.push(window.ZC_LIVE_VOICES()), 80);
+      await wait(20000);
+      clearInterval(t); stopPlayback(); await wait(400);
+      window.ZCnovaAcoustic.prototype._one = 元;
+      声.sort((a, b) => a - b);
+      out.編成[名] = { 全, 消えた, 同時最大: 声[声.length - 1], 上位1割: 声[Math.floor(声.length * 0.9)] };
+    }
+    zcLiteSetting = 'auto';
+    return out;
+  });
+  const 悪い = Object.entries(r.編成).filter(([, v]) => v.消えた > 0)
+    .map(([k, v]) => `${k} ${v.消えた}/${v.全}音`);
+  const 一覧 = Object.entries(r.編成)
+    .map(([k, v]) => `${k} 最大${v.同時最大}・上位1割${v.上位1割}`).join(' / ');
+  const 余裕 = Object.values(r.編成).every(v => v.同時最大 < r.上限);
+  return [
+    { ok: 悪い.length === 0,
+      label: `安全弁で音がまるごと消えていない（上限 ${r.上限}）`,
+      info: 悪い.length ? '消えた: ' + 悪い.join(' / ')
+                        : 一覧 + '　／ 上限40だったころは 25秒で48音（4.4%）が消えていた' },
+    { ok: 余裕,
+      label: '同時発音の山が上限に届いていない（余裕が残っている）',
+      info: 一覧 + `　／ 上限 ${r.上限}` },
+  ];
 }
