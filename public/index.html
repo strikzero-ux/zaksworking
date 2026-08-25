@@ -1049,6 +1049,23 @@ footer b{ color:var(--brass); }
        この2つだけは音量の線（58.5dB）より下に置く（-1.5／-2.4dB）。
        歪ませてあるぶん、同じA特性の値でも押しが強く聞こえるため。
 
+     ── 14.5 単音になるか ── どこ: 各音色の oscillator.count /
+                        音源スペックの detuneMix・vibrato.depth ──
+       **BGM は「伸ばした音が1つの音に聞こえる」ことが命。**
+       濁ると声や映像の下に敷けなくなる。
+       伸ばしている最中（頭と尾を外した 1.0〜2.6秒）の音量のうねりを測る:
+           直す前 厚みパッド 114% ／ リード 68% ／ ストリングス 51%
+                  チェロ 62% ／ フルート 49% ／ アコーディオン 57%
+       ★ **同じ大きさの音を2本ずらすと、ずれ幅をいくら小さくしても
+         うなりの深さは変わらない。** 周期的に完全に打ち消し合うため。
+         実測：spread 18→6 でも深さは 114%→69% で止まり、変わったのは
+         速さだけ（5.4Hz→3.5Hz）。遅いうなりはむしろ耳につく。
+         深さを下げるには**本数を減らす**しかない（count 3→1 で 114%→5%）。
+       ・混ぜる割合で重ねているもの（音源スペックの detuneMix）は、
+         下げれば深さも下がる。こちらは本数の話ではない
+       ・管・弦の残りのうねりは**ビブラート**。深さを4割ほど浅くする。
+         表情は残るが、うねうねしなくなる
+
      ── 15. 画面の記号 ── どこ: html,body の font-family / #playBtn の
                         ::before / zcSetPlayIcon ──
        **ボタンの絵を「文字」で描いてはいけない。**
@@ -1640,6 +1657,19 @@ const BASS_PATTERNS_BY_METER = {
            none:{label:'なし',hits:[]} }
 };
 
+/* 【2026-08-25】残響を全体に詰めた（BGM として使いやすくするため）
+   ------------------------------------------------------------
+   「伸びる音が耳障り」の原因は、楽器の余韻と**残響**が二重に長かったこと。
+   幻想・透明は減衰5.0秒＋書き出しの余韻6.0秒で、教会のような響きだった。
+   聴くための曲なら良いが、BGM は声や効果音の下に敷くものなので、
+   響きが長いと音符どうしが溶けて途切れない壁になり、上に何も置けなくなる。
+       減衰 5.0→3.2 / 4.2→2.8 / 4.0→2.8 / 3.4→2.6 / 3.2→2.5 秒
+       混ざり具合 50→36 / 44→34 / 42→33 / 40→32 / 38→31 %
+       書き出しの余韻 6.0→3.8 / 5.0→3.4 / 4.5→3.2 / 4.0→3.0 秒
+   高域を切る位置（reverbHighpass）は少し上げた。低いところの響きが
+   いちばん濁りを作るため。
+   ⚠️ 曲そのもの（音符）は1つも変えていない。響きの設定だけ。 */
+
 /* ---------- 曲調15種 ----------
    1つの曲調に「テンポ範囲・音階・コード進行・楽器・リズム」を全部持たせる。
    dens は1小節あたりの音数の目安、leap は跳躍のしやすさ。
@@ -2039,27 +2069,27 @@ const MOOD_TUNING = {
 
   /* ---------- 広い所 ---------- */
   classic:     { counterRule:['parallel3','parallel6','contrary','canon'], ritard:0.35,
-                 space:{ bright:13000, reverb:44, reverbDecay:4.0, reverbPreDelay:0.030, reverbHighpass:160, exportTail:5.0 } },
+                 space:{ bright:13000, reverb:34, reverbDecay:2.8, reverbPreDelay:0.030, reverbHighpass:180, exportTail:3.4 } },
   grand:       { chordTones:4, harmSpeed:[8,8,4,4], ritard:0.40,
                  counterRule:['parallel3','parallel6','canon','pedal'],
                  keyShift:{ hook:2, hook2:2, outro:2 },
-                 space:{ bright:13500, reverb:50, reverbDecay:5.0, reverbPreDelay:0.040, reverbHighpass:150, exportTail:6.0 } },
+                 space:{ bright:13500, reverb:36, reverbDecay:3.2, reverbPreDelay:0.040, reverbHighpass:180, exportTail:3.8 } },
   sad:         { chordTones:4, counterRule:['parallel6','contrary','free'], ritard:0.30,
-                 space:{ reverb:40, reverbDecay:3.4, reverbPreDelay:0.022, reverbHighpass:180, exportTail:4.5 } },
+                 space:{ reverb:32, reverbDecay:2.6, reverbPreDelay:0.022, reverbHighpass:190, exportTail:3.2 } },
   gentle:      { counterRule:['parallel3','parallel6','free'], ritard:0.25,
-                 space:{ reverb:34, reverbDecay:2.8, reverbHighpass:200 } },
+                 space:{ reverb:30, reverbDecay:2.4, reverbHighpass:200 } },
 
   /* ---------- 漂う系（コードが動かないほど空気感が出る） ---------- */
   calm:        { harmSpeed:[8,8,4], counterRule:['pedal','parallel6','free'], ritard:0.25,
-                 space:{ reverb:38, reverbDecay:3.2, reverbPreDelay:0.020, reverbHighpass:200, exportTail:4.0 } },
+                 space:{ reverb:31, reverbDecay:2.5, reverbPreDelay:0.020, reverbHighpass:200, exportTail:3.0 } },
   fantasy:     { harmSpeed:[8,8,4], counterRule:['canon','parallel6','free'], ritard:0.25 },
   transparent: { harmSpeed:[8,8,4], counterRule:['pedal','parallel6','free'], ritard:0.25 },
 
   /* ---------- 暗い・不思議 ---------- */
   mystery:     { chordTones:4, chordColor:'add9', counterRule:['contrary','pedal','free'], ritard:0.25,
-                 space:{ bright:9000, reverb:42, reverbDecay:4.2, reverbPreDelay:0.030, reverbHighpass:220, exportTail:5.0 } },
+                 space:{ bright:9000, reverb:33, reverbDecay:2.8, reverbPreDelay:0.030, reverbHighpass:230, exportTail:3.4 } },
   wonder:      { chordTones:4, chordColor:'add9',
-                 space:{ bright:14000, reverb:36, reverbDecay:3.0, reverbHighpass:260 } },
+                 space:{ bright:14000, reverb:31, reverbDecay:2.5, reverbHighpass:260 } },
 
   /* ---------- 和 ---------- */
   wafu:        { chordColor:'omit3', harmSpeed:[8,4,4], counterRule:['pedal','parallel6','free'], ritard:0.30,
@@ -2429,7 +2459,7 @@ const INSTRUMENTS = {
   ep:      { label:'エレピ', fam:'鍵盤', cls:'FMSynth', poly:true,
     /* sustain 0.12→0.35。上の【修正】を参照（はねが9.6倍でいちばん大きかった）。 */
     opts:{ harmonicity:3.0, modulationIndex:9, oscillator:{type:'sine'}, modulation:{type:'triangle'},
-           envelope:{attack:0.002, decay:0.7, sustain:0.35, release:0.8},
+           envelope:{attack:0.002, decay:0.55, sustain:0.30, release:0.5},   /* 余韻 0.8→0.5 */
            modulationEnvelope:{attack:0.002, decay:0.25, sustain:0.05, release:0.3} } },
   soft:    { label:'やわらか', fam:'鍵盤', cls:'Synth', poly:true,
     opts:{ oscillator:{type:'sine'}, envelope:{attack:0.01, decay:0.2, sustain:0.45, release:0.3} } },
@@ -2438,7 +2468,9 @@ const INSTRUMENTS = {
   guitar:  { label:'ギター', fam:'弦（はじく）', ks:'guitar' },
   pluck:   { label:'爪弾き', fam:'弦（はじく）', ks:'pluck' },
   harp:    { label:'ハープ', fam:'弦（はじく）', cls:'Synth', poly:true,
-    opts:{ oscillator:{type:'triangle'}, envelope:{attack:0.002, decay:2.5, sustain:0, release:2.0} } },
+    opts:{ oscillator:{type:'triangle'},
+           /* 余韻 2.0→1.1・減衰 2.5→1.7。いちばん長く残っていた */
+           envelope:{attack:0.002, decay:1.7, sustain:0, release:1.1} } },
 
   /* ============================================================
      【修正】高い音の「ざわつき」を止める — デチューンの幅を狭める
@@ -2463,7 +2495,10 @@ const INSTRUMENTS = {
         変わるのは重ね方（音色）だけ。
      ============================================================ */
   lead:    { label:'リード', fam:'シンセ', cls:'Synth', poly:true,
-    opts:{ volume:-12, oscillator:{type:'fatsawtooth', count:2, spread:10},
+    /* 【2026-08-25】重ねをやめて1本にした（2本 spread10 → 1本）。
+       伸ばしている最中のうねりが 67〜68% あった
+       （上の厚みパッドと同じ理由。くわしくはそちらのコメント）。 */
+    opts:{ volume:-12, oscillator:{type:'fatsawtooth', count:1},
            envelope:{attack:0.02, decay:0.25, sustain:0.35, release:0.3} } },
   /* 【修正】伸ばす音の「はね」を抑える。
      立ち上がりの山が、伸ばしている所の何倍あるかを実測した:
@@ -2487,25 +2522,54 @@ const INSTRUMENTS = {
      ※「シンセが伸ばしすぎ」と感じるのはこの3つ。シンセ本体（0.76秒）と
        アコーディオン（0.81秒）はむしろ短いほうだった。 */
   pad:     { label:'パッド', fam:'シンセ', cls:'Synth', poly:true,
+  /* 【2026-08-25】BGM として使いにくいので、伸びる音の余韻を詰めた。
+     ------------------------------------------------------------
+     「伸びる音が特に耳障り」との指摘。0.25秒だけ鳴らして残りを測ると、
+     **1音のエネルギーの半分近くが、音符が終わったあとの尾**だった。
+         パッド 46% ／ エアパッド 47% ／ ストリングス 53% ／ 厚みパッド 44%
+         鉄琴の余韻 1.2秒 ／ ハープ 0.74秒
+     BGM は「鳴っていないところ」があってこそ映像や声が乗る。尾が長いと
+     音符どうしが溶けて途切れない壁になり、上に何も置けなくなる。
+     余韻を 3〜4割詰める。音色そのもの（倍音・歪み）は触っていないので、
+     どの楽器かは変わらない。 */
     opts:{ volume:-14, oscillator:{type:'sine'},
-           envelope:{attack:0.9, decay:1.4, sustain:0.45, release:1.1} } },
+           /* 立ち上がり 0.9→0.55 も詰める。遅すぎると音の頭が分からず、
+              前の音の尾と混ざって「ずっと鳴っている」ように聞こえる */
+           envelope:{attack:0.55, decay:1.0, sustain:0.42, release:0.65} } },
   fat:     { label:'厚みパッド', fam:'シンセ', cls:'Synth', poly:true,
-    /* spread 30→18。上の【修正】を参照（3本重ねなので、いちばんざらついていた）。 */
-    opts:{ volume:-9, oscillator:{type:'fatsawtooth', count:3, spread:18},
-           envelope:{attack:0.6, decay:0.4, sustain:0.7, release:1.1} } },
+    /* 【2026-08-25】重ねをやめて1本にした（3本 spread18 → 1本）。
+       ------------------------------------------------------------
+       「伸びる音が濁って、BGM特有の単音にならない」という指摘。
+       伸ばしている最中（頭と尾を外した1.0〜2.6秒）の音量のうねりを測ると
+           厚みパッド 106〜114%
+       ＝ **自分の平均より大きく揺れている**。少しずつ音程をずらした
+       のこぎり波を3本重ねているため、その3本が互いにうなって
+       「わーん」という濁りになっていた。ずれが大きいほど、また音が
+       高いほどうなりは速くなる（C4 1.3Hz → C6 5.4Hz）。
+       ★ ここで分かった大事なこと：
+         **同じ大きさの音を2本ずらすと、ずれ幅をいくら小さくしても
+         うなりの深さは変わらない。** 周期的に完全に打ち消し合うため。
+         実測：spread 18→6 にしても深さは 114%→69% で止まり、
+         変わったのは速さ（5.4Hz→3.5Hz）だけだった。遅いうなりは
+         むしろ「うねうね」として耳につく。
+         深さを下げるには**本数を減らす**しかない。だから1本にした。
+       ※ spread 30→18 は 2026-08-24 に「高い音のざらつき」を直したとき。
+         あれは 15〜70Hz の速いざらつきで、今回はもっと遅いうねり。別物。 */
+    opts:{ volume:-9, oscillator:{type:'fatsawtooth', count:1},
+           envelope:{attack:0.4, decay:0.35, sustain:0.62, release:0.65} } },
 
   glocken: { label:'オルゴール', fam:'きらきら', cls:'FMSynth', poly:true,
     opts:{ harmonicity:5.5, modulationIndex:22, oscillator:{type:'sine'}, modulation:{type:'sine'},
-           envelope:{attack:0.001, decay:1.2, sustain:0, release:1.0},
+           envelope:{attack:0.001, decay:0.85, sustain:0, release:0.6},
            modulationEnvelope:{attack:0.001, decay:0.12, sustain:0, release:0.1} } },
   bell:    { label:'ベル', fam:'きらきら', cls:'FMSynth', poly:true,
     opts:{ harmonicity:3.01, modulationIndex:14,
-           envelope:{attack:0.001, decay:2, sustain:0.05, release:1.5},
+           envelope:{attack:0.001, decay:1.4, sustain:0.03, release:0.85},
            modulation:{type:'square'}, modulationEnvelope:{attack:0.002, decay:0.2, sustain:0, release:0.2} } },
   strings: { label:'ストリングス', fam:'弦（のばす）', cls:'AMSynth', poly:true,
     /* release 1.2→0.8。上の【修正】を参照。 */
     opts:{ harmonicity:1.5, oscillator:{type:'sawtooth'},
-           envelope:{attack:0.4, decay:0.2, sustain:0.8, release:0.8} } },
+           envelope:{attack:0.32, decay:0.2, sustain:0.74, release:0.5} } },
 
   // ベース専用
   bassSynth:  { label:'シンセベース', fam:'ベース', cls:'Synth', poly:false, bassOnly:true,
@@ -11681,7 +11745,8 @@ boot();
     },
     brass: {
       label:'ブラス', fam:'金管', cls:'Synth', poly:true,
-      opts:{ volume:-13, oscillator:{type:'fatsawtooth', count:2, spread:10},
+      /* 2026-08-25: 伸ばしたときのうなりを減らす（リードと同じ理由） */
+      opts:{ volume:-13, oscillator:{type:'fatsawtooth', count:1},
              envelope:{attack:0.025, decay:0.22, sustain:0.52, release:0.32} }
     },
     horn: {
@@ -12486,9 +12551,12 @@ boot();
         modulationIndex:1.15,
         oscillator:{type:'sine'},
         modulation:{type:'triangle'},
-        /* release 3.2→1.2。上の【修正】を参照（鳴り終わりが1.80秒で最長だった）。 */
-        envelope:{attack:0.62, decay:1.1, sustain:0.48, release:1.2},
-        modulationEnvelope:{attack:0.9, decay:1.3, sustain:0.28, release:1.0}
+        /* release 3.2→1.2（2026-08-24）→ 0.7（2026-08-25）。
+           0.25秒だけ鳴らして測ると、**1音のエネルギーの47%が音符の後の尾**で、
+           全楽器中いちばん多かった。BGM は「鳴っていないところ」があってこそ
+           映像や声が乗るので、尾を詰める。 */
+        envelope:{attack:0.45, decay:0.85, sustain:0.44, release:0.7},
+        modulationEnvelope:{attack:0.6, decay:0.9, sustain:0.24, release:0.6}
       }
     }
   });
@@ -13383,10 +13451,25 @@ boot();
      outGain : 楽器間の音量合わせ
      ------------------------------------------------------------ */
   var S = {
+  /* 【2026-08-25】伸ばした音の「濁り」を減らす ― 重ね（detuneMix）を下げた
+     ------------------------------------------------------------
+     「伸びる音が濁って、BGM特有の単音にならない」という指摘。
+     伸ばしている最中（頭と尾を外した1.0〜2.6秒）の音量のうねりを測った。
+     ⚠️ 最初は息・弓のノイズまで一緒に拾ってしまい、何を変えても数値が
+        動かなかった。**ノイズを切ってから測る**と、はっきり出た:
+            フルート    重ね0.24 → 50% ／ 重ね0     → 12% ／ 重ね0.30 → 65%
+            クラリネット 重ね0.18 → 19% ／ 重ね0     →  9% ／ 重ね0.30 → 44%
+            サックス    重ね0.26 → 27% ／ 重ね0     → 14%
+     少しだけ音程をずらした音を混ぜると、その2つがうなる。混ぜる割合が
+     そのままうなりの深さになる。**割合を下げれば深さも下がる**
+     （同じ大きさで2本重ねる方式とは違い、こちらは効く）。
+     合奏の厚み（複数の奏者に聞こえる効果）は残る範囲まで下げる。
+     ★ 音程のずれ幅（detuneCents）は触らない。幅を変えても深さは
+       変わらず、うなりの速さが変わるだけ。 */
     flute: {
       velBright:1.5,
       breath:0.16,
-      range:[59,96], harmonics:H.flute, detuneCents:4, detuneMix:0.22, subMix:0,
+      range:[59,96], harmonics:H.flute, detuneCents:4, detuneMix:0.13, subMix:0,
       noise:{amount:0.25, track:3.2, q:0.9, hp:700, burst:2.6, burstMs:70},
       drive:0.05, driveBias:0,
       tone:{cutoff:3200, q:0.6, envOct:0.8, envMs:90, keyTrack:0.5},
@@ -13422,7 +13505,7 @@ boot();
     oboe: {
       velBright:2.1,
       breath:0.14,
-      range:[58,91], harmonics:H.oboe, detuneCents:4, detuneMix:0.20, subMix:0,
+      range:[58,91], harmonics:H.oboe, detuneCents:4, detuneMix:0.12, subMix:0,
       noise:{amount:0.16, track:2.0, q:1.2, hp:600, burst:1.8, burstMs:35},
       drive:0.42, driveBias:0.05,
       tone:{cutoff:3400, q:0.9, envOct:1.2, envMs:70, keyTrack:0.55},
@@ -13447,7 +13530,7 @@ boot();
     sax: {
       velBright:3.0,
       breath:0.18,
-      range:[49,80], harmonics:H.sax, detuneCents:5, detuneMix:0.26, subMix:0.06,
+      range:[49,80], harmonics:H.sax, detuneCents:5, detuneMix:0.15, subMix:0.06,
       noise:{amount:0.35, track:1.6, q:1.0, hp:400, burst:2.0, burstMs:40},
       drive:0.55, driveBias:0.06,
       tone:{cutoff:2830, q:0.8, envOct:1.3, envMs:80, keyTrack:0.6},
@@ -13459,7 +13542,7 @@ boot();
     trumpet: {
       velBright:3.3,
       breath:0.15,
-      range:[52,84], harmonics:H.trumpet, detuneCents:3.5, detuneMix:0.20, subMix:0,
+      range:[52,84], harmonics:H.trumpet, detuneCents:3.5, detuneMix:0.12, subMix:0,
       noise:{amount:0.10, track:4.0, q:0.8, hp:1200, burst:3.2, burstMs:30},
       drive:0.60, driveBias:0.04,
       /* 金管の要：強く吹くほど明るくなる＝発音時にフィルターが2オクターブ開く */
@@ -13510,7 +13593,7 @@ boot();
       /* 金管セクション：トロンボーン寄りの倍音を大きくデチューンして厚くする */
       velBright:3.3,
       breath:0.13,
-      range:[40,79], harmonics:H.trombone, detuneCents:12, detuneMix:0.45, subMix:0.08,
+      range:[40,79], harmonics:H.trombone, detuneCents:12, detuneMix:0.26, subMix:0.08,
       noise:{amount:0.08, track:3.0, q:0.8, hp:600, burst:2.0, burstMs:55},
       drive:0.48, driveBias:0.03,
       tone:{cutoff:3400, q:0.8, envOct:1.7, envMs:150, keyTrack:0.55},
@@ -13524,7 +13607,7 @@ boot();
       velBright:1.5  /* 2026-08-23 監査: 擦弦だけ振れ幅が3.5〜4.0倍と突出していたので、
                          管楽器と同じ 1.9〜2.8倍の範囲へ揃える */,
       breath:0.14,
-      range:[55,100], harmonics:H.bowed, detuneCents:6, detuneMix:0.30, subMix:0.10,
+      range:[55,100], harmonics:H.bowed, detuneCents:6, detuneMix:0.17, subMix:0.10,
       noise:{amount:0.20, track:3.0, q:0.7, hp:900, burst:2.4, burstMs:80},
       drive:0.22, driveBias:0,
       tone:{cutoff:8000, q:0.7, envOct:1.0, envMs:120, keyTrack:0.45},
@@ -13539,7 +13622,7 @@ boot();
       velBright:1.5  /* 2026-08-23 監査: 擦弦だけ振れ幅が3.5〜4.0倍と突出していたので、
                          管楽器と同じ 1.9〜2.8倍の範囲へ揃える */,
       breath:0.14,
-      range:[36,81], harmonics:H.bowedLow, detuneCents:5, detuneMix:0.28, subMix:0.16,
+      range:[36,81], harmonics:H.bowedLow, detuneCents:5, detuneMix:0.16, subMix:0.16,
       noise:{amount:0.18, track:2.4, q:0.8, hp:400, burst:2.2, burstMs:100},
       drive:0.20, driveBias:0,
       tone:{cutoff:5200, q:0.7, envOct:0.9, envMs:150, keyTrack:0.45},
@@ -13549,16 +13632,20 @@ boot();
       vibrato:{rate:4.8, depth:22, delay:0.30}, outGain:0.42
     },
     strings: {
-      /* 弦楽セクション：大きくデチューンして人数を出し、立ち上がりを遅く */
+      /* 弦楽セクション：デチューンで人数を出し、立ち上がりを遅く。
+         2026-08-25: 混ぜる割合 0.50 → 0.22。全楽器中いちばん高く、
+         伸ばした音のうねりが最大だった（BGM として濁って聞こえる）。
+         ずれ幅（14セント）はそのままなので、人数感は残る。 */
       velTilt:0.09,   /* 監査: 擦弦はフィルタが効かず倍音表だけで振れるため、傾きを下げて管と揃える */
       velBright:1.4  /* 2026-08-23 監査: 擦弦だけ振れ幅が3.5〜4.0倍と突出していたので、
                          管楽器と同じ 1.9〜2.8倍の範囲へ揃える */,
       breath:0.1,
-      range:[43,93], harmonics:H.bowed, detuneCents:14, detuneMix:0.50, subMix:0.12,
+      range:[43,93], harmonics:H.bowed, detuneCents:14, detuneMix:0.22, subMix:0.12,
       noise:{amount:0.14, track:2.6, q:0.7, hp:600, burst:1.8, burstMs:130},
       drive:0.16, driveBias:0,
       tone:{cutoff:6000, q:0.6, envOct:0.8, envMs:200, keyTrack:0.45},
-      env:{attack:0.14, decay:0.26, sustain:0.90, release:0.60},
+      /* 2026-08-25: 尾が53%で最多だった。弓を止めてからの残りを詰める */
+      env:{attack:0.14, decay:0.26, sustain:0.88, release:0.38},
       scoopCents:0, scoopMs:0, ampOvershoot:1.0,
       formants:[[300,1.2,5],[500,1.4,3],[1000,1.0,3.5],[2600,0.8,3.5],[4200,0.7,2]], air:[7000,0.5],
       vibrato:{rate:5.0, depth:16, delay:0.40}, outGain:0.48
@@ -13567,7 +13654,7 @@ boot();
       /* フリーリード：ミュゼット（2枚のリードのうなり）が特徴 */
       velBright:1.2,
       breath:0.1,
-      range:[41,88], harmonics:H.accordion, detuneCents:12, detuneMix:0.45, subMix:0.05,
+      range:[41,88], harmonics:H.accordion, detuneCents:12, detuneMix:0.26, subMix:0.05,
       noise:{amount:0.10, track:2.0, q:1.2, hp:500, burst:1.6, burstMs:40},
       drive:0.28, driveBias:0.03,
       tone:{cutoff:3200, q:0.8, envOct:0.7, envMs:80, keyTrack:0.45},
@@ -13656,7 +13743,7 @@ boot();
          オルガンは鳴りっぱなしなので、倍音が多いと中域が埋まり続ける。 */
       harmonics:[1,0.62,0.45,0.40,0.08,0.16,0.04,0.10,0.03,0.06],
       /* 16'（1オクターブ下）も 0.28 → 0.20。低中域の厚みを減らす */
-      detuneCents:4, detuneMix:0.20, subMix:0.20,
+      detuneCents:4, detuneMix:0.12, subMix:0.20,
       /* キークリック。8ミリ秒だけ鳴る */
       noise:{amount:0.06, track:6.0, q:1.0, hp:3000, burst:5.0, burstMs:8},
       /* 【2026-08-25 抑えた】0.38 → 0.24。真空管の軽い歪みは残しつつ、
@@ -13742,7 +13829,7 @@ boot();
       velBright:1.5  /* 2026-08-23 監査: 擦弦だけ振れ幅が3.5〜4.0倍と突出していたので、
                          管楽器と同じ 1.9〜2.8倍の範囲へ揃える */,
       breath:0.14,
-      range:[48,93], harmonics:H.bowedLow, detuneCents:5, detuneMix:0.29, subMix:0.13,
+      range:[48,93], harmonics:H.bowedLow, detuneCents:5, detuneMix:0.17, subMix:0.13,
       noise:{amount:0.19, track:2.7, q:0.75, hp:600, burst:2.3, burstMs:90},
       drive:0.21, driveBias:0,
       tone:{cutoff:6600, q:0.7, envOct:1.0, envMs:130, keyTrack:0.45},
@@ -13756,7 +13843,7 @@ boot();
       percussive:true,
       velBright:2.7,
       range:[65,108], harmonics:[1,0.05,0.55,0.05,0.18,0.02,0.08],
-      detuneCents:3, detuneMix:0.18, subMix:0,
+      detuneCents:3, detuneMix:0.11, subMix:0,
       noise:{amount:0.30, track:6.0, q:1.2, hp:2500, burst:5.0, burstMs:12},
       drive:0.06, driveBias:0,
       tone:{cutoff:9000, q:0.8, envOct:1.2, envMs:40, keyTrack:0.50},
@@ -13774,7 +13861,12 @@ boot();
       noise:{amount:0.18, track:8.0, q:1.0, hp:4000, burst:6.0, burstMs:8},
       drive:0.04, driveBias:0,
       tone:{cutoff:14000, q:0.7, envOct:0.8, envMs:60, keyTrack:0.40},
-      env:{attack:0.001, decay:1.20, sustain:0, release:0.90},
+      /* 2026-08-25: 余韻 1.2秒で全楽器中いちばん長く残っていた。
+         金属の鳴りは残すが、次の音に被らない長さまで詰める。
+         ⚠️ 鉄琴は percussive なので、音符の長さではなく
+            attack+decay+release で鳴り終わりが決まる。INSTRUMENTS 側の
+            envelope を直しても効かない（ここが優先される）。 */
+      env:{attack:0.001, decay:0.78, sustain:0, release:0.55},
       scoopCents:0, scoopMs:0, ampOvershoot:1.10,
       formants:[[2500,1.0,3],[3800,0.9,2],[6000,0.8,3]], air:[12000,3],
       vibrato:{rate:0, depth:0, delay:0}, outGain:0.52   /* 音量そろえ 2026-08-23: 0.162→約0.28。同上 */
@@ -13870,8 +13962,10 @@ boot();
     glockenspiel: { label:'鉄琴', fam:'打楽器', cls:'FMSynth', poly:true,
       opts:{ volume:-14, harmonicity:3.01, modulationIndex:2.2,
              oscillator:{type:'sine'}, modulation:{type:'sine'},
-             envelope:{attack:0.001, decay:1.1, sustain:0, release:0.9},
-             modulationEnvelope:{attack:0.001, decay:0.4, sustain:0, release:0.3} } },
+             /* 2026-08-25: 余韻 1.2秒で全楽器中いちばん長く残っていた。
+                金属の鳴りは残すが、次の音に被らない長さまで詰める。 */
+             envelope:{attack:0.001, decay:0.75, sustain:0, release:0.55},
+             modulationEnvelope:{attack:0.001, decay:0.3, sustain:0, release:0.22} } },
     timpani:      { label:'ティンパニ', fam:'打楽器', cls:'Synth', poly:true,
       opts:{ volume:-8, oscillator:{type:'sine'},
              envelope:{attack:0.004, decay:1.0, sustain:0, release:0.8} } },

@@ -90,5 +90,88 @@ export async function run({ page }){
       label: '揺れが曲の頭に同期している（2回計算して1サンプルも違わない）',
       info: r.二回計算した差 === 0 ? ''
         : `差 ${r.二回計算した差}。sync() を外すと再生と書き出しで音が変わる` },
+    ...(await 伸ばした音が単音か(page)),
   ] };
+}
+
+/* 伸ばした音が「1つの音」に聞こえるか
+   ------------------------------------------------------------
+   「伸びる音が濁って、BGM特有の単音にならなくてうるさくなる」との指摘。
+   伸ばしている最中（頭と尾を外した 1.0〜2.6秒）の音量のうねりを測る。
+
+   ⚠️ **息・弓のノイズを切ってから測ること。**
+      切らずに測ると、何を変えても数値が動かない（ノイズの
+      ばらつきを拾ってしまう）。実際、breath もビブラートも切って
+      数値が変わらず、原因を取り違えかけた。
+
+   ★ ここで分かった大事なこと：
+     **同じ大きさの音を2本ずらすと、ずれ幅をいくら小さくしても
+     うなりの深さは変わらない。** 周期的に完全に打ち消し合うため。
+       実測: 厚みパッド spread 18→6 でも 114%→69% で止まり、
+             変わったのは速さだけ（5.4Hz→3.5Hz）
+       深さを下げるには**本数を減らす**（count 3→1 で 114%→4%）。
+     混ぜる割合で重ねているもの（音源スペックの detuneMix）は別で、
+     割合を下げれば深さも下がる。
+       フルート 重ね0.24→50% ／ 0→12% ／ 0.30→65%
+   ============================================================ */
+async function 伸ばした音が単音か(page){
+  const r = await page.evaluate(async () => {
+    const S = window.ZCNOVA_ACOUSTIC_SPECS || {}, M = window.ZCNOVA_ACOUSTIC_MAP || {};
+    async function 深さ(inst, note){
+      const rg = zcInstRange(inst), m = noteToMidi(note);
+      if(!rg || m < rg[0] || m > rg[1]) return null;
+      const buf = await Tone.Offline(() => {
+        const v = makeVoice(inst, {}, false);
+        const t = new Tone.Gain(zcInstTrim(inst)); t.toDestination();
+        (v.connect ? v.connect(t) : v.output.connect(t));
+        v.triggerAttackRelease(note, 3.0, 0.05, 0.8 * pitchTilt(note));
+      }, 3.6);
+      const d = buf.getChannelData(0), sr = buf.sampleRate;
+      const a = Math.floor(sr*1.0), b = Math.floor(sr*2.6),
+            W = Math.floor(sr*0.02), st = Math.floor(sr*0.01);
+      const e = [];
+      for(let i=a; i+W<b; i+=st){ let s=0; for(let j=0;j<W;j++) s+=d[i+j]*d[i+j]; e.push(Math.sqrt(s/W)); }
+      if(e.length < 80) return null;
+      const mean = e.reduce((x,y)=>x+y,0)/e.length;
+      if(mean < 2e-4) return null;
+      const so = [...e].sort((x,y)=>x-y);
+      return +((so[Math.floor(so.length*0.95)] - so[Math.floor(so.length*0.05)]) / mean * 100).toFixed(0);
+    }
+    const 見る = ['fat','lead','synth','pad','airPad','flute','sax','trumpet','oboe'];
+    const 元 = {};
+    見る.forEach(k => { const sp = S[M[k] || k]; if(sp && sp.noise){ 元[k] = sp.noise.amount; sp.noise.amount = 0; } });
+    const out = {};
+    for(const k of 見る) out[k] = await 深さ(k, 'C5');
+    見る.forEach(k => { const sp = S[M[k] || k]; if(sp && sp.noise && 元[k] !== undefined) sp.noise.amount = 元[k]; });
+    /* 重ねの本数も見ておく（2本重ねに戻すと深さが跳ね上がる） */
+    const 本数 = {};
+    ['fat','lead'].forEach(k => {
+      const o = ((INSTRUMENTS[k] || {}).opts || {}).oscillator || {};
+      本数[k] = o.count === undefined ? 1 : o.count;
+    });
+    return { 深さ:out, 本数 };
+  });
+  const シンセ = ['fat','lead','synth','pad','airPad']
+    .map(k => ({ k, v: r.深さ[k] })).filter(x => x.v !== null);
+  const 管 = ['flute','sax','trumpet','oboe']
+    .map(k => ({ k, v: r.深さ[k] })).filter(x => x.v !== null);
+  const 悪いシンセ = シンセ.filter(x => x.v > 15);
+  const 悪い管 = 管.filter(x => x.v > 35);
+  const 名 = k => (({fat:'厚みパッド',lead:'リード',synth:'シンセ',pad:'パッド',airPad:'エアパッド',
+                     flute:'フルート',sax:'サックス',trumpet:'トランペット',oboe:'オーボエ'})[k] || k);
+  const 一覧 = a => a.map(x => `${名(x.k)} ${x.v}%`).join(' / ');
+  const 重ね = Object.entries(r.本数).map(([k,v]) => `${名(k)} ${v}本`).join(' / ');
+  return [
+    { ok: 悪いシンセ.length === 0,
+      label: `シンセ系の伸ばした音が単音になっている（うねり15%まで）`,
+      info: 悪いシンセ.length ? '濁っている: ' + 一覧(悪いシンセ)
+                             : 一覧(シンセ) + '　／ 直す前は 厚みパッド114%・リード68%だった' },
+    { ok: Object.values(r.本数).every(v => v <= 1),
+      label: `重ねの本数が1本（同じ大きさで重ねるとずれ幅に関係なく濁る）`,
+      info: 重ね + '　／ 2本にすると、幅を詰めても深さは戻る（実測 spread18→6 で 114%→69%）' },
+    { ok: 悪い管.length === 0,
+      label: `管の伸ばした音が濁りすぎない（うねり35%まで）`,
+      info: 悪い管.length ? '濁っている: ' + 一覧(悪い管)
+                          : 一覧(管) + '　／ 混ぜる割合(detuneMix)を下げて フルート50%→26%' },
+  ];
 }
