@@ -36,7 +36,19 @@
   --border:rgba(200,150,62,0.16); --accent:#d85a30;
 }
 *{ box-sizing:border-box; margin:0; padding:0; }
-html,body{ background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; }
+/* 【修正 2026-08-25】記号を持つフォントを控えに足す。
+   ------------------------------------------------------------
+   Inter には ▶(U+25B6) や ⏸(U+23F8) が**入っていない**。ふつうは
+   ブラウザが字ごとに別のフォントへ落ちて拾ってくれるが、拾える
+   フォントが1つも無いと「最後の手段の字形」＝**四角の中にその字の
+   番号（25B6）が並んだもの**が描かれる。
+   ブログに貼ったとき「再生ボタンに数字が出る」のはこれ。
+   （ブログは iframe の中で開くうえ、Google Fonts が届かないことも
+     あるので、素の環境より起きやすい）
+   字ごとの控えなので、日本語や英字は今までどおり Inter が使われる。 */
+html,body{ background:var(--bg); color:var(--text);
+  font-family:'Inter','Segoe UI Symbol','Apple Symbols','Noto Sans Symbols 2','Arial Unicode MS',sans-serif;
+  min-height:100vh; }
 body{
   background-image:
     radial-gradient(ellipse at 50% -10%, rgba(200,150,62,0.08), transparent 60%),
@@ -99,8 +111,28 @@ input[type=text]{ background:#1d1710; border:1px solid #4a3d2a; color:var(--text
 /* ---- 上部の操作帯 ---- */
 .transport{ background:var(--card); border:1px solid var(--border); border-radius:12px;
   padding:14px 16px; margin-bottom:16px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+/* 【修正 2026-08-25】再生ボタンだけは字ではなく**図形で描く**。
+   ------------------------------------------------------------
+   上の控えフォントで大半は防げるが、そのどれも入っていない端末では
+   まだ豆腐（四角に番号）になる。ここはこの道具のいちばん目立つ
+   ボタンなので、フォントに一切頼らない形にする。
+   ・字は font-size:0 で描かない（読み上げには textContent が残る）
+   ・data-state で ▶（三角）と ⏸（二本線）を描き分ける
+   ⚠️ textContent は今までどおり ▶ / ⏸ を入れること。
+      読み上げと、状態を見ている所（検査を含む）がそこを見る。 */
 #playBtn{ width:46px; height:46px; border-radius:50%; display:flex; align-items:center;
-  justify-content:center; background:var(--brass); color:#14100c; border:none; font-size:16px; cursor:pointer; }
+  justify-content:center; background:var(--brass); color:#14100c; border:none;
+  font-size:0; cursor:pointer; position:relative; }
+#playBtn::before{ content:''; display:block; }
+/* ▶ 三角。左の辺を色で、上下を透明にして三角を作る */
+#playBtn[data-state="play"]::before{
+  width:0; height:0; margin-left:3px;
+  border-left:14px solid #14100c;
+  border-top:9px solid transparent; border-bottom:9px solid transparent; }
+/* ⏸ 二本線 */
+#playBtn[data-state="pause"]::before{
+  width:14px; height:16px;
+  border-left:5px solid #14100c; border-right:5px solid #14100c; }
 #playBtn:hover{ background:#dba84f; }
 #renderBtn{ border-color:rgba(216,90,48,0.5); color:var(--accent); }
 /* 上部の保存を目立たせる。気に入った曲を残す唯一の手段なので、
@@ -254,7 +286,7 @@ footer b{ color:var(--brass); }
 
   <!-- ===== 上部：再生と状態 ===== -->
   <div class="transport">
-    <button id="playBtn" title="再生／停止（スペースキー）">▶</button>
+    <button id="playBtn" data-state="play" title="再生／停止（スペースキー）">▶</button>
     <div class="now" id="nowPlaying">まだ曲がありません。下の「① 曲を作る」から曲調を選んでください。</div>
     <span class="badge" id="lenBadge">長さ —</span>
     <button class="io-btn save" id="topSaveBtn"
@@ -1017,7 +1049,27 @@ footer b{ color:var(--brass); }
        この2つだけは音量の線（58.5dB）より下に置く（-1.5／-2.4dB）。
        歪ませてあるぶん、同じA特性の値でも押しが強く聞こえるため。
 
-     ── 15. 直したら必ず測り直す ────────────────────
+     ── 15. 画面の記号 ── どこ: html,body の font-family / #playBtn の
+                        ::before / zcSetPlayIcon ──
+       **ボタンの絵を「文字」で描いてはいけない。**
+       再生ボタンの中身は ▶(U+25B6) という文字だったが、本文の字体
+       Inter には**この字が入っていない**。ふつうはブラウザが字ごとに
+       別の字体へ落ちて拾うが、拾える字体が1つも無いと
+       「最後の手段の字形」＝**四角の中にその字の番号（25B6）が並んだもの**
+       が描かれる。使う人からは「再生ボタンに数字が出る」と見える。
+       ブログに貼ると iframe の中で開くうえ Google Fonts が届かないことも
+       あるので、素の環境より起きやすい（ファイルを直接開くと出ない）。
+       直し方は2段構え:
+         ① 本文の字体の控えに記号を持つ字体を足す
+            （Segoe UI Symbol / Apple Symbols / Noto Sans Symbols 2 …）
+            字ごとの控えなので、日本語と英字は今までどおり Inter が使われる
+         ② いちばん目立つ再生ボタンは**字をやめて CSS の図形で描く**
+            font-size:0 で字を消し、data-state で三角と二本線を描き分ける
+            （字は読み上げと状態の判定のために textContent に残す）
+       ⚠️ 絵文字（💾 ↩ 🔧 🎲）は広く入っているので同じ問題は起きにくい。
+          危ないのは ▶ ⏸ ■ のような**記号**のほう。
+
+     ── 16. 直したら必ず測り直す ────────────────────
        ここの数字はすべて tests/ の自動検査が見張っている。
        聴かないと分からないものは、聴かないと壊れたことにも気づけない。
      ============================================================ -->
@@ -8169,6 +8221,15 @@ const UNDO_MAX = 12;
    保存や自動保存は他の箇所で既に try で守られていたが、
    折りたたみの開閉状態を覚える処理だけが素のまま呼んでいた。
    ============================================================ */
+/* 【追加 2026-08-25】再生ボタンの見た目を1か所で切り替える。
+   字（▶ ⏸）は読み上げと状態の判定のために残し、
+   実際に描かれるのは CSS の図形（#playBtn[data-state]）のほう。 */
+function zcSetPlayIcon(playing){
+  const b = document.getElementById('playBtn'); if(!b) return;
+  b.textContent = playing ? '⏸' : '▶';
+  b.dataset.state = playing ? 'pause' : 'play';
+}
+
 function zcLSGet(k){
   try{ return window.localStorage ? window.localStorage.getItem(k) : null; }
   catch(e){ return null; }
@@ -9002,7 +9063,7 @@ function zcStopTrackPreview(rebuild){
   refreshLiveEngine(song);
   clearHighlight();
   if(rebuild !== false) buildTrackArea();
-  $('playBtn').textContent = '▶';
+  zcSetPlayIcon(false);
 }
 async function zcStartTrackPreview(trackKey){
   const ph = song.phrases[curPhrase];
@@ -9615,12 +9676,12 @@ async function togglePlay(){
        止め方が分からない状態になっていた（実測：押すと started に戻り、
        書き出しが終わってもそのまま鳴り続ける）。
        止める操作はいつでも通す（鳴りっぱなしのほうが困るため）。 */
-    if(playing){ stopPlayback(); clearHighlight(); $('playBtn').textContent = '▶'; try{ zcSyncMixPlayBtn(); }catch(e){} }
+    if(playing){ stopPlayback(); clearHighlight(); zcSetPlayIcon(false); try{ zcSyncMixPlayBtn(); }catch(e){} }
     else if(rendering){
       zcPlayHint('書き出しの計算中は再生できません。終わるまでお待ちください（書き出したファイルには影響しません）。');
-      $('playBtn').textContent = '▶';
+      zcSetPlayIcon(false);
     }
-    else { await restartPlayback(); $('playBtn').textContent = '⏸'; }
+    else { await restartPlayback(); zcSetPlayIcon(true); }
     try{ zcSyncMixPlayBtn(); }catch(e){}
   }finally{
     // 再生中でもロックは解除する。次のクリックはplaying状態を見て停止／再生を判断する。
@@ -9922,7 +9983,7 @@ $('autoArrangeBtn').addEventListener('click', () => {
 $('clearArrangeBtn').addEventListener('click', () => {
   pushUndo();
   song.arrangement = [];
-  if(playing){ stopPlayback(); clearHighlight(); $('playBtn').textContent = '▶'; }
+  if(playing){ stopPlayback(); clearHighlight(); zcSetPlayIcon(false); }
   renderAll(); scheduleAutosave();
 });
 
@@ -10219,7 +10280,7 @@ async function zcPlayPart(id){
     stopPlayback(); clearHighlight();
     zcSetPlayOrder(null, null);
     zcPartPlaying = null;
-    $('playBtn').textContent = '▶';
+    zcSetPlayIcon(false);
     try{ zcSyncMixPlayBtn(); }catch(e){}
     zcSyncPartBtns();
     status('mixStatus', '止めました');
@@ -10240,7 +10301,7 @@ async function zcPlayPart(id){
   try{
     if(playing){ stopPlayback(); clearHighlight(); }
     await restartPlayback();
-    $('playBtn').textContent = '⏸';
+    zcSetPlayIcon(true);
     try{ zcSyncMixPlayBtn(); }catch(e){}
     zcSyncPartBtns();
     status('mixStatus',
@@ -10719,7 +10780,7 @@ function songFileName(ext){
 // renderSong 側から呼ばれる（書き出し前に再生を止めたことを画面へ）
 function onRenderStopped(){
   clearHighlight();
-  $('playBtn').textContent = '▶';
+  zcSetPlayIcon(false);
 }
 /* 【修正】書き出し中は「曲を作り替える操作」を止める。
    ------------------------------------------------------------
@@ -12328,7 +12389,7 @@ boot();
 
       try{
         const playBtn = document.getElementById('playBtn');
-        if(playBtn) playBtn.textContent = '▶';
+        if(playBtn){ playBtn.textContent = '▶'; playBtn.dataset.state = 'play'; }
       }catch(e){}
 
       zcStabilityStatus(
