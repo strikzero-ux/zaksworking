@@ -1,5 +1,54 @@
-node_modules/
+# ============================================================
+#  ZCnova BGM Studio — git に入れないもの
+# ============================================================
+
+# ---- この道具の組み立て途中のもの ----
 # 配布物の中身は毎回組み立て直せるので、置いたままにしない。
 # 出来上がりの zip だけは、そのまま配れるように残しておく。
 dist/blogger/_app.min.html
 dist/zip/
+# ※ public/ は**入れる**こと。URLで公開するときの中身そのものなので、
+#    git に無いとホスティング側（Netlify・Cloudflare Pages など）が拾えない。
+
+# ---- Windows ----
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ---- macOS ----
+.DS_Store
+
+# ---- エディター設定 ----
+.vscode/
+.idea/
+
+# ---- 一時ファイル・バックアップ ----
+*.tmp
+*.temp
+*.bak
+*.old
+*.orig
+*.log
+*.swp
+*~
+~$*
+*.broken-*
+
+# ---- 秘密情報 ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Node.js ----
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Cloudflare・Netlify のローカル設定 ----
+.wrangler/
+.dev.vars
+.netlify/

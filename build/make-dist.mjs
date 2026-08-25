@@ -15,6 +15,15 @@
      3. zip/  … 手元で使う版一式（本体＋権利表記＋説明）
      4. zcnova-bgm-studio-v5.6.zip
 
+   ＋ public/（dist の外）… **URLで公開するときの中身そのもの**
+     Netlify・Cloudflare Pages・GitHub Pages などに、このフォルダごと
+     置けばそのまま動く。dist/ と違って **git に入れる**（入れないと
+     ホスティング側が拾えない）。
+       public/index.html   本体（ZCNOVA_BGM_v5.6.html と同じもの）
+       public/robots.txt   検索よけをしない印（置かないと扱いが曖昧になる）
+       public/_headers     Netlify 用の見出し設定。Cloudflare Pages も読む
+       public/ライセンスと利用について.txt
+
    ⚠️ 中身の削り方について
      JavaScript は terser に「圧縮も名前の付け替えもせず、説明だけ外す」
      設定で通している。名前を付け替えないのは、このファイルが
@@ -315,9 +324,45 @@ try{
   console.warn('⚠ zip コマンドが使えないので、たたまずに dist/zip/ に置きました。');
 }
 
+/* ---------- 公開用（URLで配るとき） ----------
+   ここだけ dist/ の外に置く。dist/ は「組み立て直せるから git に入れない」
+   ものだが、public/ は **公開するファイルそのもの**なので git に入れる。
+   ホスティング側（Netlify・Cloudflare Pages・GitHub Pages）は
+   git にあるファイルしか見ないため、無いとサイトが空になる。 */
+const PUB = path.join(ROOT, 'public');
+fs.mkdirSync(PUB, { recursive: true });
+/* 本体。URLの見え方が短くなるよう index.html にする
+   （https://例.com/ だけで開ける） */
+fs.writeFileSync(path.join(PUB, 'index.html'), src);
+
+/* 検索よけをしない印。置かないと巡回側の扱いが曖昧になる */
+fs.writeFileSync(path.join(PUB, 'robots.txt'),
+  'User-agent: *\nAllow: /\n');
+
+/* Netlify の見出し設定（Cloudflare Pages も同じ書き方を読む）。
+   ・音を作るのに時間がかかるので、本体は毎回取り直させない
+   ・とはいえ更新したらすぐ反映してほしいので、確認だけはさせる */
+fs.writeFileSync(path.join(PUB, '_headers'),
+  ['/*',
+   '  X-Content-Type-Options: nosniff',
+   '  Referrer-Policy: no-referrer',
+   '',
+   '/index.html',
+   '  Cache-Control: public, max-age=0, must-revalidate',
+   ''].join('\n'));
+
+if(lic){
+  fs.writeFileSync(path.join(PUB, 'ライセンスと利用について.txt'),
+    fs.readFileSync(path.join(ZIPDIR, 'ライセンスと利用について.txt')));
+}
+/* 置き方の手順書。組み立てで消えないよう、ここで置き直す */
+fs.copyFileSync(path.join(HERE, '公開のしかた.txt'),
+                path.join(PUB, '公開のしかた.txt'));
+
 const kb = n => (n / 1024).toFixed(0) + 'KB';
 console.log(`本体            ${kb(src.length)}`);
 console.log(`説明を外した版  ${kb(min.length)}  （${jsBlocks}個の <script> を通した）`);
 console.log(`Blogger 貼り付け ${kb(bloggerFull.length)}`);
 console.log(`外部ファイル版   ${kb(bloggerLite.length)}`);
 if(zipped) console.log(`zip             ${kb(fs.statSync(path.join(DIST, ZIPNAME)).size)}  → dist/${ZIPNAME}`);
+console.log(`公開用          ${kb(src.length)}  → public/index.html（このフォルダごと置けば動く）`);

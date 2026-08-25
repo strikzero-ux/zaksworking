@@ -1,0 +1,85 @@
+==========================================================
+ ZCnova BGM Studio  v5.6
+ このフォルダの置き方（URLで公開するとき）
+==========================================================
+
+■ このフォルダは何か
+
+  URLで配るときに、そのまま置く中身です。
+  中身をいじる必要はありません。フォルダごと置いてください。
+
+      index.html                  本体（これがアプリ）
+      robots.txt                  検索よけをしない印
+      _headers                    Netlify / Cloudflare Pages 用の設定
+      ライセンスと利用について.txt   権利表記
+      公開のしかた.txt              この文書
+
+  ※ このフォルダは `node build/make-dist.mjs` で組み立て直せます。
+     本体（ZCNOVA_BGM_v5.6.html）を直したら、組み立て直してください。
+
+
+■ 置き方（どれか1つ）
+
+  ● Netlify
+      1. netlify.com にログイン
+      2. Add new site → Import an existing project → GitHub を選ぶ
+      3. このリポジトリを選ぶ
+      4. Build command … 空のまま
+         Publish directory … public
+      5. Deploy
+
+      ドラッグ&ドロップでもできます（Sites の画面へ public フォルダを落とす）。
+
+  ● Cloudflare Pages
+      1. Workers & Pages → Create → Pages → Connect to Git
+      2. このリポジトリを選ぶ
+      3. Build command … 空のまま
+         Build output directory … public
+      4. Save and Deploy
+
+  ● GitHub Pages
+      Settings → Pages → Source を「Deploy from a branch」にして、
+      ブランチと `/public` を選ぶ（`/docs` しか選べない版では、
+      public を docs という名前に変えて置いてください）。
+
+
+■ 公開したあとの URL
+
+      https://（あなたのサイト名）/
+
+  index.html なので、ファイル名を付けなくても開きます。
+
+
+■ ブログへの貼り方（URL方式）
+
+  記事に、ふつうのリンクを1本置くだけです。
+
+      <a href="https://（あなたのサイト名）/" target="_blank" rel="noopener">
+        ZCnova BGM Studio を開く
+      </a>
+
+  記事の中に埋め込みたいときは iframe でも置けます。
+
+      <iframe src="https://（あなたのサイト名）/"
+              style="width:100%;height:900px;border:0;" loading="lazy"></iframe>
+
+  ※ 埋め込みは、ブログのテンプレートによっては高さが合わないことが
+     あります。うまくいかないときはリンク1本のほうが確実です。
+
+
+■ 動かすのに必要なもの
+
+  音を鳴らす部品（Tone.js）と MP3 に変える部品（lamejs）を
+  外から読み込みます。見ている人がインターネットにつながっていれば
+  それだけで動きます。サーバー側に用意するものはありません。
+
+  曲はすべて見ている人のブラウザの中で作られます。
+  作った曲がどこかへ送られることはありません。
+
+
+■ 気をつけること
+
+  ・保存した曲は「見ている人のブラウザの中」に残ります。
+    URLが変わると別の場所として扱われ、前に保存した曲は見えません。
+  ・https で公開してください。http だと音が出ない環境があります。
+    （上のサービスはどれも既定で https になります）
